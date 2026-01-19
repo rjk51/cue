@@ -1,4 +1,4 @@
-package com.example.cue
+package com.cuehq.app
 
 import io.flutter.embedding.android.FlutterActivity
 
