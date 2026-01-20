@@ -30,6 +30,9 @@ class NotificationService {
 
   // Callback for when notification action is tapped
   Function(String reminderId, String action)? onNotificationAction;
+  
+  // Stream subscription for reminder updates
+  StreamSubscription<QuerySnapshot>? _reminderSubscription;
 
   Future<void> initialize() async {
     // Initialize timezone database
@@ -117,6 +120,9 @@ class NotificationService {
     if (initialMessage != null) {
       _handleNotificationTap(initialMessage);
     }
+    
+    // Listen for reminder updates to dismiss notifications
+    _listenToReminderUpdates();
   }
 
   Future<void> _requestExactAlarmPermission() async {
@@ -363,6 +369,33 @@ class NotificationService {
   Future<void> cancelNotification(String reminderId) async {
     await _localNotifications.cancel(reminderId.hashCode);
     print('Cancelled notification for reminder: $reminderId');
+  }
+  
+  // Listen to reminder updates to dismiss notifications on other devices
+  void _listenToReminderUpdates() {
+    print('📡 Starting listener for reminder updates...');
+    _reminderSubscription = FirebaseFirestore.instance
+        .collection('reminders')
+        .where('isCompleted', isEqualTo: true)
+        .snapshots()
+        .listen((snapshot) {
+      for (var change in snapshot.docChanges) {
+        if (change.type == DocumentChangeType.added || 
+            change.type == DocumentChangeType.modified) {
+          final reminder = change.doc.data();
+          if (reminder != null && reminder['isCompleted'] == true) {
+            final reminderId = change.doc.id;
+            print('✅ Reminder completed, dismissing notification: $reminderId');
+            cancelNotification(reminderId);
+          }
+        }
+      }
+    });
+  }
+  
+  // Dispose stream subscription
+  void dispose() {
+    _reminderSubscription?.cancel();
   }
 
   // Test notification - shows immediately
