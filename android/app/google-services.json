@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "950107640799",
-    "project_id": "cues-1ced9",
-    "storage_bucket": "cues-1ced9.firebasestorage.app"
+    "project_number": "300393022724",
+    "project_id": "cue-hq",
+    "storage_bucket": "cue-hq.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:950107640799:android:01e946dd1b562db79bea6a",
+        "mobilesdk_app_id": "1:300393022724:android:c5353ae1c22884a238bc51",
         "android_client_info": {
           "package_name": "com.example.cue"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyCsrnpjX9SYMZzJo7VsqnTT6kq5eFjY3Eo"
+          "current_key": "AIzaSyCiCcMGr8MW-BIT4zcBjEpnlTlaTT2FiBQ"
         }
       ],
       "services": {
