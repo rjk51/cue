@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../reminders/domain/reminder_model.dart';
 import '../../reminders/presentation/create_reminder_screen.dart';
 import '../../reminders/data/reminder_service.dart';
 import '../../notifications/notification_service.dart';
+import '../../../services/auth_service.dart';
+import '../../auth/presentation/welcome_screen.dart';
 import 'package:intl/intl.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -15,12 +18,56 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final ReminderService _reminderService = ReminderService();
   final NotificationService _notificationService = NotificationService();
+  final AuthService _authService = AuthService();
 
   @override
   void initState() {
     super.initState();
     // Subscribe to user topic for cross-device notifications
-    _notificationService.subscribeToUserTopic('demo_user');
+    final userId = FirebaseAuth.instance.currentUser?.uid ?? 'demo_user';
+    _notificationService.subscribeToUserTopic(userId);
+  }
+
+  Future<void> _handleSignOut() async {
+    final shouldSignOut = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Sign Out'),
+        content: const Text('Are you sure you want to sign out?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Sign Out'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldSignOut == true) {
+      try {
+        await _authService.signOut();
+        if (mounted) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => const WelcomeScreen()),
+            (route) => false,
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error signing out: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
   }
 
   void _navigateToCreateReminder() async {
@@ -101,6 +148,11 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('My Reminders'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Sign Out',
+            onPressed: _handleSignOut,
+          ),
           IconButton(
             icon: const Icon(Icons.notifications_active),
             tooltip: 'Test Notification',

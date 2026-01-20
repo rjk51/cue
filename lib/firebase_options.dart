@@ -52,7 +52,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyCiCcMGr8MW-BIT4zcBjEpnlTlaTT2FiBQ',
-    appId: '1:300393022724:android:c5353ae1c22884a238bc51',
+    appId: '1:300393022724:android:9f12ca1927255be938bc51',
     messagingSenderId: '300393022724',
     projectId: 'cue-hq',
     storageBucket: 'cue-hq.firebasestorage.app',
@@ -60,11 +60,11 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyAdX-1ERoK67K_I_Gra-A-mhUJ7wvjUkok',
-    appId: '1:300393022724:ios:99ee30b8c8f73c9c38bc51',
+    appId: '1:300393022724:ios:5255de72cfe8739b38bc51',
     messagingSenderId: '300393022724',
     projectId: 'cue-hq',
     storageBucket: 'cue-hq.firebasestorage.app',
-    iosBundleId: 'com.example.cue',
+    iosBundleId: 'com.cuehq.app',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
