@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../reminders/domain/reminder_model.dart';
+import '../../reminders/data/reminder_service.dart';
+import '../../notifications/notification_service.dart';
 
 class CreateReminderScreen extends StatefulWidget {
   const CreateReminderScreen({super.key});
@@ -11,7 +13,10 @@ class CreateReminderScreen extends StatefulWidget {
 class _CreateReminderScreenState extends State<CreateReminderScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
+  final ReminderService _reminderService = ReminderService();
+  final NotificationService _notificationService = NotificationService();
   DateTime _selectedDateTime = DateTime.now();
+  bool _isSaving = false;
 
   @override
   void dispose() {
@@ -59,15 +64,62 @@ class _CreateReminderScreenState extends State<CreateReminderScreen> {
     }
   }
 
-  void _saveReminder() {
+  void _saveReminder() async {
     if (_formKey.currentState!.validate()) {
-      final reminder = Reminder(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        name: _nameController.text.trim(),
-        time: _selectedDateTime,
-      );
+      if (_selectedDateTime.isBefore(DateTime.now())) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please select a future date and time'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
 
-      Navigator.pop(context, reminder);
+      setState(() {
+        _isSaving = true;
+      });
+
+      try {
+        // Create reminder object
+        final reminder = Reminder(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          name: _nameController.text.trim(),
+          time: _selectedDateTime,
+          isCompleted: false,
+          deviceToken: _notificationService.fcmToken,
+          userId: 'demo_user', // Replace with actual user ID from auth
+        );
+
+        // Save to Firestore
+        final reminderId = await _reminderService.addReminder(
+          reminder,
+          _notificationService.fcmToken,
+        );
+
+        // Schedule local notification
+        final savedReminder = reminder.copyWith(id: reminderId);
+        await _notificationService.scheduleReminderNotification(savedReminder);
+
+        if (mounted) {
+          Navigator.pop(context, savedReminder);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error creating reminder: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isSaving = false;
+          });
+        }
+      }
     }
   }
 
@@ -128,16 +180,26 @@ class _CreateReminderScreenState extends State<CreateReminderScreen> {
               ),
               const SizedBox(height: 32),
               ElevatedButton(
-                onPressed: _saveReminder,
+                onPressed: _isSaving ? null : _saveReminder,
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   backgroundColor: Theme.of(context).colorScheme.primary,
                   foregroundColor: Colors.white,
+                  disabledBackgroundColor: Colors.grey,
                 ),
-                child: const Text(
-                  'Save Reminder',
-                  style: TextStyle(fontSize: 16),
-                ),
+                child: _isSaving
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Text(
+                        'Save Reminder',
+                        style: TextStyle(fontSize: 16),
+                      ),
               ),
             ],
           ),
