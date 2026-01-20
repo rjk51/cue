@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:300393022724:android:c5353ae1c22884a238bc51",
+        "mobilesdk_app_id": "1:300393022724:android:9f12ca1927255be938bc51",
         "android_client_info": {
-          "package_name": "com.example.cue"
+          "package_name": "com.cuehq.app"
         }
       },
       "oauth_client": [],

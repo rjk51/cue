@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'features/home/presentation/home_screen.dart';
+import 'features/auth/presentation/welcome_screen.dart';
 import 'features/notifications/notification_service.dart';
 import 'features/reminders/data/reminder_service.dart';
 
@@ -89,7 +91,29 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
       ),
       debugShowCheckedModeBanner: false,
-      home: const HomeScreen(),
+      home: StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, snapshot) {
+          // Show loading while checking auth state
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
+              backgroundColor: Color(0xFF4A4458),
+              body: Center(
+                child: CircularProgressIndicator(
+                  color: Color(0xFFFFB4A3),
+                ),
+              ),
+            );
+          }
+          
+          // Show home screen if user is logged in, otherwise show welcome screen
+          if (snapshot.hasData) {
+            return const HomeScreen();
+          } else {
+            return const WelcomeScreen();
+          }
+        },
+      ),
     );
   }
 }
