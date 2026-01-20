@@ -429,33 +429,32 @@ class NotificationService {
   Future<void> _saveFCMTokenToFirestore(String? token) async {
     if (token != null) {
       try {
-        const userId = 'demo_user'; // Replace with actual user ID from auth
-        
-        print('💾 Saving FCM token to Firestore...');
+        print('💾 Saving FCM token to devices collection...');
         print('Token: ${token.substring(0, 20)}...');
-        print('User: $userId');
         
+        // Save to devices collection so all devices get notifications
         await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userId)
+            .collection('devices')
+            .doc(token)
             .set({
           'fcmToken': token,
           'lastUpdated': FieldValue.serverTimestamp(),
           'platform': Platform.isAndroid ? 'android' : 'ios',
+          'active': true,
         }, SetOptions(merge: true));
         
-        print('✅ FCM Token saved to Firestore for user: $userId');
+        print('✅ FCM Token saved to devices collection');
         
         // Verify it was saved
         final doc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userId)
+            .collection('devices')
+            .doc(token)
             .get();
         
         if (doc.exists) {
-          print('✅ Verified: User document exists with token');
+          print('✅ Verified: Device document exists');
         } else {
-          print('❌ Warning: User document not found after save');
+          print('❌ Warning: Device document not found after save');
         }
       } catch (e) {
         print('❌ Error saving FCM token to Firestore: $e');

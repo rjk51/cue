@@ -13,7 +13,7 @@ const messaging = admin.messaging();
 export const triggerReminderNotification = functions.https.onCall(
   async (data) => {
     try {
-      const {reminderId, userId} = data;
+      const {reminderId} = data;
 
       if (!reminderId) {
         throw new functions.https.HttpsError(
@@ -34,7 +34,6 @@ export const triggerReminderNotification = functions.https.onCall(
       }
 
       const reminder = reminderDoc.data();
-      const reminderUserId = userId || reminder?.userId;
 
       if (reminder?.notifiedAt) {
         console.log("Reminder already notified");
@@ -46,49 +45,72 @@ export const triggerReminderNotification = functions.https.onCall(
         return {success: true, alreadyCompleted: true};
       }
 
-      // Try to get FCM token from user document first, fallback to reminder's deviceToken
-      let fcmToken = reminder?.deviceToken;
+      // Get all active devices to send notification to all of them
+      console.log("Fetching all active devices...");
+      const devicesSnapshot = await db
+        .collection("devices")
+        .where("active", "==", true)
+        .get();
 
-      const userDoc = await db.collection("users").doc(reminderUserId).get();
-      if (userDoc.exists) {
-        const userData = userDoc.data();
-        fcmToken = userData?.fcmToken || fcmToken;
-      } else {
-        console.log("User document not found, using deviceToken from reminder");
+      if (devicesSnapshot.empty) {
+        // Fallback to reminder's deviceToken if no devices found
+        const deviceToken = reminder?.deviceToken;
+        if (!deviceToken) {
+          throw new functions.https.HttpsError(
+            "failed-precondition",
+            "No devices found and no deviceToken in reminder"
+          );
+        }
+        console.log("No devices collection found, using reminder deviceToken");
+        devicesSnapshot.docs.push({
+          data: () => ({fcmToken: deviceToken}),
+        } as any);
       }
 
-      if (!fcmToken) {
-        throw new functions.https.HttpsError(
-          "failed-precondition",
-          "No FCM token found for user or reminder"
-        );
-      }
+      console.log(`Found ${devicesSnapshot.size} active devices`);
 
-      // Send data-only message so Flutter can show notification with action buttons
-      const message = {
-        token: fcmToken,
-        data: {
-          reminderId: reminderId,
-          title: reminder.name || "Reminder",
-          body: reminder.description || "Your reminder is due!",
-          type: "reminder_notification",
-          click_action: "FLUTTER_NOTIFICATION_CLICK",
-        },
-        android: {
-          priority: "high" as const,
-        },
-        apns: {
-          payload: {
-            aps: {
-              "content-available": 1,
-              "badge": 1,
+      // Send notification to all devices
+      const sendPromises = devicesSnapshot.docs.map(async (deviceDoc) => {
+        const fcmToken = deviceDoc.data().fcmToken;
+
+        if (!fcmToken) {
+          console.log(`Skipping device ${deviceDoc.id} - no token`);
+          return;
+        }
+
+        // Send data-only message so Flutter can show notification with action buttons
+        const message = {
+          token: fcmToken,
+          data: {
+            reminderId: reminderId,
+            title: reminder.name || "Reminder",
+            body: reminder.description || "Your reminder is due!",
+            type: "reminder_notification",
+            click_action: "FLUTTER_NOTIFICATION_CLICK",
+          },
+          android: {
+            priority: "high" as const,
+          },
+          apns: {
+            payload: {
+              aps: {
+                "content-available": 1,
+                "badge": 1,
+              },
             },
           },
-        },
-      };
+        };
 
-      await messaging.send(message);
-      console.log(`✅ Notification sent for reminder: ${reminderId}`);
+        try {
+          await messaging.send(message);
+          console.log(`✅ Notification sent to device: ${fcmToken.substring(0, 20)}...`);
+        } catch (error) {
+          console.error(`❌ Failed to send to device ${fcmToken.substring(0, 20)}:`, error);
+        }
+      });
+
+      await Promise.all(sendPromises);
+      console.log(`✅ Notifications sent to ${devicesSnapshot.size} devices`);
 
       await reminderDoc.ref.update({
         notifiedAt: admin.firestore.FieldValue.serverTimestamp(),
