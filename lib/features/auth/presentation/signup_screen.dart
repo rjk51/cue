@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../../services/auth_service.dart';
+import '../../../shared/widgets/custom_snackbar.dart';
 import '../../home/presentation/home_screen.dart';
 import 'login_screen.dart';
+import 'link_account_dialog.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -51,12 +54,7 @@ class _SignupScreenState extends State<SignupScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString()),
-            backgroundColor: Colors.red,
-          ),
-        );
+        context.showErrorSnackbar(e.toString());
       }
     } finally {
       if (mounted) {
@@ -68,6 +66,61 @@ class _SignupScreenState extends State<SignupScreen> {
   bool get _isIOS {
     if (kIsWeb) return false;
     return Platform.isIOS;
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final result = await _authService.attemptGoogleSignIn();
+      
+      if (result.status == GoogleSignInStatus.cancelled) {
+        // User canceled
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      if (result.status == GoogleSignInStatus.needsLinking) {
+        // Account exists with email/password, need to link
+        setState(() => _isLoading = false);
+        
+        if (mounted) {
+          await showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => LinkAccountDialog(
+              email: result.email!,
+              onSuccess: () {
+                // Navigate to home after successful linking
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (context) => const HomeScreen()),
+                  (route) => false,
+                );
+              },
+            ),
+          );
+        }
+        return;
+      }
+
+      // Successfully signed in with Google
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        context.showErrorSnackbar(e.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   @override
@@ -386,18 +439,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   width: double.infinity,
                   height: 56,
                   child: OutlinedButton(
-                    onPressed: () {
-                      // Placeholder for Apple/Google sign in
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            _isIOS
-                                ? 'Apple Sign In coming soon'
-                                : 'Google Sign In coming soon',
-                          ),
-                        ),
-                      );
-                    },
+                    onPressed: _isLoading ? null : _handleGoogleSignIn,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.black,
                       side: BorderSide(
@@ -412,10 +454,22 @@ class _SignupScreenState extends State<SignupScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(
-                          _isIOS ? Icons.apple : Icons.g_mobiledata,
-                          size: 24,
-                        ),
+                        if (_isIOS)
+                          const Icon(Icons.apple, size: 24)
+                        else
+                          Container(
+                            width: 20,
+                            height: 20,
+                            decoration: BoxDecoration(
+                              color: Colors.grey[200],
+                              shape: BoxShape.circle,
+                            ),
+                            child: const FaIcon(
+                              FontAwesomeIcons.google,
+                              size: 18,
+                              color: Colors.black54,
+                            ),
+                          ),
                         const SizedBox(width: 12),
                         Text(
                           _isIOS ? 'Sign up with Apple' : 'Sign up with Google',

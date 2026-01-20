@@ -12,7 +12,20 @@
           "package_name": "com.cuehq.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "300393022724-c12sddmja1qhtmnie21snti8gj47djsp.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.cuehq.app",
+            "certificate_hash": "8c8d51c642a6214ef88ac0e6c5a24d2340a25d15"
+          }
+        },
+        {
+          "client_id": "300393022724-mn6drdmb9hnh7aljij7jssepct53plav.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCiCcMGr8MW-BIT4zcBjEpnlTlaTT2FiBQ"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "300393022724-mn6drdmb9hnh7aljij7jssepct53plav.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "300393022724-rep9rlge6o94muivh3oeporgqgmpuorg.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.cuehq.app"
+              }
+            }
+          ]
         }
       }
     }

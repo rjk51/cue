@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../../services/auth_service.dart';
+import '../../../shared/widgets/custom_snackbar.dart';
 import '../../home/presentation/home_screen.dart';
 import 'signup_screen.dart';
+import 'link_account_dialog.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -46,12 +51,67 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString()),
-            backgroundColor: Colors.red,
-          ),
+        context.showErrorSnackbar(e.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  bool get _isIOS {
+    if (kIsWeb) return false;
+    return Platform.isIOS;
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final result = await _authService.attemptGoogleSignIn();
+      
+      if (result.status == GoogleSignInStatus.cancelled) {
+        // User canceled
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      if (result.status == GoogleSignInStatus.needsLinking) {
+        // Account exists with email/password, need to link
+        setState(() => _isLoading = false);
+        
+        if (mounted) {
+          await showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => LinkAccountDialog(
+              email: result.email!,
+              onSuccess: () {
+                // Navigate to home after successful linking
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (context) => const HomeScreen()),
+                  (route) => false,
+                );
+              },
+            ),
+          );
+        }
+        return;
+      }
+
+      // Successfully signed in with Google
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+          (route) => false,
         );
+      }
+    } catch (e) {
+      if (mounted) {
+        context.showErrorSnackbar(e.toString());
       }
     } finally {
       if (mounted) {
@@ -278,6 +338,83 @@ class _LoginScreenState extends State<LoginScreen> {
                               Icon(Icons.arrow_forward, size: 20),
                             ],
                           ),
+                  ),
+                ),
+                const SizedBox(height: 32),
+                // Divider
+                Row(
+                  children: [
+                    Expanded(
+                      child: Divider(
+                        color: Colors.grey[300],
+                        thickness: 1,
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        'or',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.black.withOpacity(0.4),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Divider(
+                        color: Colors.grey[300],
+                        thickness: 1,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 32),
+                // Google Sign In button
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: OutlinedButton(
+                    onPressed: _isLoading ? null : _handleGoogleSignIn,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.black,
+                      side: BorderSide(
+                        color: Colors.grey[300]!,
+                        width: 1,
+                      ),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(28),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (_isIOS)
+                          const Icon(Icons.apple, size: 24)
+                        else
+                          Container(
+                            width: 20,
+                            height: 20,
+                            decoration: BoxDecoration(
+                              color: Colors.grey[200],
+                              shape: BoxShape.circle,
+                            ),
+                            child: const FaIcon(
+                              FontAwesomeIcons.google,
+                              size: 18,
+                              color: Colors.black54,
+                            ),
+                          ),
+                        const SizedBox(width: 12),
+                        Text(
+                          _isIOS ? 'Sign in with Apple' : 'Sign in with Google',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 32),
