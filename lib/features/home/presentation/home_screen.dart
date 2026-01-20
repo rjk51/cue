@@ -5,6 +5,7 @@ import '../../reminders/presentation/create_reminder_screen.dart';
 import '../../reminders/data/reminder_service.dart';
 import '../../notifications/notification_service.dart';
 import '../../../services/auth_service.dart';
+import '../../../shared/widgets/custom_snackbar.dart';
 import '../../auth/presentation/welcome_screen.dart';
 import 'package:intl/intl.dart';
 
@@ -59,12 +60,7 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error signing out: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
+          context.showErrorSnackbar('Error signing out: $e');
         }
       }
     }
@@ -79,13 +75,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     if (result != null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Reminder created successfully!'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
-        ),
-      );
+      context.showSuccessSnackbar('Reminder created successfully!');
     }
   }
 
@@ -95,22 +85,11 @@ class _HomeScreenState extends State<HomeScreen> {
       await _notificationService.cancelNotification(reminderId);
       
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Reminder marked as completed!'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
+        context.showSuccessSnackbar('Reminder marked as completed!');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        context.showErrorSnackbar('Error: $e');
       }
     }
   }
@@ -121,22 +100,11 @@ class _HomeScreenState extends State<HomeScreen> {
       await _notificationService.cancelNotification(reminderId);
       
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Reminder deleted!'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 2),
-          ),
-        );
+        context.showWarningSnackbar('Reminder deleted!');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        context.showErrorSnackbar('Error: $e');
       }
     }
   }
@@ -159,12 +127,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () async {
               await _notificationService.showTestNotification();
               if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Test notification sent!'),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
+                context.showInfoSnackbar('Test notification sent!');
               }
             },
           ),

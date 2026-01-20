@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../reminders/domain/reminder_model.dart';
 import '../../reminders/data/reminder_service.dart';
 import '../../notifications/notification_service.dart';
+import '../../../shared/widgets/custom_snackbar.dart';
 
 class CreateReminderScreen extends StatefulWidget {
   const CreateReminderScreen({super.key});
@@ -67,12 +68,7 @@ class _CreateReminderScreenState extends State<CreateReminderScreen> {
   void _saveReminder() async {
     if (_formKey.currentState!.validate()) {
       if (_selectedDateTime.isBefore(DateTime.now())) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please select a future date and time'),
-            backgroundColor: Colors.orange,
-          ),
-        );
+        context.showWarningSnackbar('Please select a future date and time');
         return;
       }
 
@@ -106,12 +102,7 @@ class _CreateReminderScreenState extends State<CreateReminderScreen> {
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error creating reminder: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
+          context.showErrorSnackbar('Error creating reminder: $e');
         }
       } finally {
         if (mounted) {
