@@ -1,0 +1,236 @@
+import * as functions from "firebase-functions";
+import * as admin from "firebase-admin";
+
+admin.initializeApp();
+
+const db = admin.firestore();
+const messaging = admin.messaging();
+
+/**
+ * HTTP Callable Function triggered by the mobile app when a reminder is due
+ * Sends FCM notification for a specific reminder
+ */
+export const triggerReminderNotification = functions.https.onCall(
+  async (data) => {
+    try {
+      const {reminderId, userId} = data;
+
+      if (!reminderId) {
+        throw new functions.https.HttpsError(
+          "invalid-argument",
+          "reminderId is required"
+        );
+      }
+
+      console.log(`Triggering notification for reminder: ${reminderId}`);
+
+      const reminderDoc = await db.collection("reminders").doc(reminderId).get();
+
+      if (!reminderDoc.exists) {
+        throw new functions.https.HttpsError(
+          "not-found",
+          "Reminder not found"
+        );
+      }
+
+      const reminder = reminderDoc.data();
+      const reminderUserId = userId || reminder?.userId;
+
+      if (reminder?.notifiedAt) {
+        console.log("Reminder already notified");
+        return {success: true, alreadyNotified: true};
+      }
+
+      if (reminder?.isCompleted) {
+        console.log("Reminder already completed");
+        return {success: true, alreadyCompleted: true};
+      }
+
+      // Try to get FCM token from user document first, fallback to reminder's deviceToken
+      let fcmToken = reminder?.deviceToken;
+
+      const userDoc = await db.collection("users").doc(reminderUserId).get();
+      if (userDoc.exists) {
+        const userData = userDoc.data();
+        fcmToken = userData?.fcmToken || fcmToken;
+      } else {
+        console.log("User document not found, using deviceToken from reminder");
+      }
+
+      if (!fcmToken) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "No FCM token found for user or reminder"
+        );
+      }
+
+      // Send data-only message so Flutter can show notification with action buttons
+      const message = {
+        token: fcmToken,
+        data: {
+          reminderId: reminderId,
+          title: reminder.name || "Reminder",
+          body: reminder.description || "Your reminder is due!",
+          type: "reminder_notification",
+          click_action: "FLUTTER_NOTIFICATION_CLICK",
+        },
+        android: {
+          priority: "high" as const,
+        },
+        apns: {
+          payload: {
+            aps: {
+              "content-available": 1,
+              "badge": 1,
+            },
+          },
+        },
+      };
+
+      await messaging.send(message);
+      console.log(`✅ Notification sent for reminder: ${reminderId}`);
+
+      await reminderDoc.ref.update({
+        notifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      return {success: true, notificationSent: true};
+    } catch (error) {
+      console.error("Error triggering reminder notification:", error);
+      throw new functions.https.HttpsError(
+        "internal",
+        "Failed to send notification"
+      );
+    }
+  }
+);
+
+export const checkPendingReminders = functions.https.onCall(
+  async (data) => {
+    try {
+      const {userId} = data;
+
+      if (!userId) {
+        throw new functions.https.HttpsError(
+          "invalid-argument",
+          "userId is required"
+        );
+      }
+
+      const now = admin.firestore.Timestamp.now();
+      const snapshot = await db
+        .collection("reminders")
+        .where("userId", "==", userId)
+        .where("scheduledTime", "<=", now)
+        .where("isCompleted", "==", false)
+        .get();
+
+      const results = [];
+      for (const doc of snapshot.docs) {
+        const reminder = doc.data();
+        if (reminder.notifiedAt) continue;
+
+        const userDoc = await db.collection("users").doc(userId).get();
+        const fcmToken = userDoc.data()?.fcmToken;
+        if (!fcmToken) continue;
+
+        try {
+          await messaging.send({
+            token: fcmToken,
+            notification: {
+              title: reminder.name || "Reminder",
+              body: reminder.description || "Your reminder is due!",
+            },
+            data: {reminderId: doc.id, click_action: "FLUTTER_NOTIFICATION_CLICK"},
+          });
+
+          await doc.ref.update({
+            notifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+
+          results.push({reminderId: doc.id, status: "sent"});
+        } catch (error) {
+          results.push({reminderId: doc.id, status: "failed"});
+        }
+      }
+
+      return {success: true, processed: results.length, results};
+    } catch (error) {
+      throw new functions.https.HttpsError(
+        "internal",
+        "Failed to check pending reminders"
+      );
+    }
+  }
+);
+
+export const onReminderCreated = functions.firestore
+  .document("reminders/{reminderId}")
+  .onCreate(async (snap, context) => {
+    console.log(`New reminder created: ${context.params.reminderId}`, snap.data());
+    return null;
+  });
+
+export const onReminderUpdated = functions.firestore
+  .document("reminders/{reminderId}")
+  .onUpdate(async (change, context) => {
+    const before = change.before.data();
+    const after = change.after.data();
+
+    if (!before.isCompleted && after.isCompleted) {
+      console.log(`Reminder completed: ${context.params.reminderId}`);
+    }
+
+    return null;
+  });
+
+export const sendTestNotification = functions.https.onRequest(
+  async (req, res) => {
+    try {
+      const {reminderId} = req.body;
+
+      if (!reminderId) {
+        res.status(400).send({error: "reminderId required"});
+        return;
+      }
+
+      const reminderDoc = await db.collection("reminders").doc(reminderId).get();
+      if (!reminderDoc.exists) {
+        res.status(404).send({error: "Reminder not found"});
+        return;
+      }
+
+      const reminder = reminderDoc.data();
+      const userDoc = await db.collection("users").doc(reminder?.userId).get();
+
+      if (!userDoc.exists) {
+        res.status(404).send({error: "User not found"});
+        return;
+      }
+
+      const fcmToken = userDoc.data()?.fcmToken;
+
+      if (!fcmToken) {
+        res.status(400).send({error: "No FCM token found"});
+        return;
+      }
+
+      await messaging.send({
+        token: fcmToken,
+        notification: {
+          title: reminder?.title || "Test Reminder",
+          body: reminder?.description || "This is a test notification",
+        },
+        data: {reminderId, testMode: "true"},
+      });
+
+      res.status(200).send({
+        success: true,
+        message: "Test notification sent successfully",
+      });
+    } catch (error) {
+      console.error("Error sending test notification:", error);
+      res.status(500).send({error: "Failed to send test notification"});
+    }
+  }
+);
