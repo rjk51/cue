@@ -165,11 +165,21 @@ class NotificationService {
     final payload = response.payload;
     final actionId = response.actionId;
 
+    print('📱 Notification response received:');
+    print('  - Payload: $payload');
+    print('  - Action ID: $actionId');
+    print('  - Notification ID: ${response.id}');
+
     if (payload != null && actionId != null) {
       // Handle action button tap (Done/Snooze)
       if (onNotificationAction != null) {
+        print('✅ Calling onNotificationAction callback');
         onNotificationAction!(payload, actionId);
+      } else {
+        print('❌ onNotificationAction callback is null');
       }
+    } else {
+      print('⚠️ Payload or actionId is null');
     }
   }
 
@@ -246,7 +256,7 @@ class NotificationService {
         const AndroidNotificationAction(
           'snooze',
           'Snooze',
-          showsUserInterface: false,
+          showsUserInterface: true,
           cancelNotification: true,
         ),
       ],
@@ -420,7 +430,7 @@ class NotificationService {
         AndroidNotificationAction(
           'snooze',
           'Snooze',
-          showsUserInterface: false,
+          showsUserInterface: true,
           cancelNotification: true,
         ),
       ],
@@ -440,7 +450,7 @@ class NotificationService {
       '🧪 Test Notification',
       'If you see this, notifications are working!',
       notificationDetails,
-      payload: 'test',
+      payload: 'test_reminder_${DateTime.now().millisecondsSinceEpoch}',
     );
     
     print('✅ Test notification sent');
