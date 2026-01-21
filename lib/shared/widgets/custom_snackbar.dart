@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 /// Custom Snackbar Widget for Cue App
 /// 
@@ -66,10 +67,10 @@ class CustomSnackbar {
         backgroundColor: colors.backgroundColor,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(12.r),
         ),
-        margin: const EdgeInsets.all(16),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        margin: EdgeInsets.all(16.r),
+        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
         duration: duration,
         action: actionLabel != null
             ? SnackBarAction(
@@ -143,15 +144,15 @@ class _SnackbarContent extends StatelessWidget {
         Icon(
           icon,
           color: iconColor,
-          size: 24,
+          size: 24.sp,
         ),
-        const SizedBox(width: 12),
+        SizedBox(width: 12.w),
         Expanded(
           child: Text(
             message,
-            style: const TextStyle(
+            style: TextStyle(
               color: Colors.white,
-              fontSize: 14,
+              fontSize: 14.sp,
               fontWeight: FontWeight.w500,
               height: 1.4,
             ),

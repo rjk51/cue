@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../../services/auth_service.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
 import '../../home/presentation/home_screen.dart';
@@ -137,41 +138,41 @@ class _SignupScreenState extends State<SignupScreen> {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
+          padding: EdgeInsets.all(24.r),
           child: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 8),
+                SizedBox(height: 8.h),
                 // Title
-                const Text(
+                Text(
                   'Create your space.',
                   style: TextStyle(
-                    fontSize: 32,
+                    fontSize: 32.sp,
                     fontWeight: FontWeight.w600,
                     color: Colors.black,
                   ),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: 8.h),
                 Text(
                   'Start capturing your moments with precision.',
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 16.sp,
                     color: Colors.black.withOpacity(0.5),
                   ),
                 ),
-                const SizedBox(height: 48),
+                SizedBox(height: 48.h),
                 // Full Name field
                 Text(
                   'Full Name',
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 14.sp,
                     color: Colors.black.withOpacity(0.6),
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: 8.h),
                 TextFormField(
                   controller: _fullNameController,
                   keyboardType: TextInputType.name,
@@ -228,12 +229,12 @@ class _SignupScreenState extends State<SignupScreen> {
                 Text(
                   'Email Address',
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 14.sp,
                     color: Colors.black.withOpacity(0.6),
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: 8.h),
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
@@ -292,12 +293,12 @@ class _SignupScreenState extends State<SignupScreen> {
                 Text(
                   'Password',
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 14.sp,
                     color: Colors.black.withOpacity(0.6),
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: 8.h),
                 TextFormField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
@@ -364,11 +365,11 @@ class _SignupScreenState extends State<SignupScreen> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 48),
+                SizedBox(height: 48.h),
                 // Continue button
                 SizedBox(
                   width: double.infinity,
-                  height: 56,
+                  height: 56.h,
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _handleSignUp,
                     style: ElevatedButton.styleFrom(
@@ -377,35 +378,35 @@ class _SignupScreenState extends State<SignupScreen> {
                       elevation: 0,
                       disabledBackgroundColor: const Color(0xFFFFB4A3).withOpacity(0.6),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(28),
+                        borderRadius: BorderRadius.circular(28.r),
                       ),
                     ),
                     child: _isLoading
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
+                        ? SizedBox(
+                            height: 20.h,
+                            width: 20.w,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
                               color: Colors.black,
                             ),
                           )
-                        : const Row(
+                        : Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
                                 'Continue',
                                 style: TextStyle(
-                                  fontSize: 16,
+                                  fontSize: 16.sp,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
-                              SizedBox(width: 8),
-                              Icon(Icons.arrow_forward, size: 20),
+                              SizedBox(width: 8.w),
+                              Icon(Icons.arrow_forward, size: 20.sp),
                             ],
                           ),
                   ),
                 ),
-                const SizedBox(height: 24),
+                SizedBox(height: 24.h),
                 // Divider
                 Row(
                   children: [
@@ -416,11 +417,11 @@ class _SignupScreenState extends State<SignupScreen> {
                       ),
                     ),
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      padding: EdgeInsets.symmetric(horizontal: 16.w),
                       child: Text(
                         'or',
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: 14.sp,
                           color: Colors.black.withOpacity(0.4),
                         ),
                       ),
@@ -433,11 +434,11 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 24),
+                SizedBox(height: 24.h),
                 // Apple/Google Sign Up button (platform-specific)
                 SizedBox(
                   width: double.infinity,
-                  height: 56,
+                  height: 56.h,
                   child: OutlinedButton(
                     onPressed: _isLoading ? null : _handleGoogleSignIn,
                     style: OutlinedButton.styleFrom(
@@ -448,33 +449,44 @@ class _SignupScreenState extends State<SignupScreen> {
                       ),
                       elevation: 0,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(28),
+                        borderRadius: BorderRadius.circular(28.r),
                       ),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        if (_isIOS)
-                          const Icon(Icons.apple, size: 24)
-                        else
+                        if (_isIOS) ...[
                           Container(
-                            width: 20,
-                            height: 20,
+                            width: 20.w,
+                            height: 20.h,
                             decoration: BoxDecoration(
-                              color: Colors.grey[200],
                               shape: BoxShape.circle,
                             ),
-                            child: const FaIcon(
-                              FontAwesomeIcons.google,
-                              size: 18,
+                            child: FaIcon(
+                              FontAwesomeIcons.apple,
+                              size: 18.sp,
                               color: Colors.black54,
                             ),
                           ),
-                        const SizedBox(width: 12),
+                        ]
+                        else
+                          Container(
+                            width: 20.w,
+                            height: 20.h,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                            ),
+                            child: FaIcon(
+                              FontAwesomeIcons.google,
+                              size: 18.sp,
+                              color: Colors.black54,
+                            ),
+                          ),
+                        SizedBox(width: 12.w),
                         Text(
                           _isIOS ? 'Sign up with Apple' : 'Sign up with Google',
-                          style: const TextStyle(
-                            fontSize: 16,
+                          style: TextStyle(
+                            fontSize: 16.sp,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -482,7 +494,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 32),
+                SizedBox(height: 32.h),
                 // Login link
                 Center(
                   child: TextButton(
@@ -496,7 +508,7 @@ class _SignupScreenState extends State<SignupScreen> {
                       TextSpan(
                         text: 'Already have an account? ',
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: 14.sp,
                           color: Colors.black.withOpacity(0.6),
                         ),
                         children: const [

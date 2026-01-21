@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../reminders/domain/reminder_model.dart';
 import '../../reminders/presentation/create_reminder_screen.dart';
 import '../../reminders/data/reminder_service.dart';
@@ -166,8 +167,8 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.error_outline, size: 48, color: Colors.red),
-                  const SizedBox(height: 16),
+                   Icon(Icons.error_outline, size: 48.sp, color: Colors.red),
+                  SizedBox(height: 16.h),
                   Text('Error: ${snapshot.error}'),
                 ],
               ),
@@ -177,16 +178,16 @@ class _HomeScreenState extends State<HomeScreen> {
           final reminders = snapshot.data ?? [];
 
           if (reminders.isEmpty) {
-            return const Center(
+            return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.notifications_off, size: 64, color: Colors.grey),
-                  SizedBox(height: 16),
+                  Icon(Icons.notifications_off, size: 64.sp, color: Colors.grey),
+                  SizedBox(height: 16.h),
                   Text(
                     'No reminders yet.\nTap + to add one!',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 18, color: Colors.grey),
+                    style: TextStyle(fontSize: 18.sp, color: Colors.grey),
                   ),
                 ],
               ),
@@ -194,14 +195,14 @@ class _HomeScreenState extends State<HomeScreen> {
           }
 
           return ListView.builder(
-            padding: const EdgeInsets.all(8),
+            padding: EdgeInsets.all(8.r),
             itemCount: reminders.length,
             itemBuilder: (context, index) {
               final reminder = reminders[index];
               final isPast = reminder.time.isBefore(DateTime.now());
               
               return Card(
-                margin: const EdgeInsets.symmetric(vertical: 4),
+                margin: EdgeInsets.symmetric(vertical: 4.h),
                 elevation: 2,
                 child: ListTile(
                   leading: CircleAvatar(
@@ -220,7 +221,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const SizedBox(height: 4),
+                      SizedBox(height: 4.h),
                       Text(
                         DateFormat('MMM dd, yyyy - hh:mm a').format(reminder.time),
                       ),
