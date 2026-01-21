@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../reminders/domain/reminder_model.dart';
 import '../../reminders/data/reminder_service.dart';
 import '../../notifications/notification_service.dart';
@@ -122,7 +123,7 @@ class _CreateReminderScreenState extends State<CreateReminderScreen> {
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: EdgeInsets.all(16.r),
         child: Form(
           key: _formKey,
           child: Column(
@@ -169,27 +170,27 @@ class _CreateReminderScreenState extends State<CreateReminderScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 32),
+              SizedBox(height: 32.h),
               ElevatedButton(
                 onPressed: _isSaving ? null : _saveReminder,
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  padding: EdgeInsets.symmetric(vertical: 16.h),
                   backgroundColor: Theme.of(context).colorScheme.primary,
                   foregroundColor: Colors.white,
                   disabledBackgroundColor: Colors.grey,
                 ),
                 child: _isSaving
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
+                    ? SizedBox(
+                        height: 20.h,
+                        width: 20.w,
+                        child: const CircularProgressIndicator(
                           color: Colors.white,
                           strokeWidth: 2,
                         ),
                       )
-                    : const Text(
+                    : Text(
                         'Save Reminder',
-                        style: TextStyle(fontSize: 16),
+                        style: TextStyle(fontSize: 16.sp),
                       ),
               ),
             ],

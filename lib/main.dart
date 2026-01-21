@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -84,35 +85,41 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Cue',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
-      debugShowCheckedModeBanner: false,
-      home: StreamBuilder<User?>(
-        stream: FirebaseAuth.instance.authStateChanges(),
-        builder: (context, snapshot) {
-          // Show loading while checking auth state
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Scaffold(
-              backgroundColor: Color(0xFF4A4458),
-              body: Center(
-                child: CircularProgressIndicator(
-                  color: Color(0xFFFFB4A3),
+    return ScreenUtilInit(
+      designSize: const Size(484, 1048),
+      useInheritedMediaQuery: true,
+      minTextAdapt: true,
+      splitScreenMode: true,
+      child: MaterialApp(
+        title: 'Cue',
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+          useMaterial3: true,
+        ),
+        debugShowCheckedModeBanner: false,
+        home: StreamBuilder<User?>(
+          stream: FirebaseAuth.instance.authStateChanges(),
+          builder: (context, snapshot) {
+            // Show loading while checking auth state
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Scaffold(
+                backgroundColor: Color(0xFF4A4458),
+                body: Center(
+                  child: CircularProgressIndicator(
+                    color: Color(0xFFFFB4A3),
+                  ),
                 ),
-              ),
-            );
-          }
-          
-          // Show home screen if user is logged in, otherwise show welcome screen
-          if (snapshot.hasData) {
-            return const HomeScreen();
-          } else {
-            return const WelcomeScreen();
-          }
-        },
+              );
+            }
+            
+            // Show home screen if user is logged in, otherwise show welcome screen
+            if (snapshot.hasData) {
+              return const HomeScreen();
+            } else {
+              return const WelcomeScreen();
+            }
+          },
+        ),
       ),
     );
   }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'login_screen.dart';
 import 'signup_screen.dart';
 
@@ -11,7 +12,7 @@ class WelcomeScreen extends StatelessWidget {
       backgroundColor: const Color(0xFF4A4458),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+          padding: EdgeInsets.symmetric(horizontal: 24.w),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -19,30 +20,35 @@ class WelcomeScreen extends StatelessWidget {
               // Logo and tagline
               Column(
                 children: [
+                  Image.asset(
+                    'assets/logo.png',
+                    width: 120.w,
+                    height: 120.h,
+                  ),
                   Text(
                     'Cue',
                     style: TextStyle(
-                      fontSize: 72,
+                      fontSize: 72.sp,
                       fontWeight: FontWeight.w400,
                       color: Colors.white,
                       letterSpacing: 2,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  // SizedBox(height: 8.h),
                   // Decorative dot
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFB4A3),
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
+                  // Container(
+                  //   width: 8.w,
+                  //   height: 8.h,
+                  //   decoration: BoxDecoration(
+                  //     color: const Color(0xFFFFB4A3),
+                  //     shape: BoxShape.circle,
+                  //   ),
+                  // ),
+                  SizedBox(height: 16.h),
                   Text(
                     'PRECISION & CALM',
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 14.sp,
                       fontWeight: FontWeight.w400,
                       color: Colors.white.withOpacity(0.6),
                       letterSpacing: 2,
@@ -54,7 +60,7 @@ class WelcomeScreen extends StatelessWidget {
               // Sign In button
               SizedBox(
                 width: double.infinity,
-                height: 56,
+                height: 56.h,
                 child: ElevatedButton(
                   onPressed: () {
                     Navigator.push(
@@ -67,23 +73,23 @@ class WelcomeScreen extends StatelessWidget {
                     foregroundColor: Colors.black,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(28),
+                      borderRadius: BorderRadius.circular(28.r),
                     ),
                   ),
-                  child: const Text(
+                  child: Text(
                     'Sign In',
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 16.sp,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16.h),
               // Create Account button
               SizedBox(
                 width: double.infinity,
-                height: 56,
+                height: 56.h,
                 child: OutlinedButton(
                   onPressed: () {
                     Navigator.push(
@@ -99,25 +105,25 @@ class WelcomeScreen extends StatelessWidget {
                     ),
                     elevation: 0,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(28),
+                      borderRadius: BorderRadius.circular(28.r),
                     ),
                   ),
-                  child: const Text(
+                  child: Text(
                     'Create Account',
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 16.sp,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
                 ),
               ),
-              const SizedBox(height: 32),
+              SizedBox(height: 32.h),
               // Terms and Privacy Policy
               Text.rich(
                 TextSpan(
                   text: 'By continuing, you agree to our\n',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 12.sp,
                     color: Colors.white.withOpacity(0.5),
                     height: 1.5,
                   ),
@@ -133,7 +139,7 @@ class WelcomeScreen extends StatelessWidget {
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 24),
+              SizedBox(height: 24.h),
             ],
           ),
         ),
