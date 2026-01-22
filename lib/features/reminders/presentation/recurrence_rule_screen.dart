@@ -2,20 +2,29 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
 
-enum RecurrenceFrequency { daily, weekly, monthly, yearly }
+import '../domain/recurrence_rule.dart';
 
 class RecurrenceRuleScreen extends StatefulWidget {
-  const RecurrenceRuleScreen({super.key});
+  const RecurrenceRuleScreen({
+    super.key,
+    this.initialStartDate,
+    this.initialTimeOfDay,
+    this.initialRule,
+  });
+
+  final DateTime? initialStartDate;
+  final TimeOfDay? initialTimeOfDay;
+  final RecurrenceRule? initialRule;
 
   @override
   State<RecurrenceRuleScreen> createState() => _RecurrenceRuleScreenState();
 }
 
 class _RecurrenceRuleScreenState extends State<RecurrenceRuleScreen> {
-  RecurrenceFrequency _selectedFrequency = RecurrenceFrequency.weekly;
-  final Set<int> _selectedDays = {2, 4}; // Tuesday and Thursday (1=Monday, 7=Sunday)
-  TimeOfDay _selectedTime = const TimeOfDay(hour: 8, minute: 0);
-  DateTime _startDate = DateTime.now();
+  late RecurrenceFrequency _selectedFrequency;
+  late Set<int> _selectedDays;
+  late TimeOfDay _selectedTime;
+  late DateTime _startDate;
   DateTime? _endDate;
   bool _endDateEnabled = false;
 
@@ -30,6 +39,21 @@ class _RecurrenceRuleScreenState extends State<RecurrenceRuleScreen> {
     'Saturday',
     'Sunday'
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    final seedStart = widget.initialStartDate ?? DateTime.now();
+    final seedTime = widget.initialTimeOfDay ?? const TimeOfDay(hour: 8, minute: 0);
+    final seedRule = widget.initialRule;
+
+    _selectedFrequency = seedRule?.frequency ?? RecurrenceFrequency.weekly;
+    _selectedDays = {...(seedRule?.selectedWeekDays ?? {seedStart.weekday})};
+    _selectedTime = seedRule?.timeOfDay ?? seedTime;
+    _startDate = seedRule?.startDate ?? seedStart;
+    _endDate = seedRule?.endDate;
+    _endDateEnabled = _endDate != null;
+  }
 
   void _toggleDay(int dayIndex) {
     setState(() {
@@ -82,55 +106,37 @@ class _RecurrenceRuleScreenState extends State<RecurrenceRuleScreen> {
   }
 
   List<Map<String, String>> _generateNextOccurrences() {
-    final now = DateTime.now();
+    final rule = _buildRule();
     final occurrences = <Map<String, String>>[];
-    
-    if (_selectedFrequency == RecurrenceFrequency.weekly && _selectedDays.isNotEmpty) {
-      final sortedDays = _selectedDays.toList()..sort();
-      int addedCount = 0;
-      int daysToCheck = 0;
-      
-      while (addedCount < 3 && daysToCheck < 30) {
-        final checkDate = now.add(Duration(days: daysToCheck));
-        final checkDayOfWeek = checkDate.weekday;
-        
-        if (_selectedDays.contains(checkDayOfWeek)) {
-          final dayName = _fullDayNames[checkDayOfWeek - 1];
-          final dateStr = DateFormat('MMM dd').format(checkDate);
-          final hour = _selectedTime.hourOfPeriod == 0 ? 12 : _selectedTime.hourOfPeriod;
-          final minute = _selectedTime.minute.toString().padLeft(2, '0');
-          final period = _selectedTime.period == DayPeriod.am ? 'AM' : 'PM';
-          
-          occurrences.add({
-            'title': '$dayName, $dateStr',
-            'subtitle': 'In $daysToCheck day${daysToCheck == 1 ? '' : 's'}',
-            'time': '$hour:$minute $period',
-          });
-          addedCount++;
-        }
-        daysToCheck++;
-      }
-    } else {
-      occurrences.addAll([
-        {
-          'title': 'Tuesday, Oct 24',
-          'subtitle': 'In 2 days',
-          'time': '8:00 AM',
-        },
-        {
-          'title': 'Thursday, Oct 26',
-          'subtitle': 'In 4 days',
-          'time': '8:00 AM',
-        },
-        {
-          'title': 'Tuesday, Oct 31',
-          'subtitle': 'In 9 days',
-          'time': '8:00 AM',
-        },
-      ]);
+    DateTime? cursor = rule.nextOccurrence(from: DateTime.now());
+    int safety = 0;
+
+    while (cursor != null && occurrences.length < 3 && safety < 12) {
+      occurrences.add({
+        'title': DateFormat('EEEE, MMM dd').format(cursor),
+        'subtitle': _relativeSubtitle(cursor),
+        'time': DateFormat('hh:mm a').format(cursor),
+      });
+
+      cursor = rule.nextOccurrence(from: cursor.add(const Duration(minutes: 1)));
+      safety++;
     }
-    
+
     return occurrences;
+  }
+
+  String _relativeSubtitle(DateTime date) {
+    final now = DateTime.now();
+    final diff = date.difference(now);
+    final days = diff.inDays;
+    if (days <= 0) {
+      final hours = diff.inHours;
+      if (hours <= 0) {
+        return 'In less than 1 hour';
+      }
+      return 'In $hours hour${hours == 1 ? '' : 's'}';
+    }
+    return 'In $days day${days == 1 ? '' : 's'}';
   }
 
   List<TextSpan> _buildSummaryTextSpans() {
@@ -259,9 +265,16 @@ class _RecurrenceRuleScreenState extends State<RecurrenceRuleScreen> {
       appBar: AppBar(
         backgroundColor: const Color.fromARGB(255, 21, 23, 25),
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.close, color: Colors.white70),
-          onPressed: () => Navigator.pop(context),
+        leading: TextButton(
+          onPressed: () => Navigator.pop(context, null),
+          child: Text(
+            'Skip',
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 14.sp,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
         centerTitle: true,
         title: Text(
@@ -274,7 +287,7 @@ class _RecurrenceRuleScreenState extends State<RecurrenceRuleScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(context, _buildRule()),
             child: Text(
               'Save',
               style: TextStyle(
@@ -575,10 +588,12 @@ class _RecurrenceRuleScreenState extends State<RecurrenceRuleScreen> {
                   borderRadius: BorderRadius.circular(24.r),
                 ),
                 child: Column(
-                  children: _generateNextOccurrences().asMap().entries.map((entry) {
+                  children: () {
+                    final occurrences = _generateNextOccurrences();
+                    return occurrences.asMap().entries.map((entry) {
                     final index = entry.key;
                     final occurrence = entry.value;
-                    final isLast = index == _generateNextOccurrences().length - 1;
+                    final isLast = index == occurrences.length - 1;
                     
                     return Column(
                       children: [
@@ -628,7 +643,8 @@ class _RecurrenceRuleScreenState extends State<RecurrenceRuleScreen> {
                         if (!isLast) Divider(color: const Color.fromARGB(255, 38, 42, 46), height: 1.h),
                       ],
                     );
-                  }).toList(),
+                    }).toList();
+                  }(),
                 ),
               ),
             ],
@@ -665,6 +681,16 @@ class _RecurrenceRuleScreenState extends State<RecurrenceRuleScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  RecurrenceRule _buildRule() {
+    return RecurrenceRule(
+      frequency: _selectedFrequency,
+      selectedWeekDays: _selectedDays,
+      timeOfDay: _selectedTime,
+      startDate: _startDate,
+      endDate: _endDateEnabled ? _endDate : null,
     );
   }
 

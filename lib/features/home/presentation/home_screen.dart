@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../reminders/domain/reminder_model.dart';
+import '../../reminders/domain/suggestion_model.dart';
 import '../../reminders/presentation/create_reminder_screen.dart';
 import '../../reminders/presentation/recurrence_rule_screen.dart';
 import '../../reminders/data/reminder_service.dart';
+import '../../reminders/data/suggestion_service.dart';
 import '../../notifications/notification_service.dart';
 import '../../../services/auth_service.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
@@ -20,6 +22,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final ReminderService _reminderService = ReminderService();
+  final SuggestionService _suggestionService = SuggestionService();
   final NotificationService _notificationService = NotificationService();
   final AuthService _authService = AuthService();
 
@@ -120,6 +123,189 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Widget _buildSuggestionsSection(
+    bool isLoading,
+    Object? error,
+    List<Suggestion> suggestions,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 6.h),
+          child: Text(
+            'Recurrence Suggestions',
+            style: TextStyle(
+              fontSize: 16.sp,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        if (isLoading)
+          Card(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 16.h),
+              child: const Center(child: CircularProgressIndicator()),
+            ),
+          )
+        else if (error != null)
+          Card(
+            color: Colors.red.shade50,
+            child: ListTile(
+              leading: const Icon(Icons.error_outline, color: Colors.red),
+              title: const Text('Could not load suggestions'),
+              subtitle: Text('$error'),
+            ),
+          )
+        else if (suggestions.isEmpty)
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.repeat, color: Colors.grey),
+              title: const Text('No recurrence suggestions yet'),
+              subtitle: const Text('Create a recurring reminder to see it here.'),
+            ),
+          )
+        else
+          ...suggestions.map(_buildSuggestionCard),
+      ],
+    );
+  }
+
+  Widget _buildSuggestionCard(Suggestion suggestion) {
+    final nextDueText = suggestion.nextDueAt != null
+        ? DateFormat('MMM dd, yyyy - hh:mm a').format(suggestion.nextDueAt!)
+        : 'Next occurrence not set';
+    final recurrenceType = (suggestion.recurrence?['frequency'] as String? ??
+        suggestion.recurrence?['type'] as String? ??
+        'recurring')
+      .toUpperCase();
+
+    return Card(
+      margin: EdgeInsets.symmetric(vertical: 4.h),
+      elevation: 2,
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: Colors.deepPurple,
+          child: const Icon(Icons.repeat, color: Colors.white),
+        ),
+        title: Text(
+          suggestion.title,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(height: 4.h),
+            Text('Next: $nextDueText'),
+            SizedBox(height: 2.h),
+            Text('Recurrence: $recurrenceType'),
+          ],
+        ),
+        trailing: Chip(
+          label: Text(
+            suggestion.status.toUpperCase(),
+            style: const TextStyle(color: Colors.white),
+          ),
+          backgroundColor: Colors.deepPurple,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRemindersSection(
+    bool isLoading,
+    Object? error,
+    List<Reminder> reminders,
+  ) {
+    if (isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (error != null) {
+      return Card(
+        color: Colors.red.shade50,
+        child: ListTile(
+          leading: const Icon(Icons.error_outline, color: Colors.red),
+          title: const Text('Could not load reminders'),
+          subtitle: Text('$error'),
+        ),
+      );
+    }
+
+    if (reminders.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.notifications_off, size: 64.sp, color: Colors.grey),
+            SizedBox(height: 16.h),
+            Text(
+              'No reminders yet.\nTap + to add one!',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 18.sp, color: Colors.grey),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: reminders.map((reminder) {
+        final isPast = reminder.time.isBefore(DateTime.now());
+
+        return Card(
+          margin: EdgeInsets.symmetric(vertical: 4.h),
+          elevation: 2,
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: isPast ? Colors.orange : Colors.deepPurple,
+              child: Icon(
+                isPast ? Icons.notification_important : Icons.notifications,
+                color: Colors.white,
+              ),
+            ),
+            title: Text(
+              reminder.name,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(height: 4.h),
+                Text(
+                  DateFormat('MMM dd, yyyy - hh:mm a').format(reminder.time),
+                ),
+                if (isPast)
+                  const Text(
+                    'Overdue',
+                    style: TextStyle(
+                      color: Colors.orange,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+              ],
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.check_circle, color: Colors.green),
+                  tooltip: 'Mark as Done',
+                  onPressed: () => _markAsCompleted(reminder.id),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.red),
+                  tooltip: 'Delete',
+                  onPressed: () => _deleteReminder(reminder.id),
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -165,102 +351,41 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: StreamBuilder<List<Reminder>>(
-        stream: _reminderService.getRemindersStream(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: StreamBuilder<List<Suggestion>>(
+        stream: _suggestionService.getSuggestionsStream(),
+        builder: (context, suggestionSnapshot) {
+          return StreamBuilder<List<Reminder>>(
+            stream: _reminderService.getRemindersStream(),
+            builder: (context, reminderSnapshot) {
+              final suggestions = suggestionSnapshot.data ?? [];
+              final reminders = reminderSnapshot.data ?? [];
 
-          if (snapshot.hasError) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+              final loadingSuggestions =
+                  suggestionSnapshot.connectionState == ConnectionState.waiting &&
+                  suggestions.isEmpty;
+              final loadingReminders =
+                  reminderSnapshot.connectionState == ConnectionState.waiting &&
+                  reminders.isEmpty;
+
+              if (loadingSuggestions && loadingReminders) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              return ListView(
+                padding: EdgeInsets.all(8.r),
                 children: [
-                   Icon(Icons.error_outline, size: 48.sp, color: Colors.red),
-                  SizedBox(height: 16.h),
-                  Text('Error: ${snapshot.error}'),
-                ],
-              ),
-            );
-          }
-
-          final reminders = snapshot.data ?? [];
-
-          if (reminders.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.notifications_off, size: 64.sp, color: Colors.grey),
-                  SizedBox(height: 16.h),
-                  Text(
-                    'No reminders yet.\nTap + to add one!',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 18.sp, color: Colors.grey),
+                  _buildSuggestionsSection(
+                    loadingSuggestions,
+                    suggestionSnapshot.hasError ? suggestionSnapshot.error : null,
+                    suggestions,
+                  ),
+                  SizedBox(height: 12.h),
+                  _buildRemindersSection(
+                    loadingReminders,
+                    reminderSnapshot.hasError ? reminderSnapshot.error : null,
+                    reminders,
                   ),
                 ],
-              ),
-            );
-          }
-
-          return ListView.builder(
-            padding: EdgeInsets.all(8.r),
-            itemCount: reminders.length,
-            itemBuilder: (context, index) {
-              final reminder = reminders[index];
-              final isPast = reminder.time.isBefore(DateTime.now());
-              
-              return Card(
-                margin: EdgeInsets.symmetric(vertical: 4.h),
-                elevation: 2,
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: isPast 
-                        ? Colors.orange 
-                        : Colors.deepPurple,
-                    child: Icon(
-                      isPast ? Icons.notification_important : Icons.notifications,
-                      color: Colors.white,
-                    ),
-                  ),
-                  title: Text(
-                    reminder.name,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(height: 4.h),
-                      Text(
-                        DateFormat('MMM dd, yyyy - hh:mm a').format(reminder.time),
-                      ),
-                      if (isPast)
-                        const Text(
-                          'Overdue',
-                          style: TextStyle(
-                            color: Colors.orange,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                    ],
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.check_circle, color: Colors.green),
-                        tooltip: 'Mark as Done',
-                        onPressed: () => _markAsCompleted(reminder.id),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        tooltip: 'Delete',
-                        onPressed: () => _deleteReminder(reminder.id),
-                      ),
-                    ],
-                  ),
-                ),
               );
             },
           );

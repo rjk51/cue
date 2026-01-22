@@ -36,7 +36,8 @@ class ReminderService {
     try {
       final reminderData = reminder.toMap();
       // Ensure scheduledTime is set for Cloud Functions
-      reminderData['scheduledTime'] = reminderData['time'];
+      reminderData['scheduledTime'] = reminderData['nextDueAt'] ?? reminderData['time'];
+      reminderData['status'] = reminderData['status'] ?? 'active';
       
       final docRef = await _firestore.collection(_collection).add({
         ...reminderData,
