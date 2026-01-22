@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import '../../../services/auth_service.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
 
 class LinkAccountDialog extends StatefulWidget {
   final String email;
   final VoidCallback onSuccess;
+  final AuthorizationCredentialAppleID? appleCredential;
 
   const LinkAccountDialog({
     super.key,
     required this.email,
     required this.onSuccess,
+    this.appleCredential,
   });
 
   @override
@@ -37,16 +40,33 @@ class _LinkAccountDialogState extends State<LinkAccountDialog> {
     setState(() => _isLoading = true);
 
     try {
-      await _authService.linkGoogleToExistingAccount(
-        email: widget.email,
-        password: _passwordController.text,
-      );
+      if (widget.appleCredential != null) {
+        // Link Apple account
+        await _authService.linkAppleToExistingAccount(
+          email: widget.email,
+          password: _passwordController.text,
+          appleCredential: widget.appleCredential!,
+        );
+        
+        if (mounted) {
+          Navigator.pop(context);
+          // Show success message
+          context.showSuccessSnackbar('Apple is now linked to your Cue account.');
+          widget.onSuccess();
+        }
+      } else {
+        // Link Google account
+        await _authService.linkGoogleToExistingAccount(
+          email: widget.email,
+          password: _passwordController.text,
+        );
 
-      if (mounted) {
-        Navigator.pop(context);
-        // Show success message
-        context.showSuccessSnackbar('Google is now linked to your Cue account.');
-        widget.onSuccess();
+        if (mounted) {
+          Navigator.pop(context);
+          // Show success message
+          context.showSuccessSnackbar('Google is now linked to your Cue account.');
+          widget.onSuccess();
+        }
       }
     } catch (e) {
       if (mounted) {
