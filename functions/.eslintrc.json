@@ -18,7 +18,8 @@
     "sourceType": "module"
   },
   "ignorePatterns": [
-    "/lib/**/*"
+    "/lib/**/*",
+    "/test/**/*"
   ],
   "plugins": [
     "@typescript-eslint",

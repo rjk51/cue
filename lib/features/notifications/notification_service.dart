@@ -94,10 +94,38 @@ class NotificationService {
     // Request exact alarm permission for Android 12+
     await _requestExactAlarmPermission();
 
-    // Get FCM token
-    _fcmToken = await _messaging.getToken();
-    print('FCM Token: $_fcmToken');
-    await _saveFCMTokenToFirestore(_fcmToken);
+    // Get FCM token (iOS requires APNS token first)
+    try {
+      if (Platform.isIOS) {
+        // For iOS, wait for APNS token first
+        String? apnsToken = await _messaging.getAPNSToken();
+        if (apnsToken != null) {
+          print('APNS Token: $apnsToken');
+          _fcmToken = await _messaging.getToken();
+          print('FCM Token: $_fcmToken');
+          await _saveFCMTokenToFirestore(_fcmToken);
+        } else {
+          print('⚠️ APNS token is null, retrying...');
+          // Retry after a short delay
+          await Future.delayed(const Duration(seconds: 2));
+          apnsToken = await _messaging.getAPNSToken();
+          if (apnsToken != null) {
+            _fcmToken = await _messaging.getToken();
+            print('FCM Token (retry): $_fcmToken');
+            await _saveFCMTokenToFirestore(_fcmToken);
+          } else {
+            print('❌ Could not get APNS token after retry');
+          }
+        }
+      } else {
+        // Android can get token directly
+        _fcmToken = await _messaging.getToken();
+        print('FCM Token: $_fcmToken');
+        await _saveFCMTokenToFirestore(_fcmToken);
+      }
+    } catch (e) {
+      print('❌ Error getting FCM token: $e');
+    }
 
     // Listen to token refresh
     _messaging.onTokenRefresh.listen((newToken) {
@@ -148,6 +176,7 @@ class NotificationService {
       requestAlertPermission: true,
       requestBadgePermission: true,
       requestSoundPermission: true,
+      onDidReceiveLocalNotification: null,
     );
 
     const InitializationSettings initSettings = InitializationSettings(
@@ -155,10 +184,17 @@ class NotificationService {
       iOS: iosSettings,
     );
 
-    await _localNotifications.initialize(
+    final initialized = await _localNotifications.initialize(
       initSettings,
       onDidReceiveNotificationResponse: _onNotificationResponse,
     );
+
+    print('📱 Local notifications initialized: $initialized');
+    
+    // For iOS, create notification channel equivalent
+    if (Platform.isIOS) {
+      print('📱 iOS detected - notification categories should be registered in AppDelegate');
+    }
   }
 
   void _onNotificationResponse(NotificationResponse response) {
@@ -411,6 +447,7 @@ class NotificationService {
   // Test notification - shows immediately
   Future<void> showTestNotification() async {
     print('🧪 Showing test notification...');
+    print('📱 Platform: ${Platform.isIOS ? "iOS" : "Android"}');
     
     const AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
@@ -438,6 +475,9 @@ class NotificationService {
 
     const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
       categoryIdentifier: 'reminder_category',
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
     );
 
     const NotificationDetails notificationDetails = NotificationDetails(
@@ -445,15 +485,22 @@ class NotificationService {
       iOS: iosDetails,
     );
 
+    print('📱 Calling show() with ID: 999');
     await _localNotifications.show(
       999,
       '🧪 Test Notification',
-      'If you see this, notifications are working!',
+      'If you see this, notifications are working! Tap Done or Snooze.',
       notificationDetails,
       payload: 'test_reminder_${DateTime.now().millisecondsSinceEpoch}',
     );
     
-    print('✅ Test notification sent');
+    print('✅ Test notification sent - check notification center');
+    
+    // For iOS, also log the pending notifications
+    if (Platform.isIOS) {
+      final pending = await _localNotifications.pendingNotificationRequests();
+      print('📱 Pending iOS notifications: ${pending.length}');
+    }
   }
 
   // Subscribe to a topic for cross-device sync
