@@ -6,6 +6,17 @@ admin.initializeApp();
 const db = admin.firestore();
 const messaging = admin.messaging();
 
+// ============================================================================
+// RECURRENCE SYSTEM EXPORTS
+// ============================================================================
+// Export recurrence functions from separate module to keep code organized
+export {
+  completeReminder,
+  updateReminderRecurrence,
+  onReminderCompleted,
+  calculateNextDueAt,
+} from "./recurrenceFunctions";
+
 /**
  * HTTP Callable Function triggered by the mobile app when a reminder is due
  * Sends FCM notification for a specific reminder
@@ -62,6 +73,7 @@ export const triggerReminderNotification = functions.https.onCall(
           );
         }
         console.log("No devices collection found, using reminder deviceToken");
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         devicesSnapshot.docs.push({
           data: () => ({fcmToken: deviceToken}),
         } as any);
