@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -193,6 +194,150 @@ class AuthService {
     return user.providerData.any((info) => info.providerId == 'google.com');
   }
 
+  // Sign in with Apple
+  Future<UserCredential?> signInWithApple() async {
+    try {
+      // Request credential for the currently signed in Apple account
+      final appleCredential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
+
+      // Create an OAuthCredential from the credential returned by Apple
+      final oauthCredential = OAuthProvider('apple.com').credential(
+        idToken: appleCredential.identityToken,
+        accessToken: appleCredential.authorizationCode,
+      );
+
+      // Sign in to Firebase with the Apple credential
+      final userCredential = await _auth.signInWithCredential(oauthCredential);
+
+      // Update display name if available (only on first sign-in)
+      if (userCredential.user != null && 
+          (userCredential.user!.displayName == null || userCredential.user!.displayName!.isEmpty) &&
+          appleCredential.givenName != null && appleCredential.familyName != null) {
+        await userCredential.user!.updateDisplayName(
+          '${appleCredential.givenName} ${appleCredential.familyName}',
+        );
+      }
+
+      return userCredential;
+    } on SignInWithAppleAuthorizationException catch (e) {
+      if (e.code == AuthorizationErrorCode.canceled) {
+        // User canceled the sign-in
+        return null;
+      }
+      throw 'Apple Sign-In failed. Please try again.';
+    } on FirebaseAuthException catch (e) {
+      throw _handleAuthException(e);
+    } catch (e) {
+      throw 'Apple Sign-In failed. Please try again.';
+    }
+  }
+
+  // Attempt Apple sign-in and check for account conflicts
+  Future<AppleSignInResult> attemptAppleSignIn() async {
+    try {
+      // Request credential for the currently signed in Apple account
+      final appleCredential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
+
+      // Check if an account already exists with this email
+      if (appleCredential.email != null) {
+        final signInMethods = await _auth.fetchSignInMethodsForEmail(appleCredential.email!);
+        
+        if (signInMethods.isNotEmpty && !signInMethods.contains('apple.com')) {
+          // Account exists with different provider (e.g., email/password, Google)
+          return AppleSignInResult(
+            status: AppleSignInStatus.needsLinking,
+            email: appleCredential.email!,
+            existingProviders: signInMethods,
+            appleCredential: appleCredential,
+          );
+        }
+      }
+
+      // Create an OAuthCredential from the credential returned by Apple
+      final oauthCredential = OAuthProvider('apple.com').credential(
+        idToken: appleCredential.identityToken,
+        accessToken: appleCredential.authorizationCode,
+      );
+
+      // Sign in to Firebase with the Apple credential
+      final userCredential = await _auth.signInWithCredential(oauthCredential);
+
+      // Update display name if available (only on first sign-in)
+      if (userCredential.user != null && 
+          (userCredential.user!.displayName == null || userCredential.user!.displayName!.isEmpty) &&
+          appleCredential.givenName != null && appleCredential.familyName != null) {
+        await userCredential.user!.updateDisplayName(
+          '${appleCredential.givenName} ${appleCredential.familyName}',
+        );
+      }
+
+      return AppleSignInResult(
+        status: AppleSignInStatus.success,
+        userCredential: userCredential,
+      );
+    } on SignInWithAppleAuthorizationException catch (e) {
+      if (e.code == AuthorizationErrorCode.canceled) {
+        return AppleSignInResult(status: AppleSignInStatus.cancelled);
+      }
+      throw 'Apple Sign-In failed. Please try again.';
+    } on FirebaseAuthException catch (e) {
+      throw _handleAuthException(e);
+    } catch (e) {
+      throw 'Apple Sign-In failed. Please try again.';
+    }
+  }
+
+  // Link Apple account to existing user
+  Future<UserCredential> linkAppleToExistingAccount({
+    required String email,
+    required String password,
+    required AuthorizationCredentialAppleID appleCredential,
+  }) async {
+    try {
+      // First, verify the password
+      final credential = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      // Create OAuth credential from Apple
+      final oauthCredential = OAuthProvider('apple.com').credential(
+        idToken: appleCredential.identityToken,
+        accessToken: appleCredential.authorizationCode,
+      );
+
+      // Link the Apple credential to the existing user
+      final linkedCredential = await credential.user!.linkWithCredential(oauthCredential);
+      
+      return linkedCredential;
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'provider-already-linked') {
+        throw 'Apple account is already linked to this account.';
+      } else if (e.code == 'credential-already-in-use') {
+        throw 'This Apple account is already linked to another user.';
+      }
+      throw _handleAuthException(e);
+    } catch (e) {
+      if (e is String) rethrow;
+      throw 'Failed to link Apple account. Please try again.';
+    }
+  }
+
+  // Check if user has Apple provider linked
+  bool hasAppleProvider(User user) {
+    return user.providerData.any((info) => info.providerId == 'apple.com');
+  }
+
   // Sign out
   Future<void> signOut() async {
     try {
@@ -253,5 +398,29 @@ class GoogleSignInResult {
     this.userCredential,
     this.email,
     this.existingProviders,
+  });
+}
+
+// Enum for Apple Sign-In status
+enum AppleSignInStatus {
+  success,
+  cancelled,
+  needsLinking,
+}
+
+// Result class for Apple Sign-In
+class AppleSignInResult {
+  final AppleSignInStatus status;
+  final UserCredential? userCredential;
+  final String? email;
+  final List<String>? existingProviders;
+  final AuthorizationCredentialAppleID? appleCredential;
+
+  AppleSignInResult({
+    required this.status,
+    this.userCredential,
+    this.email,
+    this.existingProviders,
+    this.appleCredential,
   });
 }

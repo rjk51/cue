@@ -16,5 +16,10 @@ service cloud.firestore {
     match /devices/{deviceToken} {
       allow read, write: if true;
     }
+    
+    // Allow all users to read and write suggestions (for prototype)
+    match /suggestions/{suggestionId} {
+      allow read, write: if true;
+    }
   }
 }

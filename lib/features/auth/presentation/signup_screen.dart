@@ -124,6 +124,62 @@ class _SignupScreenState extends State<SignupScreen> {
     }
   }
 
+  Future<void> _handleAppleSignIn() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final result = await _authService.attemptAppleSignIn();
+      
+      if (result.status == AppleSignInStatus.cancelled) {
+        // User canceled
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      if (result.status == AppleSignInStatus.needsLinking) {
+        // Account exists with email/password, need to link
+        setState(() => _isLoading = false);
+        
+        if (mounted) {
+          await showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => LinkAccountDialog(
+              email: result.email!,
+              appleCredential: result.appleCredential,
+              onSuccess: () {
+                // Navigate to home after successful linking
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (context) => const HomeScreen()),
+                  (route) => false,
+                );
+              },
+            ),
+          );
+        }
+        return;
+      }
+
+      // Successfully signed in with Apple
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        context.showErrorSnackbar(e.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -440,7 +496,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   width: double.infinity,
                   height: 56.h,
                   child: OutlinedButton(
-                    onPressed: _isLoading ? null : _handleGoogleSignIn,
+                    onPressed: _isLoading ? null : (_isIOS ? _handleAppleSignIn : _handleGoogleSignIn),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.black,
                       side: BorderSide(
