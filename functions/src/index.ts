@@ -201,7 +201,42 @@ export const checkPendingReminders = functions.https.onCall(
 export const onReminderCreated = functions.firestore
   .document("reminders/{reminderId}")
   .onCreate(async (snap, context) => {
-    console.log(`New reminder created: ${context.params.reminderId}`, snap.data());
+    const reminderId = context.params.reminderId;
+    const reminderData = snap.data();
+
+    console.log(`New reminder created: ${reminderId}`, reminderData);
+
+    // Check if the reminder has recurrence
+    if (reminderData.recurrence) {
+      console.log(`Processing recurring reminder: ${reminderId}`);
+      console.log(`Recurrence type: ${reminderData.recurrence.type}`);
+
+      try {
+        // Save to suggestions collection for the user
+        const suggestionData = {
+          userId: reminderData.userId,
+          reminderId: reminderId,
+          title: reminderData.title,
+          description: reminderData.description || "",
+          status: reminderData.status || "active",
+          recurrence: reminderData.recurrence,
+          nextDueAt: reminderData.nextDueAt,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          version: reminderData.version || 1,
+        };
+
+        await db.collection("suggestions").add(suggestionData);
+        const msg = "Recurring reminder saved to suggestions " +
+          `collection for user: ${reminderData.userId}`;
+        console.log(`✅ ${msg}`);
+      } catch (error) {
+        console.error("❌ Error saving to suggestions collection:", error);
+      }
+    } else {
+      console.log("Non-recurring reminder, skipping suggestions collection");
+    }
+
     return null;
   });
 
