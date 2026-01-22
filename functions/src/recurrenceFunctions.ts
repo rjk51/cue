@@ -9,7 +9,9 @@ import * as admin from "firebase-admin";
  * Recurrence configuration for a reminder
  */
 interface RecurrenceConfig {
-  type: "interval" | "weekly" | "monthly";
+  type: "interval" | "weekly" | "monthly" | "yearly";
+  startDate?: admin.firestore.Timestamp;
+  endDate?: admin.firestore.Timestamp;
 
   // For interval-based recurrence
   every?: number; // e.g., 2 for "every 2 days"
@@ -23,6 +25,10 @@ interface RecurrenceConfig {
   // For monthly recurrence
   pattern?: "dayOfMonth" | "nthWeekday";
   value?: number; // day number (1-31) or nth weekday (1-5, -1 for last)
+
+  // For yearly recurrence
+  month?: number; // 1-12
+  day?: number; // 1-31
 }
 
 /**
@@ -32,7 +38,7 @@ interface Reminder {
   id: string;
   title: string;
   status: "active" | "paused";
-  nextDueAt: admin.firestore.Timestamp;
+  nextDueAt?: admin.firestore.Timestamp;
   recurrence?: RecurrenceConfig;
   lastCompletedAt?: admin.firestore.Timestamp;
   updatedAt: admin.firestore.Timestamp;
@@ -58,21 +64,37 @@ export function calculateNextDueAt(reminder: Reminder): Date | null {
 
   const recurrence = reminder.recurrence;
   const now = new Date();
+  const startBoundary = recurrence.startDate?.toDate();
+  const baseline = startBoundary && startBoundary > now ? startBoundary : now;
 
+  let nextDue: Date | null = null;
   switch (recurrence.type) {
   case "interval":
-    return calculateIntervalNextDue(reminder, recurrence, now);
+    nextDue = calculateIntervalNextDue(reminder, recurrence, baseline);
+    break;
 
   case "weekly":
-    return calculateWeeklyNextDue(recurrence, now);
+    nextDue = calculateWeeklyNextDue(recurrence, baseline);
+    break;
 
   case "monthly":
-    return calculateMonthlyNextDue(recurrence, now);
+    nextDue = calculateMonthlyNextDue(recurrence, baseline);
+    break;
+
+  case "yearly":
+    nextDue = calculateYearlyNextDue(recurrence, baseline);
+    break;
 
   default:
     console.warn(`Unknown recurrence type: ${recurrence.type}`);
+  }
+
+  const endBoundary = recurrence.endDate?.toDate();
+  if (endBoundary && nextDue && nextDue.getTime() > endBoundary.getTime()) {
     return null;
   }
+
+  return nextDue;
 }
 
 /**
@@ -83,13 +105,13 @@ export function calculateNextDueAt(reminder: Reminder): Date | null {
  * - "scheduled": Next occurrence is X time after the last scheduled time
  * @param {Reminder} reminder - The reminder document
  * @param {RecurrenceConfig} recurrence - The recurrence configuration
- * @param {Date} now - Current date
+ * @param {Date} baseline - Current date respecting start boundary
  * @return {Date} Next due date
  */
 function calculateIntervalNextDue(
   reminder: Reminder,
   recurrence: RecurrenceConfig,
-  now: Date
+  baseline: Date
 ): Date {
   const every = recurrence.every || 1;
   const unit = recurrence.unit || "days";
@@ -103,7 +125,7 @@ function calculateIntervalNextDue(
     referenceDate = reminder.lastCompletedAt.toDate();
   } else {
     // Anchor to last scheduled time (or current time if never completed)
-    referenceDate = reminder.nextDueAt.toDate();
+    referenceDate = reminder.nextDueAt ? reminder.nextDueAt.toDate() : baseline;
   }
 
   // Calculate the interval in milliseconds
@@ -127,7 +149,7 @@ function calculateIntervalNextDue(
   // If the calculated next due is in the past, keep adding intervals
   // until it's in the future
   // This handles cases where the reminder wasn't completed for a long time
-  while (nextDue.getTime() < now.getTime()) {
+  while (nextDue.getTime() < baseline.getTime()) {
     nextDue.setTime(nextDue.getTime() + intervalMs);
   }
 
@@ -138,12 +160,12 @@ function calculateIntervalNextDue(
  * Calculate next due date for WEEKLY recurrence
  * Examples: "Every Monday at 9am", "Every Mon/Wed/Fri at 14:30"
  * @param {RecurrenceConfig} recurrence - The recurrence configuration
- * @param {Date} now - Current date
+ * @param {Date} baseline - Current date respecting start boundary
  * @return {Date} Next due date
  */
 function calculateWeeklyNextDue(
   recurrence: RecurrenceConfig,
-  now: Date
+  baseline: Date
 ): Date {
   const days = recurrence.days || ["mon"];
   const time = recurrence.time || "09:00";
@@ -162,16 +184,16 @@ function calculateWeeklyNextDue(
 
   if (targetDays.length === 0) {
     console.warn("No valid days specified for weekly recurrence");
-    return now;
+    return baseline;
   }
 
   // Sort target days to find the next occurrence
   targetDays.sort((a, b) => a - b);
 
   // Find the next occurrence
-  const currentDay = now.getDay();
-  const currentHour = now.getHours();
-  const currentMinute = now.getMinutes();
+  const currentDay = baseline.getDay();
+  const currentHour = baseline.getHours();
+  const currentMinute = baseline.getMinutes();
 
   // Check if we can schedule for today
   const todayIndex = targetDays.indexOf(currentDay);
@@ -179,7 +201,7 @@ function calculateWeeklyNextDue(
     // Today is a target day - check if the time hasn't passed yet
     if (hours > currentHour ||
         (hours === currentHour && minutes > currentMinute)) {
-      const nextDue = new Date(now);
+      const nextDue = new Date(baseline);
       nextDue.setHours(hours, minutes, 0, 0);
       return nextDue;
     }
@@ -200,7 +222,7 @@ function calculateWeeklyNextDue(
   }
 
   // Calculate the next due date
-  const nextDue = new Date(now);
+  const nextDue = new Date(baseline);
   nextDue.setDate(nextDue.getDate() + daysUntilNext);
   nextDue.setHours(hours, minutes, 0, 0);
 
@@ -213,12 +235,12 @@ function calculateWeeklyNextDue(
  * - "dayOfMonth": Repeat on a specific day (e.g., 15th of every month)
  * - "nthWeekday": Repeat on nth weekday (e.g., 2nd Tuesday, last Friday)
  * @param {RecurrenceConfig} recurrence - The recurrence configuration
- * @param {Date} now - Current date
+ * @param {Date} baseline - Current date respecting start boundary
  * @return {Date} Next due date
  */
 function calculateMonthlyNextDue(
   recurrence: RecurrenceConfig,
-  now: Date
+  baseline: Date
 ): Date {
   const pattern = recurrence.pattern || "dayOfMonth";
   const value = recurrence.value || 1;
@@ -227,9 +249,9 @@ function calculateMonthlyNextDue(
   const [hours, minutes] = time.split(":").map(Number);
 
   if (pattern === "dayOfMonth") {
-    return calculateMonthlyDayOfMonth(now, value, hours, minutes);
+    return calculateMonthlyDayOfMonth(baseline, value, hours, minutes);
   } else {
-    return calculateMonthlyNthWeekday(now, value, hours, minutes);
+    return calculateMonthlyNthWeekday(baseline, value, hours, minutes);
   }
 }
 
@@ -269,6 +291,42 @@ function calculateMonthlyDayOfMonth(
   }
 
   return nextDue;
+}
+
+/**
+ * Calculate next due date for YEARLY recurrence
+ * Example: every year on March 10 at 09:00
+ * @param {RecurrenceConfig} recurrence - The recurrence configuration
+ * @param {Date} baseline - Current date respecting start boundary
+ * @return {Date} Next due date
+ */
+function calculateYearlyNextDue(
+  recurrence: RecurrenceConfig,
+  baseline: Date
+): Date {
+  const time = recurrence.time || "09:00";
+  const [hours, minutes] = time.split(":").map(Number);
+
+  const month = recurrence.month ??
+    ((recurrence.startDate?.toDate().getMonth() ?? baseline.getMonth()) + 1);
+  const day = recurrence.day ?? recurrence.value ?? baseline.getDate();
+
+  const target = new Date(baseline);
+  target.setMonth(month - 1, day);
+  target.setHours(hours, minutes, 0, 0);
+
+  if (target <= baseline) {
+    target.setFullYear(target.getFullYear() + 1);
+    target.setMonth(month - 1, day);
+  }
+
+  // Clamp overflow (e.g., Feb 30 → Feb 28/29)
+  if (target.getMonth() !== month - 1) {
+    target.setDate(0);
+    target.setHours(hours, minutes, 0, 0);
+  }
+
+  return target;
 }
 
 /**
