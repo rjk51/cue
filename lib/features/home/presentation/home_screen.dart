@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../reminders/domain/reminder_model.dart';
 import '../../reminders/presentation/create_reminder_screen.dart';
+import '../../reminders/presentation/recurrence_rule_screen.dart';
 import '../../reminders/data/reminder_service.dart';
 import '../../notifications/notification_service.dart';
 import '../../../services/auth_service.dart';
@@ -78,6 +79,15 @@ class _HomeScreenState extends State<HomeScreen> {
     if (result != null && mounted) {
       context.showSuccessSnackbar('Reminder created successfully!');
     }
+  }
+
+  void _navigateToRecurrenceRule() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const RecurrenceRuleScreen(),
+      ),
+    );
   }
 
   Future<void> _markAsCompleted(String reminderId) async {
@@ -256,10 +266,25 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _navigateToCreateReminder,
-        tooltip: 'Add Reminder',
-        child: const Icon(Icons.add),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Temporary FAB for testing Recurrence Rule screen
+          FloatingActionButton(
+            heroTag: 'recurrence_rule_fab',
+            onPressed: _navigateToRecurrenceRule,
+            tooltip: 'Recurrence Rule (Test)',
+            backgroundColor: Colors.deepPurple,
+            child: const Icon(Icons.repeat),
+          ),
+          SizedBox(height: 16.h),
+          FloatingActionButton(
+            heroTag: 'add_reminder_fab',
+            onPressed: _navigateToCreateReminder,
+            tooltip: 'Add Reminder',
+            child: const Icon(Icons.add),
+          ),
+        ],
       ),
     );
   }
