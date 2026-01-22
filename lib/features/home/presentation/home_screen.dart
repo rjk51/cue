@@ -395,14 +395,14 @@ class _HomeScreenState extends State<HomeScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           // Temporary FAB for testing Recurrence Rule screen
-          FloatingActionButton(
-            heroTag: 'recurrence_rule_fab',
-            onPressed: _navigateToRecurrenceRule,
-            tooltip: 'Recurrence Rule (Test)',
-            backgroundColor: Colors.deepPurple,
-            child: const Icon(Icons.repeat),
-          ),
-          SizedBox(height: 16.h),
+          // FloatingActionButton(
+          //   heroTag: 'recurrence_rule_fab',
+          //   onPressed: _navigateToRecurrenceRule,
+          //   tooltip: 'Recurrence Rule (Test)',
+          //   backgroundColor: Colors.deepPurple,
+          //   child: const Icon(Icons.repeat),
+          // ),
+          // SizedBox(height: 16.h),
           FloatingActionButton(
             heroTag: 'add_reminder_fab',
             onPressed: _navigateToCreateReminder,
