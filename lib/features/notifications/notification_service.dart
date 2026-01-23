@@ -8,6 +8,7 @@ import 'package:timezone/data/latest.dart' as tz;
 import '../reminders/domain/reminder_model.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/services.dart';
 
 // Top-level function for background message handling
 @pragma('vm:entry-point')
@@ -151,6 +152,31 @@ class NotificationService {
     
     // Listen for reminder updates to dismiss notifications
     _listenToReminderUpdates();
+    
+    // For iOS: Listen for notification actions from native side
+    if (Platform.isIOS) {
+      _setupIOSNotificationActionListener();
+    }
+  }
+  
+  void _setupIOSNotificationActionListener() {
+    // Listen for notification actions posted from iOS AppDelegate
+    const EventChannel('notification_action_channel')
+        .receiveBroadcastStream()
+        .listen((event) {
+      print('📱 Received iOS notification action: $event');
+      if (event is Map) {
+        final action = event['action'] as String?;
+        final reminderId = event['reminderId'] as String?;
+        
+        if (action != null && reminderId != null && onNotificationAction != null) {
+          print('✅ Processing iOS action: $action for reminder: $reminderId');
+          onNotificationAction!(reminderId, action);
+        }
+      }
+    }, onError: (error) {
+      print('❌ Error listening to iOS notification actions: $error');
+    });
   }
 
   Future<void> _requestExactAlarmPermission() async {
@@ -223,7 +249,14 @@ class NotificationService {
     print('Foreground message received');
     print('Data: ${message.data}');
     
-    // Check if it's a reminder notification (data-only message)
+    // On iOS, don't show local notification - let native system handle it via AppDelegate
+    // The AppDelegate is configured to show foreground notifications with banner and list
+    if (Platform.isIOS) {
+      print('📱 iOS: Letting native notification system handle foreground notification');
+      return;
+    }
+    
+    // On Android, show local notification with action buttons
     if (message.data.containsKey('type') && 
         message.data['type'] == 'reminder_notification') {
       final reminderId = message.data['reminderId'] ?? '';
@@ -300,6 +333,9 @@ class NotificationService {
 
     const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
       categoryIdentifier: 'reminder_category',
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
     );
 
     final NotificationDetails notificationDetails = NotificationDetails(
@@ -317,67 +353,19 @@ class NotificationService {
   }
 
   // Schedule a notification using Cloud Functions
+  // Note: Actual scheduling now happens automatically via Firestore triggers
+  // This method is kept for backward compatibility but scheduling is handled server-side
   Future<void> scheduleReminderNotification(Reminder reminder) async {
-    print('=== Scheduling Cloud Function Trigger ===');
+    print('=== Reminder Created ===');
     print('Reminder: ${reminder.name}');
     print('Time: ${reminder.time}');
+    print('✅ Cloud Functions will automatically handle notification scheduling');
     
-    if (reminder.time.isBefore(DateTime.now())) {
-      print('❌ Reminder time is in the past, not scheduling');
-      return;
-    }
-
-    try {
-      // Calculate delay until reminder time
-      final delay = reminder.time.difference(DateTime.now());
-      print('Delay until trigger: ${delay.inSeconds} seconds');
-      
-      // Schedule local alarm to trigger Cloud Function
-      final scheduledDate = tz.TZDateTime(
-        tz.local,
-        reminder.time.year,
-        reminder.time.month,
-        reminder.time.day,
-        reminder.time.hour,
-        reminder.time.minute,
-        reminder.time.second,
-      );
-
-      // Use a silent local notification to trigger the Cloud Function call
-      await _localNotifications.zonedSchedule(
-        reminder.id.hashCode,
-        null, // Silent notification
-        null,
-        scheduledDate,
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'reminder_trigger_channel',
-            'Reminder Triggers',
-            channelDescription: 'Silent channel for triggering cloud notifications',
-            importance: Importance.low,
-            priority: Priority.low,
-            playSound: false,
-            enableVibration: false,
-            visibility: NotificationVisibility.secret,
-          ),
-        ),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-        payload: reminder.id,
-      );
-
-      // Also schedule a fallback timer for when app is open
-      Future.delayed(delay, () {
-        _triggerCloudNotification(reminder.id, 'demo_user');
-      });
-
-      print('✅ Scheduled cloud notification trigger for: ${reminder.name}');
-      print('=== Scheduling Complete ===');
-    } catch (e) {
-      print('❌ Error scheduling cloud notification: $e');
-      rethrow;
-    }
+    // The scheduleReminderOnCreate Cloud Function trigger will automatically
+    // create a pending_notification document when the reminder is saved to Firestore
+    // No local scheduling needed - everything is handled server-side for iOS/Android parity
+    
+    return;
   }
 
   // Trigger Cloud Function to send notification

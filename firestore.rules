@@ -1,25 +1,31 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
+
     // Allow all users to read and write reminders (for prototype)
     match /reminders/{reminderId} {
       allow read, write: if true;
     }
-    
+
     // Allow all users to read and write user documents (for prototype)
     match /users/{userId} {
       allow read, write: if true;
     }
-    
+
     // Allow devices to write their own FCM tokens
     match /devices/{deviceToken} {
       allow read, write: if true;
     }
-    
+
     // Allow all users to read and write suggestions (for prototype)
     match /suggestions/{suggestionId} {
       allow read, write: if true;
+    }
+
+    // Pending notifications collection (managed by Cloud Functions)
+    match /pending_notifications/{notificationId} {
+      allow read: if true;
+      allow write: if true; // Only Cloud Functions should write, but allowing for testing
     }
   }
 }

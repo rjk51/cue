@@ -6,11 +6,22 @@ import UserNotifications
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
+  private var eventSink: FlutterEventSink?
+  
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
     GeneratedPluginRegistrant.register(with: self)
+    
+    // Setup event channel for notification actions
+    if let controller = window?.rootViewController as? FlutterViewController {
+      let eventChannel = FlutterEventChannel(
+        name: "notification_action_channel",
+        binaryMessenger: controller.binaryMessenger
+      )
+      eventChannel.setStreamHandler(NotificationActionStreamHandler())
+    }
     
     registerNotificationCategories()
     
@@ -105,9 +116,56 @@ extension AppDelegate {
     let userInfo = response.notification.request.content.userInfo
     let actionIdentifier = response.actionIdentifier
     
+    print("📱 Notification Action Received")
     print("📱 Action: \(actionIdentifier)")
     print("📱 UserInfo: \(userInfo)")
     
+    // Handle custom actions (mark_done, snooze)
+    if actionIdentifier == "mark_done" || actionIdentifier == "snooze" {
+      // Extract reminderId from userInfo
+      if let reminderId = userInfo["reminderId"] as? String {
+        print("📱 Processing action '\(actionIdentifier)' for reminder: \(reminderId)")
+        
+        // Send event to Flutter via EventChannel
+        NotificationActionStreamHandler.sendAction(
+          action: actionIdentifier,
+          reminderId: reminderId
+        )
+      }
+    }
+    
     completionHandler()
+  }
+}
+
+// StreamHandler for notification actions
+class NotificationActionStreamHandler: NSObject, FlutterStreamHandler {
+  private static var eventSink: FlutterEventSink?
+  
+  func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+    NotificationActionStreamHandler.eventSink = events
+    print("📱 Event channel listener attached")
+    return nil
+  }
+  
+  func onCancel(withArguments arguments: Any?) -> FlutterError? {
+    NotificationActionStreamHandler.eventSink = nil
+    print("📱 Event channel listener detached")
+    return nil
+  }
+  
+  static func sendAction(action: String, reminderId: String) {
+    guard let sink = eventSink else {
+      print("❌ No event sink available")
+      return
+    }
+    
+    let event: [String: String] = [
+      "action": action,
+      "reminderId": reminderId
+    ]
+    
+    print("📱 Sending action to Flutter: \(event)")
+    sink(event)
   }
 }
