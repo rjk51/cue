@@ -18,75 +18,6 @@ export {
 } from "./recurrenceFunctions";
 
 /**
- * Helper function to send dismissal notification to all devices
- * This tells all devices to cancel/dismiss the notification for a reminder
- * @param {string} reminderId - The ID of the reminder to dismiss
- */
-async function sendDismissalNotificationToAllDevices(reminderId: string): Promise<void> {
-  try {
-    console.log(`Sending dismissal notification for reminder: ${reminderId}`);
-    // Get all active devices
-    const devicesSnapshot = await db
-      .collection("devices")
-      .where("active", "==", true)
-      .get();
-
-    if (devicesSnapshot.empty) {
-      console.log("No active devices found for dismissal");
-      return;
-    }
-
-    console.log(`Found ${devicesSnapshot.size} active devices for dismissal`);
-
-    // Send dismissal message to all devices
-    const sendPromises = devicesSnapshot.docs.map(async (deviceDoc) => {
-      const fcmToken = deviceDoc.data().fcmToken;
-
-      if (!fcmToken) {
-        console.log(`Skipping device ${deviceDoc.id} - no token`);
-        return;
-      }
-
-      // Send data-only message to dismiss notification
-      const message = {
-        token: fcmToken,
-        data: {
-          reminderId: reminderId,
-          type: "dismiss_notification",
-          action: "dismiss",
-        },
-        android: {
-          priority: "high" as const,
-        },
-        apns: {
-          payload: {
-            aps: {
-              "content-available": 1,
-            },
-          },
-          headers: {
-            "apns-priority": "5", // Normal priority for dismissal
-          },
-        },
-      };
-
-      try {
-        await messaging.send(message);
-        console.log(`✅ Dismissal sent to device: ${fcmToken.substring(0, 20)}...`);
-      } catch (error) {
-        console.error(`❌ Failed to send dismissal to device ${fcmToken.substring(0, 20)}:`, error);
-      }
-    });
-
-    await Promise.all(sendPromises);
-    console.log(`✅ Dismissal notifications sent to ${devicesSnapshot.size} devices`);
-  } catch (error) {
-    console.error("Error sending dismissal notifications:", error);
-    // Don't throw - this is a best-effort operation
-  }
-}
-
-/**
  * HTTP Callable Function triggered by the mobile app when a reminder is due
  * Sends FCM notification for a specific reminder
  */
@@ -156,71 +87,54 @@ export const triggerReminderNotification = functions.https.onCall(
 
       // Send notification to all devices
       const sendPromises = devicesSnapshot.docs.map(async (deviceDoc) => {
-        const deviceData = deviceDoc.data();
-        const fcmToken = deviceData.fcmToken;
-        const platform = deviceData.platform || "android"; // Default to android
+        const fcmToken = deviceDoc.data().fcmToken;
 
         if (!fcmToken) {
           console.log(`Skipping device ${deviceDoc.id} - no token`);
           return;
         }
 
-        const title = reminder.name || "Reminder";
-        const body = reminder.description || "Your reminder is due!";
-
-        // Build message based on platform
-        // For iOS: Include notification payload so it shows in background with action buttons
-        // For Android: Data-only message, Flutter will show with action buttons
-        const message: admin.messaging.Message = {
+        // Send message with notification field for iOS persistence
+        const message = {
           token: fcmToken,
+          notification: {
+            title: reminder.name || "Reminder",
+            body: reminder.description || "Your reminder is due!",
+          },
           data: {
             reminderId: reminderId,
-            title: title,
-            body: body,
+            title: reminder.name || "Reminder",
+            body: reminder.description || "Your reminder is due!",
             type: "reminder_notification",
             click_action: "FLUTTER_NOTIFICATION_CLICK",
           },
-        };
-
-        if (platform === "ios") {
-          // For iOS: Include notification payload and APNS alert so it shows in background
-          // iOS will automatically display the notification with action buttons from AppDelegate
-          message.notification = {
-            title: title,
-            body: body,
-          };
-          message.apns = {
+          android: {
+            priority: "high" as const,
+          },
+          apns: {
             payload: {
               aps: {
                 "alert": {
-                  "title": title,
-                  "body": body,
+                  title: reminder.name || "Reminder",
+                  body: reminder.description || "Your reminder is due!",
                 },
                 "sound": "default",
                 "badge": 1,
                 "content-available": 1,
-                "category": "reminder_category", // For iOS action buttons
+                "mutable-content": 1,
+                "category": "reminder_category",
               },
+              reminderId: reminderId,
+              type: "reminder_notification",
             },
-            headers: {
-              "apns-priority": "10", // High priority for immediate delivery
-            },
-          };
-        } else {
-          // For Android: Data-only message, Flutter will show with action buttons
-          message.android = {
-            priority: "high" as const,
-          };
-        }
+          },
+        };
 
         try {
           await messaging.send(message);
-          const tokenPreview = fcmToken.substring(0, 20);
-          console.log(`✅ Notification sent to ${platform} device: ${tokenPreview}...`);
+          console.log(`✅ Notification sent to device: ${fcmToken.substring(0, 20)}...`);
         } catch (error) {
-          const tokenPreview = fcmToken.substring(0, 20);
-          const errorMsg = `❌ Failed to send to ${platform} device ${tokenPreview}:`;
-          console.error(errorMsg, error);
+          console.error(`❌ Failed to send to device ${fcmToken.substring(0, 20)}:`, error);
         }
       });
 
@@ -301,7 +215,11 @@ export const checkPendingReminders = functions.https.onCall(
   }
 );
 
-export const onReminderCreated = functions.firestore
+/**
+ * Firestore trigger: When a reminder is created, schedule it for notification
+ * and handle recurrence logic
+ */
+export const scheduleReminderOnCreate = functions.firestore
   .document("reminders/{reminderId}")
   .onCreate(async (snap, context) => {
     const reminderId = context.params.reminderId;
@@ -309,7 +227,7 @@ export const onReminderCreated = functions.firestore
 
     console.log(`New reminder created: ${reminderId}`, reminderData);
 
-    // Check if the reminder has recurrence
+    // Handle recurrence logic
     if (reminderData.recurrence) {
       console.log(`Processing recurring reminder: ${reminderId}`);
       console.log(`Recurrence type: ${reminderData.recurrence.type}`);
@@ -336,10 +254,33 @@ export const onReminderCreated = functions.firestore
       } catch (error) {
         console.error("❌ Error saving to suggestions collection:", error);
       }
-    } else {
-      console.log("Non-recurring reminder, skipping suggestions collection");
     }
 
+    // Skip notification scheduling if already completed or no time set
+    if (reminderData.isCompleted || !reminderData.time) {
+      console.log(`Skipping notification scheduling for ${reminderId}`);
+      return null;
+    }
+
+    const reminderTime = reminderData.time.toDate();
+    const now = new Date();
+
+    // Skip if time is in the past
+    if (reminderTime <= now) {
+      console.log(`Reminder ${reminderId} time is in the past, skipping notification`);
+      return null;
+    }
+
+    // Create a document in pending_notifications collection
+    await db.collection("pending_notifications").doc(reminderId).set({
+      reminderId: reminderId,
+      scheduledTime: reminderData.time,
+      reminderName: reminderData.name || "Reminder",
+      reminderDescription: reminderData.description || "Your reminder is due!",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    console.log(`✅ Scheduled notification for reminder ${reminderId} at ${reminderTime}`);
     return null;
   });
 
@@ -349,13 +290,8 @@ export const onReminderUpdated = functions.firestore
     const before = change.before.data();
     const after = change.after.data();
 
-    // Check if reminder was just completed
     if (!before.isCompleted && after.isCompleted) {
-      const reminderId = context.params.reminderId;
-      console.log(`Reminder completed: ${reminderId}`);
-
-      // Send dismissal notification to all devices
-      await sendDismissalNotificationToAllDevices(reminderId);
+      console.log(`Reminder completed: ${context.params.reminderId}`);
     }
 
     return null;
@@ -407,7 +343,132 @@ export const sendTestNotification = functions.https.onRequest(
       });
     } catch (error) {
       console.error("Error sending test notification:", error);
-      res.status(500).send({error: "Failed to send test notification"});
+      res.status(500).send({error: "Failed to send notification"});
     }
   }
 );
+
+
+/**
+ * Scheduled function - runs every minute but only reads pending notifications
+ * Much more efficient: only reads documents that need processing
+ */
+export const processPendingNotifications = functions.pubsub
+  .schedule("every 1 minutes")
+  .onRun(async () => {
+    console.log("🔍 Processing pending notifications...");
+
+    const now = admin.firestore.Timestamp.now();
+    try {
+      // Query ONLY pending notifications that are due
+      // This is much cheaper than querying all reminders
+      const snapshot = await db
+        .collection("pending_notifications")
+        .where("scheduledTime", "<=", now)
+        .limit(50) // Process max 50 per run to avoid timeouts
+        .get();
+
+      if (snapshot.empty) {
+        console.log("No pending notifications");
+        return {success: true, processed: 0};
+      }
+
+      console.log(`Found ${snapshot.size} pending notifications`);
+
+      for (const doc of snapshot.docs) {
+        const notification = doc.data();
+        const reminderId = notification.reminderId;
+
+        try {
+          // Delete the pending notification FIRST to ensure only one process handles it
+          await doc.ref.delete();
+          console.log(`🔒 Locked notification processing for ${reminderId}`);
+
+          // Check if reminder still exists and isn't completed
+          const reminderDoc = await db.collection("reminders").doc(reminderId).get();
+
+          if (!reminderDoc.exists || reminderDoc.data()?.isCompleted) {
+            console.log(`Reminder ${reminderId} completed or deleted, skipping`);
+            continue;
+          }
+
+          // Check if already notified
+          if (reminderDoc.data()?.notifiedAt) {
+            console.log(`Reminder ${reminderId} already notified, skipping`);
+            continue;
+          }
+
+          // Mark reminder as notified FIRST to prevent duplicate processing
+          await reminderDoc.ref.update({
+            notifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+
+          // Get active devices
+          const devicesSnapshot = await db
+            .collection("devices")
+            .where("active", "==", true)
+            .get();
+
+          if (devicesSnapshot.empty) {
+            console.log(`No active devices, skipping ${reminderId}`);
+            continue;
+          }
+
+          // Send notifications
+          const sendPromises = devicesSnapshot.docs.map(async (deviceDoc) => {
+            const fcmToken = deviceDoc.data().fcmToken;
+            if (!fcmToken) return;
+
+            const message = {
+              token: fcmToken,
+              notification: {
+                title: notification.reminderName,
+                body: notification.reminderDescription,
+              },
+              data: {
+                reminderId: reminderId,
+                title: notification.reminderName,
+                body: notification.reminderDescription,
+                type: "reminder_notification",
+                click_action: "FLUTTER_NOTIFICATION_CLICK",
+              },
+              android: {
+                priority: "high" as const,
+              },
+              apns: {
+                payload: {
+                  aps: {
+                    "alert": {
+                      title: notification.reminderName,
+                      body: notification.reminderDescription,
+                    },
+                    "sound": "default",
+                    "badge": 1,
+                    "content-available": 1,
+                    "mutable-content": 1,
+                    "category": "reminder_category",
+                  },
+                  reminderId: reminderId,
+                  type: "reminder_notification",
+                },
+              },
+            };
+
+            await messaging.send(message);
+            console.log(`✅ Sent to device ${fcmToken.substring(0, 20)}...`);
+          });
+
+          await Promise.all(sendPromises);
+
+          console.log(`✅ Processed notification for ${reminderId}`);
+        } catch (error) {
+          console.error(`❌ Error processing ${reminderId}:`, error);
+        }
+      }
+
+      return {success: true, processed: snapshot.size};
+    } catch (error) {
+      console.error("❌ Error processing pending notifications:", error);
+      return {success: false, error};
+    }
+  });
