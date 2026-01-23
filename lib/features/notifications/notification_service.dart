@@ -223,6 +223,17 @@ class NotificationService {
     print('Foreground message received');
     print('Data: ${message.data}');
     
+    // Check if it's a dismissal notification
+    if (message.data.containsKey('type') && 
+        message.data['type'] == 'dismiss_notification') {
+      final reminderId = message.data['reminderId'] ?? '';
+      if (reminderId.isNotEmpty) {
+        print('Dismissing notification for reminder: $reminderId');
+        cancelNotification(reminderId);
+      }
+      return;
+    }
+    
     // Check if it's a reminder notification (data-only message)
     if (message.data.containsKey('type') && 
         message.data['type'] == 'reminder_notification') {
@@ -239,13 +250,17 @@ class NotificationService {
         payload: reminderId,
       );
     } else if (message.notification != null) {
-      // Fallback for regular notifications
-      _showLocalNotificationWithActions(
-        id: message.data['reminderId']?.hashCode ?? 0,
-        title: message.notification!.title ?? 'Reminder',
-        body: message.notification!.body ?? '',
-        payload: message.data['reminderId'] ?? '',
-      );
+      // Fallback for regular notifications (iOS will show this automatically)
+      // For iOS, the system will show the notification, but we can also show local with actions
+      final reminderId = message.data['reminderId'] ?? '';
+      if (reminderId.isNotEmpty) {
+        _showLocalNotificationWithActions(
+          id: reminderId.hashCode,
+          title: message.notification!.title ?? 'Reminder',
+          body: message.notification!.body ?? '',
+          payload: reminderId,
+        );
+      }
     }
   }
 

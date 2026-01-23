@@ -18,6 +18,75 @@ export {
 } from "./recurrenceFunctions";
 
 /**
+ * Helper function to send dismissal notification to all devices
+ * This tells all devices to cancel/dismiss the notification for a reminder
+ */
+async function sendDismissalNotificationToAllDevices(reminderId: string): Promise<void> {
+  try {
+    console.log(`Sending dismissal notification for reminder: ${reminderId}`);
+    
+    // Get all active devices
+    const devicesSnapshot = await db
+      .collection("devices")
+      .where("active", "==", true)
+      .get();
+
+    if (devicesSnapshot.empty) {
+      console.log("No active devices found for dismissal");
+      return;
+    }
+
+    console.log(`Found ${devicesSnapshot.size} active devices for dismissal`);
+
+    // Send dismissal message to all devices
+    const sendPromises = devicesSnapshot.docs.map(async (deviceDoc) => {
+      const fcmToken = deviceDoc.data().fcmToken;
+
+      if (!fcmToken) {
+        console.log(`Skipping device ${deviceDoc.id} - no token`);
+        return;
+      }
+
+      // Send data-only message to dismiss notification
+      const message = {
+        token: fcmToken,
+        data: {
+          reminderId: reminderId,
+          type: "dismiss_notification",
+          action: "dismiss",
+        },
+        android: {
+          priority: "high" as const,
+        },
+        apns: {
+          payload: {
+            aps: {
+              "content-available": 1,
+            },
+          },
+          headers: {
+            "apns-priority": "5", // Normal priority for dismissal
+          },
+        },
+      };
+
+      try {
+        await messaging.send(message);
+        console.log(`✅ Dismissal sent to device: ${fcmToken.substring(0, 20)}...`);
+      } catch (error) {
+        console.error(`❌ Failed to send dismissal to device ${fcmToken.substring(0, 20)}:`, error);
+      }
+    });
+
+    await Promise.all(sendPromises);
+    console.log(`✅ Dismissal notifications sent to ${devicesSnapshot.size} devices`);
+  } catch (error) {
+    console.error("Error sending dismissal notifications:", error);
+    // Don't throw - this is a best-effort operation
+  }
+}
+
+/**
  * HTTP Callable Function triggered by the mobile app when a reminder is due
  * Sends FCM notification for a specific reminder
  */
@@ -83,41 +152,68 @@ export const triggerReminderNotification = functions.https.onCall(
 
       // Send notification to all devices
       const sendPromises = devicesSnapshot.docs.map(async (deviceDoc) => {
-        const fcmToken = deviceDoc.data().fcmToken;
+        const deviceData = deviceDoc.data();
+        const fcmToken = deviceData.fcmToken;
+        const platform = deviceData.platform || "android"; // Default to android
 
         if (!fcmToken) {
           console.log(`Skipping device ${deviceDoc.id} - no token`);
           return;
         }
 
-        // Send data-only message so Flutter can show notification with action buttons
-        const message = {
+        const title = reminder.name || "Reminder";
+        const body = reminder.description || "Your reminder is due!";
+        
+        // Build message based on platform
+        // For iOS: Include notification payload so it shows in background with action buttons
+        // For Android: Data-only message, Flutter will show with action buttons
+        const message: admin.messaging.Message = {
           token: fcmToken,
           data: {
             reminderId: reminderId,
-            title: reminder.name || "Reminder",
-            body: reminder.description || "Your reminder is due!",
+            title: title,
+            body: body,
             type: "reminder_notification",
             click_action: "FLUTTER_NOTIFICATION_CLICK",
           },
-          android: {
-            priority: "high" as const,
-          },
-          apns: {
+        };
+
+        if (platform === "ios") {
+          // For iOS: Include notification payload and APNS alert so it shows in background
+          // iOS will automatically display the notification with action buttons from AppDelegate
+          message.notification = {
+            title: title,
+            body: body,
+          };
+          message.apns = {
             payload: {
               aps: {
+                alert: {
+                  title: title,
+                  body: body,
+                },
+                sound: "default",
+                badge: 1,
                 "content-available": 1,
-                "badge": 1,
+                category: "reminder_category", // For iOS action buttons defined in AppDelegate
               },
             },
-          },
-        };
+            headers: {
+              "apns-priority": "10", // High priority for immediate delivery
+            },
+          };
+        } else {
+          // For Android: Data-only message, Flutter will show with action buttons
+          message.android = {
+            priority: "high" as const,
+          };
+        }
 
         try {
           await messaging.send(message);
-          console.log(`✅ Notification sent to device: ${fcmToken.substring(0, 20)}...`);
+          console.log(`✅ Notification sent to ${platform} device: ${fcmToken.substring(0, 20)}...`);
         } catch (error) {
-          console.error(`❌ Failed to send to device ${fcmToken.substring(0, 20)}:`, error);
+          console.error(`❌ Failed to send to ${platform} device ${fcmToken.substring(0, 20)}:`, error);
         }
       });
 
@@ -246,8 +342,13 @@ export const onReminderUpdated = functions.firestore
     const before = change.before.data();
     const after = change.after.data();
 
+    // Check if reminder was just completed
     if (!before.isCompleted && after.isCompleted) {
-      console.log(`Reminder completed: ${context.params.reminderId}`);
+      const reminderId = context.params.reminderId;
+      console.log(`Reminder completed: ${reminderId}`);
+      
+      // Send dismissal notification to all devices
+      await sendDismissalNotificationToAllDevices(reminderId);
     }
 
     return null;

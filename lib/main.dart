@@ -20,12 +20,23 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   print('Handling background message: ${message.messageId}');
   print('Data: ${message.data}');
 
+  final notificationService = NotificationService();
+  await notificationService.initialize();
+
+  // Check if it's a dismissal notification
+  if (message.data.containsKey('type') &&
+      message.data['type'] == 'dismiss_notification') {
+    final reminderId = message.data['reminderId'] ?? '';
+    if (reminderId.isNotEmpty) {
+      print('Dismissing notification for reminder: $reminderId');
+      await notificationService.cancelNotification(reminderId);
+    }
+    return;
+  }
+
   // Show notification with action buttons when app is in background
   if (message.data.containsKey('type') &&
       message.data['type'] == 'reminder_notification') {
-    final notificationService = NotificationService();
-    await notificationService.initialize();
-
     final reminderId = message.data['reminderId'] ?? '';
     final title = message.data['title'] ?? 'Reminder';
     final body = message.data['body'] ?? 'Your reminder is due!';

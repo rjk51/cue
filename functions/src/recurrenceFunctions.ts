@@ -427,6 +427,7 @@ export const completeReminder = functions.https.onCall(
 
       // Get the reminder document
       const db = admin.firestore();
+      const messaging = admin.messaging();
       const reminderRef = db
         .collection("users")
         .doc(userId)
@@ -513,6 +514,57 @@ export const completeReminder = functions.https.onCall(
           hasRecurrence: !!nextDueDate,
         };
       });
+
+      // After successful completion, send dismissal notifications to all devices
+      // This ensures notifications are dismissed on all devices when reminder is completed
+      try {
+        const devicesSnapshot = await db
+          .collection("devices")
+          .where("active", "==", true)
+          .get();
+
+        if (!devicesSnapshot.empty) {
+          console.log(`Sending dismissal notifications to ${devicesSnapshot.size} devices`);
+          const dismissalPromises = devicesSnapshot.docs.map(async (deviceDoc) => {
+            const fcmToken = deviceDoc.data().fcmToken;
+            if (!fcmToken) return;
+
+            const message = {
+              token: fcmToken,
+              data: {
+                reminderId: reminderId,
+                type: "dismiss_notification",
+                action: "dismiss",
+              },
+              android: {
+                priority: "high" as const,
+              },
+              apns: {
+                payload: {
+                  aps: {
+                    "content-available": 1,
+                  },
+                },
+                headers: {
+                  "apns-priority": "5",
+                },
+              },
+            };
+
+            try {
+              await messaging.send(message);
+            } catch (error) {
+              console.error(`Failed to send dismissal to device: ${error}`);
+            }
+          });
+
+          await Promise.all(dismissalPromises);
+          console.log("✅ Dismissal notifications sent to all devices");
+        }
+      } catch (dismissalError) {
+        // Don't fail the completion if dismissal fails
+        console.error("Error sending dismissal notifications (non-fatal):", dismissalError);
+      }
 
       return result;
     } catch (error) {
