@@ -250,15 +250,24 @@ class NotificationService {
     print('Data: ${message.data}');
     print('Notification: ${message.notification}');
     
-    // Show local notification with action buttons for reminder notifications
-    // This handles data-only messages from scheduled notifications
+    // Check if this is a reminder notification AND if system didn't already show it
+    // iOS/Android system shows notifications natively with action buttons
+    // We only show manually for data-only messages (when notification field is null)
     if (message.data.containsKey('type') && 
         message.data['type'] == 'reminder_notification') {
+      
+      // If message has notification field, system already displayed it
+      if (message.notification != null) {
+        print('⏭️  System already displayed notification, skipping local notification');
+        return;
+      }
+      
+      // Data-only message - show local notification with action buttons
       final reminderId = message.data['reminderId'] ?? '';
       final title = message.data['title'] ?? 'Reminder';
       final body = message.data['body'] ?? 'Your reminder is due!';
       
-      print('📱 Showing reminder notification with action buttons: $title');
+      print('📱 Showing local notification with action buttons: $title');
       
       _showLocalNotificationWithActions(
         id: reminderId.hashCode,
@@ -267,8 +276,6 @@ class NotificationService {
         payload: reminderId,
       );
     }
-    // Ignore messages that have a notification field (system already showed it)
-    // to prevent duplicates
   }
 
   void _handleNotificationTap(RemoteMessage message) {

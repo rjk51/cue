@@ -693,12 +693,12 @@ export const processPendingNotifications = functions.pubsub
 
             console.log(`📱 Sending to [${platform.toUpperCase()}] device [${deviceId}]`);
 
+            // Send notification with data for both platforms
+            // iOS will show via APNS with action buttons
+            // Android will show via system notification
+            // Flutter foreground handler will NOT duplicate if notification field exists
             const message = {
               token: fcmToken,
-              notification: {
-                title: notification.reminderName,
-                body: notification.reminderDescription,
-              },
               data: {
                 reminderId: reminderId,
                 title: notification.reminderName,
@@ -725,7 +725,6 @@ export const processPendingNotifications = functions.pubsub
                     },
                     "sound": "default",
                     "badge": 1,
-                    "content-available": 1,
                     "mutable-content": 1,
                     "category": "reminder_category",
                     // Thread ID helps group notifications
