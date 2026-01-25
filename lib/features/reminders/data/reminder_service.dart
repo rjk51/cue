@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../domain/reminder_model.dart';
 
 class ReminderService {
@@ -10,15 +11,19 @@ class ReminderService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final String _collection = 'reminders';
 
-  // For demo purposes, using a simple user ID
-  // In production, use Firebase Auth user ID
-  final String _userId = 'demo_user';
+  // Get current user ID from Firebase Auth
+  String? get _userId => FirebaseAuth.instance.currentUser?.uid;
 
   // Get reminders stream for real-time updates
   Stream<List<Reminder>> getRemindersStream() {
+    final userId = _userId;
+    if (userId == null) {
+      return Stream.value([]);  // Return empty stream if no user logged in
+    }
+    
     return _firestore
         .collection(_collection)
-        .where('userId', isEqualTo: _userId)
+        .where('userId', isEqualTo: userId)
         .where('isCompleted', isEqualTo: false)
         .snapshots()
         .map((snapshot) {
@@ -34,6 +39,11 @@ class ReminderService {
   // Add a new reminder
   Future<String> addReminder(Reminder reminder, String? fcmToken) async {
     try {
+      final userId = _userId;
+      if (userId == null) {
+        throw Exception('No user logged in');
+      }
+      
       final reminderData = reminder.toMap();
       // Ensure scheduledTime is set for Cloud Functions
       reminderData['scheduledTime'] = reminderData['nextDueAt'] ?? reminderData['time'];
@@ -41,7 +51,7 @@ class ReminderService {
       
       final docRef = await _firestore.collection(_collection).add({
         ...reminderData,
-        'userId': _userId,
+        'userId': userId,
         'deviceToken': fcmToken,
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -153,9 +163,14 @@ class ReminderService {
 
   // Get completed reminders (for history)
   Stream<List<Reminder>> getCompletedRemindersStream() {
+    final userId = _userId;
+    if (userId == null) {
+      return Stream.value([]);  // Return empty stream if no user logged in
+    }
+    
     return _firestore
         .collection(_collection)
-        .where('userId', isEqualTo: _userId)
+        .where('userId', isEqualTo: userId)
         .where('isCompleted', isEqualTo: true)
         .limit(50)
         .snapshots()
@@ -172,10 +187,15 @@ class ReminderService {
   // Clean up old completed reminders (optional)
   Future<void> cleanupOldReminders({int daysOld = 30}) async {
     try {
+      final userId = _userId;
+      if (userId == null) {
+        throw Exception('No user logged in');
+      }
+      
       final cutoffDate = DateTime.now().subtract(Duration(days: daysOld));
       final querySnapshot = await _firestore
           .collection(_collection)
-          .where('userId', isEqualTo: _userId)
+          .where('userId', isEqualTo: userId)
           .where('isCompleted', isEqualTo: true)
           .where('completedAt', isLessThan: Timestamp.fromDate(cutoffDate))
           .get();

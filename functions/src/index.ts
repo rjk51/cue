@@ -63,10 +63,20 @@ export const triggerReminderNotification = functions.https.onCall(
         return {success: true, alreadyCompleted: true};
       }
 
-      // Get all active devices to send notification to all of them
-      console.log("Fetching all active devices...");
+      // Get user-specific devices only (not all devices)
+      const userId = reminder?.userId;
+      if (!userId) {
+        console.error("❌ No userId found in reminder");
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Reminder has no userId"
+        );
+      }
+
+      console.log(`Fetching active devices for user: ${userId}...`);
       const devicesSnapshot = await db
         .collection("devices")
+        .where("userId", "==", userId)
         .where("active", "==", true)
         .get();
 
@@ -390,12 +400,20 @@ export const onReminderUpdated = functions.firestore
     // If reminder was just marked as completed, notify all devices to dismiss notification
     if (wasNotCompleted && isNowCompleted) {
       console.log(`✅ [onReminderUpdated] Reminder marked as completed: ${reminderId}`);
-      console.log("📤 Initiating dismiss notification to all devices...");
+      console.log("📤 Initiating dismiss notification to user's devices...");
 
       try {
-        // Get all active devices
+        // Get user-specific active devices
+        const userId = after.userId;
+        if (!userId) {
+          console.log("⚠️  No userId in reminder, skipping dismiss");
+          return null;
+        }
+
+        console.log(`📤 Fetching devices for user: ${userId}`);
         const devicesSnapshot = await db
           .collection("devices")
+          .where("userId", "==", userId)
           .where("active", "==", true)
           .get();
 
@@ -667,10 +685,19 @@ export const processPendingNotifications = functions.pubsub
             notifiedAt: admin.firestore.FieldValue.serverTimestamp(),
           });
 
-          // Get active devices
-          console.log("📱 Querying for active devices...");
+          // Get user-specific active devices
+          const reminderData = reminderDoc.data();
+          const userId = reminderData?.userId;
+
+          if (!userId) {
+            console.log(`⚠️  No userId in reminder ${reminderId}, skipping`);
+            continue;
+          }
+
+          console.log(`📱 Querying for active devices for user: ${userId}...`);
           const devicesSnapshot = await db
             .collection("devices")
+            .where("userId", "==", userId)
             .where("active", "==", true)
             .get();
 
