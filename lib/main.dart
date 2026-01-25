@@ -3,12 +3,14 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'firebase_options.dart';
-import 'features/home/presentation/home_screen.dart';
 import 'features/auth/presentation/welcome_screen.dart';
 import 'features/notifications/notification_service.dart';
 import 'features/reminders/data/reminder_service.dart';
 import 'features/snooze/presentation/snooze_screen.dart';
+import 'services/local_storage_service.dart';
+import 'shared/widgets/onboarding_gate.dart';
 
 // Global navigator key for navigation from notification handlers
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -53,6 +55,11 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Hive for local storage
+  await Hive.initFlutter();
+  final localStorageService = LocalStorageService();
+  await localStorageService.initialize();
 
   // Initialize Firebase
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
@@ -159,7 +166,7 @@ class MyApp extends StatelessWidget {
 
             // Show home screen if user is logged in, otherwise show welcome screen
             if (snapshot.hasData) {
-              return const HomeScreen();
+              return const OnboardingGate();
             } else {
               return const WelcomeScreen();
             }
