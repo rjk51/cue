@@ -7,6 +7,7 @@ import UserNotifications
 @main
 @objc class AppDelegate: FlutterAppDelegate {
   private var eventSink: FlutterEventSink?
+  private var notificationChannel: FlutterMethodChannel?
   
   override func application(
     _ application: UIApplication,
@@ -21,6 +22,29 @@ import UserNotifications
         binaryMessenger: controller.binaryMessenger
       )
       eventChannel.setStreamHandler(NotificationActionStreamHandler())
+      
+      // Setup method channel for notification removal
+      notificationChannel = FlutterMethodChannel(
+        name: "com.example.cue/notifications",
+        binaryMessenger: controller.binaryMessenger
+      )
+      
+      notificationChannel?.setMethodCallHandler { [weak self] (call: FlutterMethodCall, result: @escaping FlutterResult) in
+        if call.method == "removeNotification" {
+          guard let args = call.arguments as? [String: Any],
+                let reminderId = args["reminderId"] as? String else {
+            result(FlutterError(code: "INVALID_ARGUMENT", message: "reminderId is required", details: nil))
+            return
+          }
+          
+          print("[iOS Native] Method channel called: removeNotification")
+          print("[iOS Native] Reminder ID: \(reminderId)")
+          self?.removeNotificationFromCenter(reminderId: reminderId)
+          result(nil) // Success
+        } else {
+          result(FlutterMethodNotImplemented)
+        }
+      }
     }
     
     registerNotificationCategories()
@@ -90,6 +114,125 @@ extension AppDelegate: MessagingDelegate {
       userInfo: dataDict
     )
   }
+  
+  // Handle background/silent push notifications
+  override func application(
+    _ application: UIApplication,
+    didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+    fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+  ) {
+    print("═══════════════════════════════════════════════════════════")
+    print("🔔 [iOS Native] Remote notification received")
+    print("═══════════════════════════════════════════════════════════")
+    print("📦 Full UserInfo: \(userInfo)")
+    print("📱 App State: \(application.applicationState.rawValue) (0=active, 1=inactive, 2=background)")
+    
+    // Try to get type from multiple possible locations
+    var notificationType: String? = nil
+    var reminderId: String? = nil
+    
+    // Check direct userInfo (Android-style)
+    if let type = userInfo["type"] as? String {
+      notificationType = type
+      print("📍 Found type in direct userInfo: \(type)")
+    }
+    
+    // Check aps payload (iOS-style) 
+    if let aps = userInfo["aps"] as? [String: Any] {
+      print("📍 APS payload: \(aps)")
+      if let type = aps["type"] as? String {
+        notificationType = type
+        print("📍 Found type in aps: \(type)")
+      }
+    }
+    
+    // Get reminderId from multiple locations
+    if let rid = userInfo["reminderId"] as? String {
+      reminderId = rid
+      print("📍 Found reminderId in direct userInfo: \(rid)")
+    } else if let aps = userInfo["aps"] as? [String: Any], let rid = aps["reminderId"] as? String {
+      reminderId = rid
+      print("📍 Found reminderId in aps: \(rid)")
+    }
+    
+    print("───────────────────────────────────────────────────────────")
+    print("🔍 Parsed values:")
+    print("   - type: \(notificationType ?? "nil")")
+    print("   - reminderId: \(reminderId ?? "nil")")
+    print("───────────────────────────────────────────────────────────")
+    
+    // Check if this is a dismiss notification
+    if notificationType == "dismiss_notification", let reminderIdToRemove = reminderId {
+      print("🗑️ [iOS Native] DISMISS notification received for reminder: \(reminderIdToRemove)")
+      removeNotificationFromCenter(reminderId: reminderIdToRemove)
+      completionHandler(.newData)
+    } else {
+      print("ℹ️ [iOS Native] Non-dismiss notification or missing data")
+      print("   - type check: \(notificationType ?? "nil") == dismiss_notification ? \(notificationType == "dismiss_notification")")
+      print("   - reminderId check: \(reminderId ?? "nil")")
+      completionHandler(.noData)
+    }
+  }
+  
+  // Helper method to remove notifications from notification center
+  // Can be called from both native remote notification handler and Flutter method channel
+  private func removeNotificationFromCenter(reminderId: String) {
+    print("🗑️ [iOS Native] removeNotificationFromCenter called")
+    print("   - Reminder ID: \(reminderId)")
+    
+    // First, try to remove directly using reminderId as identifier
+    print("🔄 [iOS Native] Attempting direct removal with reminderId: \(reminderId)")
+    UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [reminderId])
+    
+    // Also remove from pending notifications
+    UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [reminderId])
+    
+    // Then search through all delivered notifications as fallback
+    UNUserNotificationCenter.current().getDeliveredNotifications { notifications in
+      print("📊 [iOS Native] Total delivered notifications: \(notifications.count)")
+      
+      var identifiersToRemove: [String] = []
+      
+      for notification in notifications {
+        let content = notification.request.content
+        let identifier = notification.request.identifier
+        let notificationUserInfo = content.userInfo
+        
+        print("📌 Checking notification: \(identifier)")
+        print("   - Title: \(content.title)")
+        print("   - ThreadId: \(content.threadIdentifier)")
+        
+        // Check if this notification belongs to the reminder we want to dismiss
+        if let notifReminderId = notificationUserInfo["reminderId"] as? String,
+           notifReminderId == reminderId {
+          identifiersToRemove.append(identifier)
+          print("   ✅ MATCH by reminderId in userInfo! Will remove: \(identifier)")
+        } else if identifier == reminderId {
+          identifiersToRemove.append(identifier)
+          print("   ✅ MATCH by identifier! Will remove: \(identifier)")
+        } else if content.threadIdentifier == reminderId {
+          identifiersToRemove.append(identifier)
+          print("   ✅ MATCH by threadId! Will remove: \(identifier)")
+        }
+      }
+      
+      if !identifiersToRemove.isEmpty {
+        print("🗑️ [iOS Native] Removing \(identifiersToRemove.count) additional notification(s): \(identifiersToRemove)")
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: identifiersToRemove)
+        print("✅ [iOS Native] Additional notifications removed!")
+      }
+      
+      // Log remaining notifications after a short delay
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        UNUserNotificationCenter.current().getDeliveredNotifications { remaining in
+          print("📊 [iOS Native] Remaining delivered notifications: \(remaining.count)")
+          for n in remaining {
+            print("   - ID: \(n.request.identifier), Title: \(n.request.content.title)")
+          }
+        }
+      }
+    }
+  }
 }
 
 extension AppDelegate {
@@ -100,6 +243,13 @@ extension AppDelegate {
   ) {
     let userInfo = notification.request.content.userInfo
     print("📱 Foreground notification: \(userInfo)")
+    
+    // Check if this is a dismiss notification - don't show it
+    if let type = userInfo["type"] as? String, type == "dismiss_notification" {
+      print("🔕 [iOS Native] Suppressing dismiss notification from display")
+      completionHandler([]) // Don't show anything
+      return
+    }
     
     if #available(iOS 14.0, *) {
       completionHandler([.banner, .sound, .badge, .list])

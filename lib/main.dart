@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -17,8 +18,8 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  print('Handling background message: ${message.messageId}');
-  print('Data: ${message.data}');
+  print('🔔 [Background] Handling background message: ${message.messageId}');
+  print('📦 [Background] Data: ${message.data}');
 
   final notificationService = NotificationService();
   await notificationService.initialize();
@@ -28,8 +29,11 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       message.data['type'] == 'dismiss_notification') {
     final reminderId = message.data['reminderId'] ?? '';
     if (reminderId.isNotEmpty) {
-      print('Dismissing notification for reminder: $reminderId');
+      print('🗑️ [Background] Dismissing notification for reminder: $reminderId');
       await notificationService.cancelNotification(reminderId);
+      print('✅ [Background] Notification dismissed');
+    } else {
+      print('⚠️ [Background] Dismiss notification missing reminderId');
     }
     return;
   }
@@ -41,6 +45,8 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     final title = message.data['title'] ?? 'Reminder';
     final body = message.data['body'] ?? 'Your reminder is due!';
 
+    print('📨 [Background] Showing reminder notification: $title');
+
     // Import flutter_local_notifications to show notification
     await notificationService.showNotificationWithActions(
       id: reminderId.hashCode,
@@ -48,6 +54,10 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       body: body,
       payload: reminderId,
     );
+    
+    print('✅ [Background] Notification shown');
+  } else {
+    print('ℹ️ [Background] Non-reminder notification or missing data');
   }
 }
 
@@ -70,37 +80,49 @@ void main() async {
 
     // Set up notification action handler
     notificationService.onNotificationAction = (reminderId, action) async {
-      print('🎯 Notification action handler called:');
-      print('  - Action: $action');
-      print('  - Reminder ID: $reminderId');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      print('🎯 [main.dart] Notification action handler called');
+      print('📝 Action: $action');
+      print('📝 Reminder ID: $reminderId');
+      print('🕐 Timestamp: ${DateTime.now().toIso8601String()}');
+      print('📱 Platform: ${Platform.isIOS ? "iOS" : "Android"}');
 
       final reminderService = ReminderService();
 
       if (action == 'mark_done' || action == 'done') {
-        print('✅ Handling mark_done/done action');
+        print('✅ [main.dart] Handling mark_done/done action');
         // Mark reminder as completed
         if (!reminderId.startsWith('test_reminder')) {
+          print('💾 [main.dart] Calling reminderService.markAsCompleted()...');
           await reminderService.markAsCompleted(reminderId);
+          print('🗑️ [main.dart] Calling notificationService.cancelNotification()...');
           await notificationService.cancelNotification(reminderId);
+          print('✅ [main.dart] Reminder marked as done and notification cancelled');
+        } else {
+          print('⏭️ [main.dart] Skipping test reminder');
         }
       } else if (action == 'snooze') {
-        print('⏰ Handling snooze action');
+        print('⏰ [main.dart] Handling snooze action');
         // Navigate to snooze screen
         final context = navigatorKey.currentContext;
-        print('  - Navigator context: ${context != null ? "available" : "null"}');
+        print('🧭 [main.dart] Navigator context: ${context != null ? "available" : "null"}');
 
         if (context != null) {
           String reminderTitle = '🧪 Test Reminder';
 
           // Get reminder details if it's a real reminder
           if (!reminderId.startsWith('test_reminder')) {
+            print('📖 [main.dart] Fetching reminder details...');
             final reminder = await reminderService.getReminder(reminderId);
             if (reminder != null) {
               reminderTitle = reminder.name;
+              print('📝 [main.dart] Reminder title: $reminderTitle');
+            } else {
+              print('⚠️ [main.dart] Reminder not found');
             }
           }
 
-          print('  - Navigating to SnoozeScreen with title: $reminderTitle');
+          print('🧭 [main.dart] Navigating to SnoozeScreen with title: $reminderTitle');
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -111,11 +133,13 @@ void main() async {
             ),
           );
         } else {
-          print('❌ Cannot navigate: context is null');
+          print('❌ [main.dart] Cannot navigate: context is null');
         }
       } else {
-        print('⚠️ Unknown action: $action');
+        print('⚠️ [main.dart] Unknown action: $action');
       }
+      
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     };
   } catch (e, stackTrace) {
     print('❌ Error initializing notification service: $e');

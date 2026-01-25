@@ -160,23 +160,36 @@ class NotificationService {
   }
   
   void _setupIOSNotificationActionListener() {
+    print('📱 [iOS] Setting up notification action listener...');
+    
     // Listen for notification actions posted from iOS AppDelegate
     const EventChannel('notification_action_channel')
         .receiveBroadcastStream()
         .listen((event) {
-      print('📱 Received iOS notification action: $event');
+      print('📨 [iOS] Received notification action event: $event');
+      
       if (event is Map) {
         final action = event['action'] as String?;
         final reminderId = event['reminderId'] as String?;
         
+        print('📝 [iOS] Action details:');
+        print('   - Action: $action');
+        print('   - Reminder ID: $reminderId');
+        
         if (action != null && reminderId != null && onNotificationAction != null) {
-          print('✅ Processing iOS action: $action for reminder: $reminderId');
+          print('✅ [iOS] Processing action: $action for reminder: $reminderId');
           onNotificationAction!(reminderId, action);
+        } else {
+          print('⚠️ [iOS] Missing data - action: $action, reminderId: $reminderId, callback: ${onNotificationAction != null}');
         }
+      } else {
+        print('⚠️ [iOS] Event is not a Map: ${event.runtimeType}');
       }
     }, onError: (error) {
-      print('❌ Error listening to iOS notification actions: $error');
+      print('❌ [iOS] Error listening to notification actions: $error');
     });
+    
+    print('✅ [iOS] Notification action listener set up');
   }
 
   Future<void> _requestExactAlarmPermission() async {
@@ -227,27 +240,46 @@ class NotificationService {
     final payload = response.payload;
     final actionId = response.actionId;
 
-    print('📱 Notification response received:');
-    print('  - Payload: $payload');
-    print('  - Action ID: $actionId');
-    print('  - Notification ID: ${response.id}');
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    print('📨 [NotificationService] Notification response received');
+    print('📝 Payload (Reminder ID): $payload');
+    print('📝 Action ID: $actionId');
+    print('📝 Notification ID: ${response.id}');
+    print('🕐 Timestamp: ${DateTime.now().toIso8601String()}');
+    print('📱 Platform: ${Platform.isIOS ? "iOS" : "Android"}');
 
     if (payload != null && actionId != null) {
       // Handle action button tap (Done/Snooze)
       if (onNotificationAction != null) {
-        print('✅ Calling onNotificationAction callback');
+        print('✅ [NotificationService] Calling onNotificationAction callback');
         onNotificationAction!(payload, actionId);
       } else {
-        print('❌ onNotificationAction callback is null');
+        print('❌ [NotificationService] onNotificationAction callback is null');
       }
     } else {
-      print('⚠️ Payload or actionId is null');
+      print('⚠️ [NotificationService] Payload or actionId is null');
     }
+    
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   }
 
   void _handleForegroundMessage(RemoteMessage message) {
-    print('Foreground message received');
-    print('Data: ${message.data}');
+    print('📨 [Flutter] Foreground message received');
+    print('📦 Data: ${message.data}');
+    print('📱 Platform: ${Platform.isIOS ? "iOS" : "Android"}');
+    
+    // Check if this is a dismiss notification
+    if (message.data.containsKey('type') && 
+        message.data['type'] == 'dismiss_notification') {
+      final reminderId = message.data['reminderId'] ?? '';
+      print('🗑️ [Flutter] Dismiss notification received for reminder: $reminderId');
+      
+      if (reminderId.isNotEmpty) {
+        cancelNotification(reminderId);
+        print('✅ [Flutter] Notification dismissed for reminder: $reminderId');
+      }
+      return;
+    }
     
     // On iOS, don't show local notification - let native system handle it via AppDelegate
     // The AppDelegate is configured to show foreground notifications with banner and list
@@ -263,7 +295,7 @@ class NotificationService {
       final title = message.data['title'] ?? 'Reminder';
       final body = message.data['body'] ?? 'Your reminder is due!';
       
-      print('Showing reminder notification: $title');
+      print('📨 [Flutter] Showing reminder notification: $title');
       
       _showLocalNotificationWithActions(
         id: reminderId.hashCode,
@@ -399,10 +431,33 @@ class NotificationService {
     }
   }
 
+  // Platform channel for native iOS notification removal
+  static const MethodChannel _notificationChannel = 
+      MethodChannel('com.example.cue/notifications');
+  
   // Cancel a scheduled notification
   Future<void> cancelNotification(String reminderId) async {
-    await _localNotifications.cancel(reminderId.hashCode);
-    print('Cancelled notification for reminder: $reminderId');
+    final notificationId = reminderId.hashCode;
+    print('🗑️ [Flutter] Cancelling notification:');
+    print('   - Reminder ID: $reminderId');
+    print('   - Notification ID (hashCode): $notificationId');
+    print('   - Platform: ${Platform.isIOS ? "iOS" : "Android"}');
+    
+    await _localNotifications.cancel(notificationId);
+    print('✅ [Flutter] Local notification cancelled');
+    
+    // For iOS, call native code to remove delivered notifications from notification center
+    if (Platform.isIOS) {
+      try {
+        print('📱 [Flutter → iOS] Calling native removeNotification with reminderId: $reminderId');
+        await _notificationChannel.invokeMethod('removeNotification', {
+          'reminderId': reminderId,
+        });
+        print('✅ [iOS → Flutter] Native notification removal completed');
+      } catch (e) {
+        print('❌ [Flutter] Error calling native removeNotification: $e');
+      }
+    }
   }
   
   // Listen to reminder updates to dismiss notifications on other devices

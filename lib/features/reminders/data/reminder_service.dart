@@ -56,16 +56,25 @@ class ReminderService {
   // Mark reminder as completed (this will trigger cross-device sync)
   Future<void> markAsCompleted(String reminderId) async {
     try {
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      print('🎯 [ReminderService] Marking reminder as completed');
+      print('📝 Reminder ID: $reminderId');
+      print('🕐 Timestamp: ${DateTime.now().toIso8601String()}');
+      
       await _firestore.collection(_collection).doc(reminderId).update({
         'isCompleted': true,
         'completedAt': FieldValue.serverTimestamp(),
       });
-      print('Reminder marked as completed: $reminderId');
+      
+      print('✅ [ReminderService] Firestore update successful');
+      print('📡 [ReminderService] This will trigger onReminderUpdated Cloud Function');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       
       // Trigger a notification to other devices
       await _notifyOtherDevices(reminderId, 'completed');
     } catch (e) {
-      print('Error marking reminder as completed: $e');
+      print('❌ [ReminderService] Error marking reminder as completed: $e');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       rethrow;
     }
   }
