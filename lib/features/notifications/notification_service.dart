@@ -9,6 +9,7 @@ import '../reminders/domain/reminder_model.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 // Top-level function for background message handling
 @pragma('vm:entry-point')
@@ -503,21 +504,30 @@ class NotificationService {
   Future<void> _saveFCMTokenToFirestore(String? token) async {
     if (token != null) {
       try {
+        // Get current user ID from Firebase Auth
+        final userId = FirebaseAuth.instance.currentUser?.uid;
+        if (userId == null) {
+          print('⚠️ No user logged in, cannot save FCM token');
+          return;
+        }
+        
         print('💾 Saving FCM token to devices collection...');
         print('Token: ${token.substring(0, 20)}...');
+        print('User ID: $userId');
         
-        // Save to devices collection so all devices get notifications
+        // Save to devices collection with userId for user-specific notifications
         await FirebaseFirestore.instance
             .collection('devices')
             .doc(token)
             .set({
           'fcmToken': token,
+          'userId': userId,  // Link device to user account
           'lastUpdated': FieldValue.serverTimestamp(),
           'platform': Platform.isAndroid ? 'android' : 'ios',
           'active': true,
         }, SetOptions(merge: true));
         
-        print('✅ FCM Token saved to devices collection');
+        print('✅ FCM Token saved to devices collection for user: $userId');
         
         // Verify it was saved
         final doc = await FirebaseFirestore.instance
