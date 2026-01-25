@@ -2,38 +2,38 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flex_color_picker/flex_color_picker.dart';
 import '../../../services/theme_service.dart';
-import '../../home/presentation/home_screen.dart';
 
-class AccentColorScreen extends StatefulWidget {
-  final String themeMode;
-
-  const AccentColorScreen({super.key, required this.themeMode});
+class AppearanceScreen extends StatefulWidget {
+  const AppearanceScreen({super.key});
 
   @override
-  State<AccentColorScreen> createState() => _AccentColorScreenState();
+  State<AppearanceScreen> createState() => _AppearanceScreenState();
 }
 
-class _AccentColorScreenState extends State<AccentColorScreen> {
+class _AppearanceScreenState extends State<AppearanceScreen> {
   final ThemeService _themeService = ThemeService();
-  Color _selectedColor = const Color(0xFFFFB4A3); // Default coral color
+  Color _selectedColor = const Color(0xFFFFB4A3);
+  String _themeMode = 'light';
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _loadAccentColor();
+    _loadSettings();
   }
 
-  Future<void> _loadAccentColor() async {
+  Future<void> _loadSettings() async {
     final color = await _themeService.getAccentColor();
+    final theme = await _themeService.getThemePreference();
     setState(() {
       _selectedColor = color;
+      _themeMode = theme;
     });
   }
 
   bool get _isDarkMode {
-    if (widget.themeMode == 'dark') return true;
-    if (widget.themeMode == 'system') {
+    if (_themeMode == 'dark') return true;
+    if (_themeMode == 'system') {
       return WidgetsBinding.instance.platformDispatcher.platformBrightness ==
           Brightness.dark;
     }
@@ -76,11 +76,24 @@ class _AccentColorScreenState extends State<AccentColorScreen> {
               child: const Text('Cancel'),
             ),
             TextButton(
-              onPressed: () {
+              onPressed: () async {
                 setState(() {
                   _selectedColor = pickedColor;
+                  _isLoading = true;
                 });
-                Navigator.pop(context);
+                await _themeService.setAccentColor(pickedColor);
+                setState(() {
+                  _isLoading = false;
+                });
+                if (mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Accent color updated!'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
               },
               child: const Text('Select'),
             ),
@@ -90,26 +103,27 @@ class _AccentColorScreenState extends State<AccentColorScreen> {
     );
   }
 
-  Future<void> _handleNext() async {
-    setState(() => _isLoading = true);
+  Future<void> _updateThemeMode(String mode) async {
+    setState(() {
+      _themeMode = mode;
+      _isLoading = true;
+    });
 
     try {
-      // Save accent color preference
-      await _themeService.setAccentColor(_selectedColor);
-
+      await _themeService.setThemePreference(mode);
       if (mounted) {
-        // Navigate to home screen
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
-          (route) => false,
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Theme updated to $mode mode!'),
+            duration: const Duration(seconds: 2),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error saving preference: $e'),
+            content: Text('Error updating theme: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -123,170 +137,250 @@ class _AccentColorScreenState extends State<AccentColorScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final backgroundColor = _isDarkMode
+        ? Color.lerp(const Color(0xFF121212), _selectedColor, 0.08)!
+        : Color.lerp(const Color(0xFFFAF5F3), _selectedColor, 0.05)!;
+
+    final cardColor = _isDarkMode
+        ? Color.lerp(const Color(0xFF1E1E1E), _selectedColor, 0.1)!
+        : Colors.white;
+
+    final textColor = _isDarkMode ? Colors.white : const Color(0xFF2D2D2D);
+    final subtitleColor = _isDarkMode
+        ? Colors.white.withOpacity(0.6)
+        : const Color(0xFF8A8A8A);
+
     return Scaffold(
-      body: Container(
-        decoration: _isDarkMode
-            ? const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0xFF2C242A), Color(0xFF1C1922)],
-                ),
-              )
-            : const BoxDecoration(color: Color(0xFFF5F5F5)),
-        child: SafeArea(
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 24.w),
-            child: Column(
-              children: [
-                SizedBox(height: 24.h),
-                // Progress dots
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _buildDot(false),
-                    SizedBox(width: 8.w),
-                    _buildDot(false),
-                    SizedBox(width: 8.w),
-                    _buildDot(true), // Active dot (3rd step)
-                  ],
-                ),
-                SizedBox(height: 48.h),
-                // Title
-                Text(
-                  'Pick your glow.',
-                  style: TextStyle(
-                    fontSize: 32.sp,
-                    fontWeight: FontWeight.w700,
-                    color: _isDarkMode ? Colors.white : const Color(0xFF2D2D2D),
-                    height: 1.2,
+      backgroundColor: backgroundColor,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Header
+            Padding(
+              padding: EdgeInsets.fromLTRB(24.w, 16.h, 24.w, 24.h),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.arrow_back, color: textColor, size: 24.sp),
+                    onPressed: () => Navigator.pop(context),
                   ),
-                  textAlign: TextAlign.center,
-                ),
-                SizedBox(height: 16.h),
-                // Subtitle
-                Text(
-                  'Fine-tune your accent color for\na look that feels right to you.',
-                  style: TextStyle(
-                    fontSize: 16.sp,
-                    color: _isDarkMode
-                        ? Colors.white.withOpacity(0.6)
-                        : const Color(0xFF8A8A8A),
-                    height: 1.5,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                SizedBox(height: 48.h),
-                // Color picker circle
-                GestureDetector(
-                  onTap: _showColorPicker,
-                  child: Container(
-                    width: 120.w,
-                    height: 120.w,
-                    decoration: BoxDecoration(
-                      color: _selectedColor,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: _selectedColor.withOpacity(0.4),
-                          blurRadius: 20,
-                          spreadRadius: 5,
-                        ),
-                      ],
+                  SizedBox(width: 8.w),
+                  Text(
+                    'Appearance',
+                    style: TextStyle(
+                      fontSize: 28.sp,
+                      fontWeight: FontWeight.w700,
+                      color: textColor,
                     ),
                   ),
-                ),
-                SizedBox(height: 48.h),
-                // Home Screen Preview
-                Expanded(
-                  child: Container(
-                    padding: EdgeInsets.all(16.r),
-                    decoration: BoxDecoration(
-                      color: _isDarkMode
-                          ? Colors.white.withOpacity(0.05)
-                          : Colors.black.withOpacity(0.03),
-                      borderRadius: BorderRadius.circular(28.r),
-                      border: Border.all(
-                        color: _isDarkMode
-                            ? Colors.white.withOpacity(0.1)
-                            : Colors.black.withOpacity(0.05),
-                        width: 1,
+                ],
+              ),
+            ),
+
+            Expanded(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.symmetric(horizontal: 24.w),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Theme Mode Section
+                    Text(
+                      'THEME',
+                      style: TextStyle(
+                        fontSize: 12.sp,
+                        fontWeight: FontWeight.w600,
+                        color: subtitleColor,
+                        letterSpacing: 1.2,
                       ),
                     ),
-                    child: Container(
-                      width: double.infinity,
+                    SizedBox(height: 16.h),
+
+                    Container(
                       decoration: BoxDecoration(
-                        color: _isDarkMode
-                            ? Color.lerp(
-                                const Color(0xFF121212),
-                                _selectedColor,
-                                0.08,
-                              )!
-                            : Color.lerp(
-                                const Color(0xFFFAF5F3),
-                                _selectedColor,
-                                0.05,
-                              )!,
-                        borderRadius: BorderRadius.circular(20.r),
+                        color: cardColor,
+                        borderRadius: BorderRadius.circular(16.r),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
+                            color: Colors.black.withOpacity(
+                              _isDarkMode ? 0.3 : 0.08,
+                            ),
                             blurRadius: 20,
-                            offset: const Offset(0, 10),
+                            offset: const Offset(0, 4),
                           ),
                         ],
                       ),
                       child: Column(
                         children: [
-                          // Date header
-                          Padding(
-                            padding: EdgeInsets.symmetric(vertical: 10.h),
-                            child: Text(
-                              'FRIDAY, JAN 25',
-                              style: TextStyle(
-                                fontSize: 9.sp,
-                                fontWeight: FontWeight.w600,
-                                color: _isDarkMode
-                                    ? Colors.white.withOpacity(0.6)
-                                    : const Color(0xFF8A8A8A),
-                                letterSpacing: 1.5,
+                          _buildThemeOption(
+                            title: 'Light',
+                            icon: Icons.light_mode,
+                            isSelected: _themeMode == 'light',
+                            onTap: () => _updateThemeMode('light'),
+                            textColor: textColor,
+                            subtitleColor: subtitleColor,
+                          ),
+                          Divider(
+                            height: 1,
+                            thickness: 1,
+                            color: subtitleColor.withOpacity(0.08),
+                          ),
+                          _buildThemeOption(
+                            title: 'Dark',
+                            icon: Icons.dark_mode,
+                            isSelected: _themeMode == 'dark',
+                            onTap: () => _updateThemeMode('dark'),
+                            textColor: textColor,
+                            subtitleColor: subtitleColor,
+                          ),
+                          Divider(
+                            height: 1,
+                            thickness: 1,
+                            color: subtitleColor.withOpacity(0.08),
+                          ),
+                          _buildThemeOption(
+                            title: 'System',
+                            icon: Icons.brightness_auto,
+                            isSelected: _themeMode == 'system',
+                            onTap: () => _updateThemeMode('system'),
+                            textColor: textColor,
+                            subtitleColor: subtitleColor,
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    SizedBox(height: 32.h),
+
+                    // Accent Color Section
+                    Text(
+                      'ACCENT COLOR',
+                      style: TextStyle(
+                        fontSize: 12.sp,
+                        fontWeight: FontWeight.w600,
+                        color: subtitleColor,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    SizedBox(height: 16.h),
+
+                    Container(
+                      padding: EdgeInsets.all(20.r),
+                      decoration: BoxDecoration(
+                        color: cardColor,
+                        borderRadius: BorderRadius.circular(16.r),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(
+                              _isDarkMode ? 0.3 : 0.08,
+                            ),
+                            blurRadius: 20,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          GestureDetector(
+                            onTap: _showColorPicker,
+                            child: Container(
+                              width: 80.w,
+                              height: 80.w,
+                              decoration: BoxDecoration(
+                                color: _selectedColor,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: _selectedColor.withOpacity(0.4),
+                                    blurRadius: 20,
+                                    spreadRadius: 5,
+                                  ),
+                                ],
                               ),
                             ),
                           ),
-
-                          SizedBox(height: 16.h),
-
-                          // Reminders Today Count
-                          Text(
-                            '5 reminders today',
-                            style: TextStyle(
-                              fontSize: 13.sp,
-                              fontWeight: FontWeight.w500,
-                              color: _isDarkMode
-                                  ? Colors.white.withOpacity(0.6)
-                                  : const Color(0xFF8A8A8A),
+                          SizedBox(width: 20.w),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Tap to change',
+                                  style: TextStyle(
+                                    fontSize: 16.sp,
+                                    fontWeight: FontWeight.w600,
+                                    color: textColor,
+                                  ),
+                                ),
+                                SizedBox(height: 4.h),
+                                Text(
+                                  'Choose a color that fits your style',
+                                  style: TextStyle(
+                                    fontSize: 14.sp,
+                                    color: subtitleColor,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
+                        ],
+                      ),
+                    ),
 
-                          SizedBox(height: 12.h),
+                    SizedBox(height: 32.h),
 
-                          // Category Icons Row
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              _buildPreviewCategoryIcon(
-                                Icons.medication_outlined,
-                              ),
-                              SizedBox(width: 18.w),
-                              _buildPreviewCategoryIcon(
-                                Icons.local_florist_outlined,
-                              ),
-                              SizedBox(width: 18.w),
-                              _buildPreviewCategoryIcon(
-                                Icons.directions_bus_outlined,
-                              ),
-                            ],
-                          ),
+                    // Preview Section
+                    Text(
+                      'PREVIEW',
+                      style: TextStyle(
+                        fontSize: 12.sp,
+                        fontWeight: FontWeight.w600,
+                        color: subtitleColor,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    SizedBox(height: 16.h),
+
+                    // Home Screen Preview
+                    Container(
+                      padding: EdgeInsets.all(16.r),
+                      decoration: BoxDecoration(
+                        color: _isDarkMode
+                            ? Colors.white.withOpacity(0.05)
+                            : Colors.black.withOpacity(0.03),
+                        borderRadius: BorderRadius.circular(28.r),
+                        border: Border.all(
+                          color: _isDarkMode
+                              ? Colors.white.withOpacity(0.1)
+                              : Colors.black.withOpacity(0.05),
+                          width: 1,
+                        ),
+                      ),
+                      child: Container(
+                        width: double.infinity,
+                        height: 345.h,
+                        decoration: BoxDecoration(
+                          color: _isDarkMode
+                              ? Color.lerp(
+                                  const Color(0xFF121212),
+                                  _selectedColor,
+                                  0.08,
+                                )!
+                              : Color.lerp(
+                                  const Color(0xFFFAF5F3),
+                                  _selectedColor,
+                                  0.05,
+                                )!,
+                          borderRadius: BorderRadius.circular(20.r),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 20,
+                              offset: const Offset(0, 10),
+                            ),
+                          ],
+                        ),
+                      child: Column(
+                        children: [
 
                           SizedBox(height: 20.h),
 
@@ -559,68 +653,13 @@ class _AccentColorScreenState extends State<AccentColorScreen> {
                         ],
                       ),
                     ),
-                  ),
-                ),
-                SizedBox(height: 24.h),
-                // Next button
-                SizedBox(
-                  width: double.infinity,
-                  height: 56.h,
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : _handleNext,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _isDarkMode
-                          ? Colors.white
-                          : Colors.black,
-                      foregroundColor: _isDarkMode
-                          ? Colors.black
-                          : Colors.white,
-                      elevation: 0,
-                      disabledBackgroundColor: _isDarkMode
-                          ? Colors.white.withOpacity(0.6)
-                          : Colors.black.withOpacity(0.6),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(28.r),
-                      ),
                     ),
-                    child: _isLoading
-                        ? SizedBox(
-                            height: 20.h,
-                            width: 20.w,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: _isDarkMode ? Colors.black : Colors.white,
-                            ),
-                          )
-                        : Text(
-                            'Next',
-                            style: TextStyle(
-                              fontSize: 16.sp,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                  ),
+                  ],
                 ),
-                SizedBox(height: 32.h),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildDot(bool isActive) {
-    return Container(
-      width: 8.w,
-      height: 8.h,
-      decoration: BoxDecoration(
-        color: isActive
-            ? (_isDarkMode ? Colors.white : const Color(0xFFFFB4A3))
-            : (_isDarkMode
-                  ? Colors.white.withOpacity(0.3)
-                  : const Color(0xFFE0E0E0)),
-        shape: BoxShape.circle,
       ),
     );
   }
@@ -641,6 +680,54 @@ class _AccentColorScreenState extends State<AccentColorScreen> {
             ? Colors.white.withOpacity(0.7)
             : _selectedColor.withOpacity(0.7),
         size: 16.sp,
+      ),
+    );
+  }
+
+  Widget _buildThemeOption({
+    required String title,
+    required IconData icon,
+    required bool isSelected,
+    required VoidCallback onTap,
+    required Color textColor,
+    required Color subtitleColor,
+  }) {
+    return InkWell(
+      onTap: _isLoading ? null : onTap,
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 16.h),
+        child: Row(
+          children: [
+            Container(
+              width: 40.w,
+              height: 40.h,
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? _selectedColor.withOpacity(0.15)
+                    : subtitleColor.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                color: isSelected ? _selectedColor : subtitleColor,
+                size: 22.sp,
+              ),
+            ),
+            SizedBox(width: 16.w),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 16.sp,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                  color: textColor,
+                ),
+              ),
+            ),
+            if (isSelected)
+              Icon(Icons.check_circle, color: _selectedColor, size: 24.sp),
+          ],
+        ),
       ),
     );
   }

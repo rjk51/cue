@@ -80,35 +80,6 @@ class ThemeService {
     }
   }
 
-  /// Create or update user document in Firestore.
-  ///
-  /// Called after user signup to initialize their document.
-  Future<void> createUserDocument({
-    String? email,
-    String? displayName,
-    String? themePreference,
-  }) async {
-    final userId = _auth.currentUser?.uid;
-    if (userId == null) return;
-
-    try {
-      final userData = {
-        'email': email ?? _auth.currentUser?.email,
-        'displayName': displayName ?? _auth.currentUser?.displayName,
-        'themePreference': themePreference ?? 'light',
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-
-      await _firestore.collection('users').doc(userId).set(
-            userData,
-            SetOptions(merge: true),
-          );
-    } catch (e) {
-      print('Error creating user document: $e');
-      // Don't throw - user can still use the app
-    }
-  }
 
   /// Check if user has completed onboarding (has theme preference set).
   Future<bool> hasCompletedOnboarding() async {
