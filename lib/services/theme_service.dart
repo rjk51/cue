@@ -1,3 +1,4 @@
+import 'package:cue/services/theme_notifier.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -60,6 +61,9 @@ class ThemeService {
 
     // Save locally first (fast, always works)
     await _localStorage.set(_themeKey, theme);
+
+    // Notify all listeners of the theme change
+    ThemeNotifier.instance.updateThemeMode(theme);
 
     // Try to sync with Firestore
     try {
@@ -157,6 +161,9 @@ class ThemeService {
 
     // Save locally first
     await _localStorage.set(_accentColorKey, colorValue);
+
+    // Notify all listeners of the color change
+    ThemeNotifier.instance.updateAccentColor(color);
 
     // Try to sync with Firestore
     try {

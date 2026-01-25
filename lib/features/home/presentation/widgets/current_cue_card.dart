@@ -242,7 +242,7 @@ class _CurrentCueCardState extends State<CurrentCueCard>
 
               // Update snooze mode when dragged past 70%
               final progress = _dragOffset / maxSlide;
-              if (progress > 0.7) {
+              if (progress > 0.2) {
                 if (!_isSnoozeMode) {
                   _isSnoozeMode = true;
                   _swipeController.forward();
@@ -288,7 +288,7 @@ class _CurrentCueCardState extends State<CurrentCueCard>
                         style: TextStyle(
                           fontSize: 16.sp,
                           fontWeight: FontWeight.w600,
-                          color: widget.isDarkMode ? Colors.white : Colors.black,
+                          color: Colors.white,
                         ),
                       ),
                     ),

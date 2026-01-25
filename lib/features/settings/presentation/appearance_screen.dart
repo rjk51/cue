@@ -346,12 +346,12 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
                       decoration: BoxDecoration(
                         color: _isDarkMode
                             ? Colors.white.withOpacity(0.05)
-                            : Colors.black.withOpacity(0.03),
+                            : Colors.transparent,
                         borderRadius: BorderRadius.circular(28.r),
                         border: Border.all(
                           color: _isDarkMode
                               ? Colors.white.withOpacity(0.1)
-                              : Colors.black.withOpacity(0.05),
+                              : Colors.transparent,
                           width: 1,
                         ),
                       ),
@@ -660,26 +660,6 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildPreviewCategoryIcon(IconData icon) {
-    return Container(
-      width: 32.w,
-      height: 32.h,
-      decoration: BoxDecoration(
-        color: _isDarkMode
-            ? Colors.white.withOpacity(0.1)
-            : _selectedColor.withOpacity(0.08),
-        shape: BoxShape.circle,
-      ),
-      child: Icon(
-        icon,
-        color: _isDarkMode
-            ? Colors.white.withOpacity(0.7)
-            : _selectedColor.withOpacity(0.7),
-        size: 16.sp,
       ),
     );
   }
