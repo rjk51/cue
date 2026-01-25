@@ -248,22 +248,17 @@ class NotificationService {
   void _handleForegroundMessage(RemoteMessage message) {
     print('Foreground message received');
     print('Data: ${message.data}');
+    print('Notification: ${message.notification}');
     
-    // On iOS, don't show local notification - let native system handle it via AppDelegate
-    // The AppDelegate is configured to show foreground notifications with banner and list
-    if (Platform.isIOS) {
-      print('📱 iOS: Letting native notification system handle foreground notification');
-      return;
-    }
-    
-    // On Android, show local notification with action buttons
+    // Show local notification with action buttons for reminder notifications
+    // This handles data-only messages from scheduled notifications
     if (message.data.containsKey('type') && 
         message.data['type'] == 'reminder_notification') {
       final reminderId = message.data['reminderId'] ?? '';
       final title = message.data['title'] ?? 'Reminder';
       final body = message.data['body'] ?? 'Your reminder is due!';
       
-      print('Showing reminder notification: $title');
+      print('📱 Showing reminder notification with action buttons: $title');
       
       _showLocalNotificationWithActions(
         id: reminderId.hashCode,
@@ -271,15 +266,9 @@ class NotificationService {
         body: body,
         payload: reminderId,
       );
-    } else if (message.notification != null) {
-      // Fallback for regular notifications
-      _showLocalNotificationWithActions(
-        id: message.data['reminderId']?.hashCode ?? 0,
-        title: message.notification!.title ?? 'Reminder',
-        body: message.notification!.body ?? '',
-        payload: message.data['reminderId'] ?? '',
-      );
     }
+    // Ignore messages that have a notification field (system already showed it)
+    // to prevent duplicates
   }
 
   void _handleNotificationTap(RemoteMessage message) {

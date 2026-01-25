@@ -1,0 +1,207 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'local_storage_service.dart';
+
+/// Service to manage theme preferences with dual storage (Hive + Firestore).
+///
+/// Stores theme preference locally for offline access and syncs with Firestore
+/// for cross-device availability.
+class ThemeService {
+  final LocalStorageService _localStorage = LocalStorageService.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  static const String _themeKey = 'theme_preference';
+  static const String _accentColorKey = 'accent_color';
+
+  /// Get the current theme preference.
+  ///
+  /// Returns 'light', 'dark', or 'system'.
+  /// Defaults to 'light' if not set.
+  Future<String> getThemePreference() async {
+    // Try to get from local storage first (faster, works offline)
+    final localTheme = _localStorage.get<String>(_themeKey);
+    if (localTheme != null) {
+      return localTheme;
+    }
+
+    // Try to get from Firestore if online
+    try {
+      final userId = _auth.currentUser?.uid;
+      if (userId != null) {
+        final userDoc = await _firestore.collection('users').doc(userId).get();
+        if (userDoc.exists) {
+          final firestoreTheme = userDoc.data()?['themePreference'] as String?;
+          if (firestoreTheme != null) {
+            // Cache it locally for future offline access
+            await _localStorage.set(_themeKey, firestoreTheme);
+            return firestoreTheme;
+          }
+        }
+      }
+    } catch (e) {
+      // Network error or Firestore unavailable, use local storage
+      print('Error fetching theme from Firestore: $e');
+    }
+
+    // Default to light theme
+    return 'light';
+  }
+
+  /// Set the theme preference.
+  ///
+  /// Saves to both local storage (Hive) and Firestore.
+  /// Valid values: 'light', 'dark', 'system'
+  Future<void> setThemePreference(String theme) async {
+    if (!['light', 'dark', 'system'].contains(theme)) {
+      throw ArgumentError('Invalid theme: $theme. Must be light, dark, or system.');
+    }
+
+    // Save locally first (fast, always works)
+    await _localStorage.set(_themeKey, theme);
+
+    // Try to sync with Firestore
+    try {
+      final userId = _auth.currentUser?.uid;
+      if (userId != null) {
+        await _firestore.collection('users').doc(userId).set(
+          {
+            'themePreference': theme,
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      }
+    } catch (e) {
+      // Failed to sync with Firestore, but local save succeeded
+      print('Error saving theme to Firestore: $e');
+      // Don't throw - local storage is sufficient
+    }
+  }
+
+  /// Create or update user document in Firestore.
+  ///
+  /// Called after user signup to initialize their document.
+  Future<void> createUserDocument({
+    String? email,
+    String? displayName,
+    String? themePreference,
+  }) async {
+    final userId = _auth.currentUser?.uid;
+    if (userId == null) return;
+
+    try {
+      final userData = {
+        'email': email ?? _auth.currentUser?.email,
+        'displayName': displayName ?? _auth.currentUser?.displayName,
+        'themePreference': themePreference ?? 'light',
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      await _firestore.collection('users').doc(userId).set(
+            userData,
+            SetOptions(merge: true),
+          );
+    } catch (e) {
+      print('Error creating user document: $e');
+      // Don't throw - user can still use the app
+    }
+  }
+
+  /// Check if user has completed onboarding (has theme preference set).
+  Future<bool> hasCompletedOnboarding() async {
+    try {
+      // Check if both theme and accent color are set locally
+      final localTheme = _localStorage.get<String>(_themeKey);
+      final localColor = _localStorage.get<int>(_accentColorKey);
+      
+      if (localTheme != null && localColor != null) {
+        return true;
+      }
+
+      // Check Firestore
+      final userId = _auth.currentUser?.uid;
+      if (userId != null) {
+        final userDoc = await _firestore.collection('users').doc(userId).get();
+        if (userDoc.exists) {
+          final data = userDoc.data();
+          final hasTheme = data?['themePreference'] != null;
+          final hasColor = data?['accentColor'] != null;
+          
+          if (hasTheme && hasColor) {
+            // Cache them locally
+            await _localStorage.set(_themeKey, data!['themePreference'] as String);
+            await _localStorage.set(_accentColorKey, data['accentColor'] as int);
+            return true;
+          }
+        }
+      }
+    } catch (e) {
+      print('Error checking onboarding status: $e');
+    }
+
+    return false;
+  }
+
+  /// Get the accent color preference.
+  ///
+  /// Returns the user's chosen accent color.
+  /// Defaults to coral (#FFB4A3) if not set.
+  Future<Color> getAccentColor() async {
+    // Try to get from local storage first
+    final localColorValue = _localStorage.get<int>(_accentColorKey);
+    if (localColorValue != null) {
+      return Color(localColorValue);
+    }
+
+    // Try to get from Firestore if online
+    try {
+      final userId = _auth.currentUser?.uid;
+      if (userId != null) {
+        final userDoc = await _firestore.collection('users').doc(userId).get();
+        if (userDoc.exists) {
+          final firestoreColor = userDoc.data()?['accentColor'] as int?;
+          if (firestoreColor != null) {
+            // Cache it locally
+            await _localStorage.set(_accentColorKey, firestoreColor);
+            return Color(firestoreColor);
+          }
+        }
+      }
+    } catch (e) {
+      print('Error fetching accent color from Firestore: $e');
+    }
+
+    // Default coral color
+    return const Color(0xFFFFB4A3);
+  }
+
+  /// Set the accent color preference.
+  ///
+  /// Saves to both local storage (Hive) and Firestore.
+  Future<void> setAccentColor(Color color) async {
+    final colorValue = color.value;
+
+    // Save locally first
+    await _localStorage.set(_accentColorKey, colorValue);
+
+    // Try to sync with Firestore
+    try {
+      final userId = _auth.currentUser?.uid;
+      if (userId != null) {
+        await _firestore.collection('users').doc(userId).set(
+          {
+            'accentColor': colorValue,
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      }
+    } catch (e) {
+      print('Error saving accent color to Firestore: $e');
+      // Don't throw - local storage is sufficient
+    }
+  }
+}
