@@ -5,7 +5,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../../services/auth_service.dart';
-import '../../../services/theme_service.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
 import '../../home/presentation/home_screen.dart';
 import '../../onboarding/presentation/theme_preference_screen.dart';
@@ -25,7 +24,6 @@ class _SignupScreenState extends State<SignupScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _authService = AuthService();
-  final _themeService = ThemeService();
   bool _isLoading = false;
   bool _obscurePassword = true;
 
@@ -47,12 +45,6 @@ class _SignupScreenState extends State<SignupScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text,
         fullName: _fullNameController.text.trim(),
-      );
-
-      // Create user document in Firestore
-      await _themeService.createUserDocument(
-        email: _emailController.text.trim(),
-        displayName: _fullNameController.text.trim(),
       );
 
       if (mounted) {
@@ -116,9 +108,6 @@ class _SignupScreenState extends State<SignupScreen> {
 
       // Successfully signed in with Google
       if (mounted) {
-        // Create user document for new Google sign-in users
-        await _themeService.createUserDocument();
-        
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const ThemePreferenceScreen()),
@@ -176,8 +165,6 @@ class _SignupScreenState extends State<SignupScreen> {
       // Successfully signed in with Apple
       if (mounted) {
         // Create user document for new Apple sign-in users
-        await _themeService.createUserDocument();
-        
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const ThemePreferenceScreen()),

@@ -1,9 +1,11 @@
+import 'package:cue/features/settings/presentation/settings_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
 import '../../reminders/domain/reminder_model.dart';
 import '../../reminders/data/reminder_service.dart';
 import '../../reminders/presentation/create_reminder_screen.dart';
+import '../../calendar/presentation/calendar_screen.dart';
 import '../../../services/theme_service.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
 import 'widgets/current_cue_card.dart';
@@ -126,138 +128,149 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     return Scaffold(
       backgroundColor: backgroundColor,
-      body: SafeArea(
-        child: StreamBuilder<List<Reminder>>(
-          stream: _reminderService.getRemindersStream(),
-          builder: (context, snapshot) {
-            final reminders = snapshot.data ?? [];
+      body: Stack(
+        children: [
+          SafeArea(
+            child: StreamBuilder<List<Reminder>>(
+              stream: _reminderService.getRemindersStream(),
+              builder: (context, snapshot) {
+                final reminders = snapshot.data ?? [];
 
-            // Sort reminders by time
-            final sortedReminders = List<Reminder>.from(reminders)
-              ..sort((a, b) => a.time.compareTo(b.time));
+                // Sort reminders by time
+                final sortedReminders = List<Reminder>.from(reminders)
+                  ..sort((a, b) => a.time.compareTo(b.time));
 
-            // Filter for today's reminders
-            final now = DateTime.now();
-            final todayReminders = sortedReminders.where((r) {
-              return r.time.year == now.year &&
-                  r.time.month == now.month &&
-                  r.time.day == now.day &&
-                  !r.isCompleted;
-            }).toList();
+                // Filter for today's reminders
+                final now = DateTime.now();
+                final todayReminders = sortedReminders.where((r) {
+                  return r.time.year == now.year &&
+                      r.time.month == now.month &&
+                      r.time.day == now.day &&
+                      !r.isCompleted;
+                }).toList();
 
-            // Get current/next reminder (first uncompleted)
-            final upcomingReminders = sortedReminders
-                .where(
-                  (r) =>
-                      !r.isCompleted &&
-                      r.time.isAfter(now.subtract(const Duration(hours: 1))),
-                )
-                .toList();
-
-            final currentReminder = upcomingReminders.isNotEmpty
-                ? upcomingReminders.first
-                : null;
-
-            // Upcoming reminders (after current)
-            final upcomingAfterCurrent = upcomingReminders.length > 1
-                ? upcomingReminders.sublist(1)
-                : <Reminder>[];
-
-            return Column(
-              children: [
-                // Date header
-                Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16.h),
-                  child: Text(
-                    DateFormat('EEEE, MMM d').format(now).toUpperCase(),
-                    style: TextStyle(
-                      fontSize: 12.sp,
-                      fontWeight: FontWeight.w600,
-                      color: subtitleColor,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                ),
-                SizedBox(height: 32.h),
-
-                // Today's Reminders Count Section (moved here)
-                _buildRemindersToday(
-                  todayReminders.length,
-                  textColor,
-                  subtitleColor,
-                ),
-
-                SizedBox(height: 40.h),
-
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: EdgeInsets.symmetric(horizontal: 32.w),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Current/Next Cue Card
-                        if (currentReminder != null)
-                          CurrentCueCard(
-                            reminder: currentReminder,
-                            accentColor: _accentColor,
-                            isDarkMode: _isDarkMode,
-                            cardColor: cardColor,
-                            textColor: textColor,
-                            subtitleColor: subtitleColor,
-                            onMarkCompleted: _markAsCompleted,
-                            getTimeDisplayText: _getTimeDisplayText,
-                            isCurrentCue: _isCurrentCue,
-                          )
-                        else
-                          _buildEmptyCueCard(
-                            cardColor,
-                            textColor,
-                            subtitleColor,
+                // Get current/next reminder (first uncompleted)
+                final upcomingReminders = sortedReminders
+                    .where(
+                      (r) =>
+                          !r.isCompleted &&
+                          r.time.isAfter(
+                            now.subtract(const Duration(hours: 1)),
                           ),
+                    )
+                    .toList();
 
-                        SizedBox(height: 32.h),
+                final currentReminder = upcomingReminders.isNotEmpty
+                    ? upcomingReminders.first
+                    : null;
 
-                        // Upcoming Section
-                        _buildUpcomingSection(
-                          upcomingAfterCurrent,
-                          cardColor,
-                          textColor,
-                          subtitleColor,
+                // Upcoming reminders (after current)
+                final upcomingAfterCurrent = upcomingReminders.length > 1
+                    ? upcomingReminders.sublist(1)
+                    : <Reminder>[];
+
+                return Column(
+                  children: [
+                    // Date header
+                    Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16.h),
+                      child: Text(
+                        DateFormat('EEEE, MMM d').format(now).toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 12.sp,
+                          fontWeight: FontWeight.w600,
+                          color: subtitleColor,
+                          letterSpacing: 1.5,
                         ),
-
-                        SizedBox(height: 100.h), // Space for FAB
-                      ],
+                      ),
                     ),
+                    SizedBox(height: 32.h),
+
+                    // Today's Reminders Count Section (moved here)
+                    _buildRemindersToday(
+                      todayReminders.length,
+                      textColor,
+                      subtitleColor,
+                    ),
+
+                    SizedBox(height: 40.h),
+
+                    Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 32.w),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Current/Next Cue Card
+                            if (currentReminder != null)
+                              CurrentCueCard(
+                                reminder: currentReminder,
+                                accentColor: _accentColor,
+                                isDarkMode: _isDarkMode,
+                                cardColor: cardColor,
+                                textColor: textColor,
+                                subtitleColor: subtitleColor,
+                                onMarkCompleted: _markAsCompleted,
+                                getTimeDisplayText: _getTimeDisplayText,
+                                isCurrentCue: _isCurrentCue,
+                              )
+                            else
+                              _buildEmptyCueCard(
+                                cardColor,
+                                textColor,
+                                subtitleColor,
+                              ),
+
+                            SizedBox(height: 24.h),
+
+                            // Upcoming Section - flexible to avoid overflow
+                            Flexible(
+                              child: _buildUpcomingSection(
+                                upcomingAfterCurrent,
+                                cardColor,
+                                textColor,
+                                subtitleColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+
+          // FAB positioned in Stack to avoid layout constraints
+          Positioned(
+            right: 34.w,
+            bottom: MediaQuery.of(context).padding.bottom + 10.h,
+            child: Container(
+              width: 64.w,
+              height: 64.h,
+              decoration: BoxDecoration(
+                color: _accentColor,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: _accentColor.withOpacity(0.4),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
                   ),
-                ),
-              ],
-            );
-          },
-        ),
-      ),
-      floatingActionButton: Padding(
-        padding: EdgeInsets.only(right: 18.w),
-        child: Container(
-          width: 64.w,
-          height: 64.h,
-          decoration: BoxDecoration(
-            color: _accentColor,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: _accentColor.withOpacity(0.4),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
+                ],
               ),
-            ],
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _navigateToCreateReminder,
+                  customBorder: const CircleBorder(),
+                  child: Icon(Icons.add, color: Colors.white, size: 28.sp),
+                ),
+              ),
+            ),
           ),
-          child: FloatingActionButton(
-            onPressed: _navigateToCreateReminder,
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            child: Icon(Icons.add, color: Colors.white, size: 28.sp),
-          ),
-        ),
+        ],
       ),
       bottomNavigationBar: Padding(
         padding: EdgeInsets.only(left: 16.w, right: 16.w),
@@ -265,12 +278,35 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           accentColor: _accentColor,
           isDarkMode: _isDarkMode,
           currentIndex: _currentNavIndex,
-          onTap: (index) {
+          onTap: (index) async {
+            // Update local index for UI
             setState(() {
               _currentNavIndex = index;
             });
-            // TODO: Navigate to different screens based on index
-            // 0 = home, 1 = calendar, 2 = settings
+
+            // Navigate to respective screens
+            if (index == 0) {
+              // Already on home; no-op
+              return;
+            } else if (index == 1) {
+              // Calendar
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const CalendarScreen()),
+              );
+            } else if (index == 2) {
+              // Settings
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const SettingsScreen()),
+              );
+            }
+            // When coming back, reset nav index to home
+            if (mounted) {
+              setState(() {
+                _currentNavIndex = 0;
+              });
+            }
           },
         ),
       ),

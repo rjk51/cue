@@ -1,9 +1,11 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
 
   // Get current user
@@ -54,11 +56,47 @@ class AuthService {
       // Update display name
       await credential.user?.updateDisplayName(fullName);
       
+      // Create user document in Firestore
+      await createUserDocument(
+        email: email,
+        displayName: fullName,
+      );
+      
       return credential;
     } on FirebaseAuthException catch (e) {
       throw _handleAuthException(e);
     } catch (e) {
       throw 'An unexpected error occurred. Please try again.';
+    }
+  }
+
+  /// Create or update user document in Firestore.
+  ///
+  /// Called after user signup to initialize their document.
+  Future<void> createUserDocument({
+    String? email,
+    String? displayName,
+    String? themePreference,
+  }) async {
+    final userId = _auth.currentUser?.uid;
+    if (userId == null) return;
+
+    try {
+      final userData = {
+        'email': email ?? _auth.currentUser?.email,
+        'displayName': displayName ?? _auth.currentUser?.displayName,
+        'themePreference': themePreference ?? 'light',
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      await _firestore.collection('users').doc(userId).set(
+            userData,
+            SetOptions(merge: true),
+          );
+    } catch (e) {
+      print('Error creating user document: $e');
+      // Don't throw - user can still use the app
     }
   }
 
@@ -83,7 +121,17 @@ class AuthService {
       );
 
       // Sign in to Firebase with the Google credential
-      return await _auth.signInWithCredential(credential);
+      final userCredential = await _auth.signInWithCredential(credential);
+
+      // Create user document if this is a new user
+      if (userCredential.additionalUserInfo?.isNewUser == true) {
+        await createUserDocument(
+          email: userCredential.user?.email,
+          displayName: userCredential.user?.displayName,
+        );
+      }
+
+      return userCredential;
     } on FirebaseAuthException catch (e) {
       // Sign out from Google if there was an error
       await _googleSignIn.signOut();
@@ -132,6 +180,14 @@ class AuthService {
 
       // Sign in to Firebase with the Google credential
       final userCredential = await _auth.signInWithCredential(credential);
+      
+      // Create user document if this is a new user
+      if (userCredential.additionalUserInfo?.isNewUser == true) {
+        await createUserDocument(
+          email: userCredential.user?.email,
+          displayName: userCredential.user?.displayName,
+        );
+      }
       
       return GoogleSignInResult(
         status: GoogleSignInStatus.success,
@@ -223,6 +279,14 @@ class AuthService {
         );
       }
 
+      // Create user document if this is a new user
+      if (userCredential.additionalUserInfo?.isNewUser == true) {
+        await createUserDocument(
+          email: userCredential.user?.email,
+          displayName: userCredential.user?.displayName,
+        );
+      }
+
       return userCredential;
     } on SignInWithAppleAuthorizationException catch (e) {
       if (e.code == AuthorizationErrorCode.canceled) {
@@ -278,6 +342,14 @@ class AuthService {
           appleCredential.givenName != null && appleCredential.familyName != null) {
         await userCredential.user!.updateDisplayName(
           '${appleCredential.givenName} ${appleCredential.familyName}',
+        );
+      }
+
+      // Create user document if this is a new user
+      if (userCredential.additionalUserInfo?.isNewUser == true) {
+        await createUserDocument(
+          email: userCredential.user?.email,
+          displayName: userCredential.user?.displayName,
         );
       }
 
