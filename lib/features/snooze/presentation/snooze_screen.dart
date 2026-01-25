@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
 import 'dart:math' as math;
+import '../../../services/theme_service.dart';
+import '../../../services/theme_notifier.dart';
 
 class SnoozeScreen extends StatefulWidget {
   final String reminderId;
@@ -18,15 +20,57 @@ class SnoozeScreen extends StatefulWidget {
 }
 
 class _SnoozeScreenState extends State<SnoozeScreen> {
+  final ThemeService _themeService = ThemeService();
   int _snoozeMinutes = 15;
   String? _selectedPreset;
   double _currentAngle =
       0.25 * 2 * 3.14159; // Start at 15 minutes (25% of circle)
+  Color _accentColor = const Color(0xFFFFB4A3);
+  bool _isDarkMode = false;
 
   // State for custom times
   DateTime? _laterTodayTime;
   DateTime? _tomorrowTime;
   DateTime? _nextWeekDateTime;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAccentColor();
+    ThemeNotifier.instance.addListener(_onThemeChanged);
+  }
+
+  @override
+  void dispose() {
+    ThemeNotifier.instance.removeListener(_onThemeChanged);
+    super.dispose();
+  }
+
+  void _onThemeChanged() {
+    if (mounted) {
+      setState(() {
+        _accentColor = ThemeNotifier.instance.accentColor;
+        _isDarkMode = ThemeNotifier.instance.isDarkMode;
+      });
+    }
+  }
+
+  Future<void> _loadAccentColor() async {
+    final color = await _themeService.getAccentColor();
+    final themePreference = await _themeService.getThemePreference();
+    if (mounted) {
+      setState(() {
+        _accentColor = color;
+        if (themePreference == 'system') {
+          _isDarkMode =
+              WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+              Brightness.dark;
+        } else {
+          _isDarkMode = themePreference == 'dark';
+        }
+      });
+    }
+  }
 
   void _updateSnoozeFromAngle(double angle) {
     // Normalize angle to 0-2π range
@@ -112,9 +156,9 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: Color(0xFF256B6F),
-              surface: Color(0xFF2A2A2A),
+            colorScheme: ColorScheme.dark(
+              primary: _accentColor,
+              surface: const Color(0xFF2A2A2A),
             ),
           ),
           child: child!,
@@ -163,9 +207,9 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: Color(0xFF256B6F),
-              surface: Color(0xFF2A2A2A),
+            colorScheme: ColorScheme.dark(
+              primary: _accentColor,
+              surface: const Color(0xFF2A2A2A),
             ),
           ),
           child: child!,
@@ -206,9 +250,9 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: Color(0xFF256B6F),
-              surface: Color(0xFF2A2A2A),
+            colorScheme: ColorScheme.dark(
+              primary: _accentColor,
+              surface: const Color(0xFF2A2A2A),
             ),
           ),
           child: child!,
@@ -223,9 +267,9 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
         builder: (context, child) {
           return Theme(
             data: Theme.of(context).copyWith(
-              colorScheme: const ColorScheme.dark(
-                primary: Color(0xFF256B6F),
-                surface: Color(0xFF2A2A2A),
+              colorScheme: ColorScheme.dark(
+                primary: _accentColor,
+                surface: const Color(0xFF2A2A2A),
               ),
             ),
             child: child!,
@@ -252,8 +296,17 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Background color with accent tint (same as home screen)
+    final backgroundColor = _isDarkMode
+        ? Color.lerp(const Color(0xFF121212), _accentColor, 0.08)!
+        : Color.lerp(const Color(0xFFFAF5F3), _accentColor, 0.05)!;
+
+    // Dynamic colors based on theme
+    final textColor = _isDarkMode ? Colors.white : const Color(0xFF2A2A2A);
+    final subtitleColor = _isDarkMode ? Colors.white70 : const Color(0xFF666666);
+
     return Scaffold(
-      backgroundColor: const Color(0xFF1E1E1E),
+      backgroundColor: backgroundColor,
       body: SafeArea(
         child: Column(
           children: [
@@ -264,14 +317,14 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
                 children: [
                   Icon(
                     Icons.notifications_outlined,
-                    color: Colors.white.withOpacity(0.6),
+                    color: subtitleColor,
                     size: 20.sp,
                   ),
                   SizedBox(width: 8.w),
                   Text(
                     'REMINDER',
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.6),
+                      color: subtitleColor,
                       fontSize: 12.sp,
                       fontWeight: FontWeight.w500,
                       letterSpacing: 1.2,
@@ -282,7 +335,7 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
                     onPressed: () => Navigator.pop(context),
                     icon: Icon(
                       Icons.close,
-                      color: Colors.white.withOpacity(0.6),
+                      color: subtitleColor,
                       size: 24.sp,
                     ),
                     padding: EdgeInsets.zero,
@@ -327,6 +380,7 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
                         painter: _SnoozeArcPainter(
                           progress: _snoozeMinutes / 60,
                           angle: _currentAngle,
+                          accentColor: _accentColor,
                         ),
                       ),
                     ),
@@ -338,7 +392,7 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
                         Text(
                           'SNOOZE FOR',
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.6),
+                            color: subtitleColor,
                             fontSize: 14.sp,
                             fontWeight: FontWeight.w500,
                             letterSpacing: 1.5,
@@ -348,7 +402,7 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
                         Text(
                           '+$_snoozeMinutes',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: textColor,
                             fontSize: 68.sp,
                             fontWeight: FontWeight.w600,
                             height: 1,
@@ -358,7 +412,7 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
                         Text(
                           'minutes',
                           style: TextStyle(
-                            color: const Color.fromARGB(255, 70, 107, 109),
+                            color: _accentColor,
                             fontSize: 20.sp,
                             fontWeight: FontWeight.w400,
                           ),
@@ -399,9 +453,9 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
                             child: Container(
                               width: 12.w,
                               height: 12.h,
-                              decoration: const BoxDecoration(
+                              decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: Color.fromARGB(255, 70, 107, 109),
+                                color: _accentColor,
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black26,
@@ -502,8 +556,8 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
                     child: ElevatedButton(
                       onPressed: _handleConfirmSnooze,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color.fromARGB(255, 70, 107, 109),
-                        foregroundColor: Colors.white,
+                        backgroundColor: _accentColor,
+                        foregroundColor: _isDarkMode ? Colors.white : Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(28.r),
@@ -536,14 +590,14 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
                         Icon(
                           Icons.check_circle,
                           size: 20.sp,
-                          color: Colors.white.withOpacity(0.5),
+                          color: subtitleColor,
                         ),
                         SizedBox(width: 8.w),
                         Text(
                           'Mark as Complete',
                           style: TextStyle(
                             fontSize: 16.sp,
-                            color: Colors.white.withOpacity(0.5),
+                            color: subtitleColor,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -568,24 +622,29 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
     required VoidCallback onTap,
     bool isFullWidth = false,
   }) {
+    // Dynamic colors based on theme
+    final textColor = _isDarkMode ? Colors.white : const Color(0xFF2A2A2A);
+    final subtitleColor = _isDarkMode ? Colors.white70 : const Color(0xFF666666);
+    final cardColor = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: EdgeInsets.all(16.r),
         decoration: BoxDecoration(
           color: isSelected
-              ? const Color(0xFF2A2A2A)
-              : Colors.white.withOpacity(0.05),
+              ? (_isDarkMode ? const Color(0xFF2A2A2A) : cardColor)
+              : (_isDarkMode ? Colors.white.withOpacity(0.05) : cardColor.withOpacity(0.7)),
           borderRadius: BorderRadius.circular(16.r),
           border: Border.all(
-            color: isSelected ? const Color(0xFF256B6F) : Colors.transparent,
+            color: isSelected ? _accentColor : Colors.transparent,
             width: 1.5,
           ),
         ),
         child: isFullWidth
             ? Row(
                 children: [
-                  Icon(icon, color: const Color(0xFF256B6F), size: 20.sp),
+                  Icon(icon, color: _accentColor, size: 20.sp),
                   SizedBox(width: 12.w),
                   Expanded(
                     child: Column(
@@ -594,7 +653,7 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
                         Text(
                           label,
                           style: TextStyle(
-                            color: const Color(0xFF256B6F),
+                            color: _accentColor,
                             fontSize: 10.sp,
                             fontWeight: FontWeight.w600,
                             letterSpacing: 1.2,
@@ -604,7 +663,7 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
                         Text(
                           '$time • $subtitle',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: textColor,
                             fontSize: 14.sp,
                             fontWeight: FontWeight.w500,
                           ),
@@ -614,7 +673,7 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
                   ),
                   Icon(
                     Icons.arrow_forward_ios,
-                    color: Colors.white.withOpacity(0.3),
+                    color: subtitleColor.withOpacity(0.5),
                     size: 16.sp,
                   ),
                 ],
@@ -624,12 +683,12 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
                 children: [
                   Row(
                     children: [
-                      Icon(icon, color: const Color(0xFF256B6F), size: 20.sp),
+                      Icon(icon, color: _accentColor, size: 20.sp),
                       SizedBox(width: 8.w),
                       Text(
                         label,
                         style: TextStyle(
-                          color: const Color(0xFF256B6F),
+                          color: _accentColor,
                           fontSize: 10.sp,
                           fontWeight: FontWeight.w600,
                           letterSpacing: 1.2,
@@ -641,7 +700,7 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
                   Text(
                     time,
                     style: TextStyle(
-                      color: Colors.white,
+                      color: textColor,
                       fontSize: 18.sp,
                       fontWeight: FontWeight.w600,
                     ),
@@ -650,7 +709,7 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
                   Text(
                     subtitle,
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.5),
+                      color: subtitleColor,
                       fontSize: 13.sp,
                       fontWeight: FontWeight.w400,
                     ),
@@ -665,8 +724,9 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
 class _SnoozeArcPainter extends CustomPainter {
   final double progress;
   final double angle;
+  final Color accentColor;
 
-  _SnoozeArcPainter({required this.progress, required this.angle});
+  _SnoozeArcPainter({required this.progress, required this.angle, required this.accentColor});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -682,7 +742,7 @@ class _SnoozeArcPainter extends CustomPainter {
 
     // Paint for the progress arc
     final progressPaint = Paint()
-      ..color = const Color.fromARGB(255, 70, 107, 109)
+      ..color = accentColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = 10
       ..strokeCap = StrokeCap.round;

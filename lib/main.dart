@@ -10,6 +10,8 @@ import 'features/notifications/notification_service.dart';
 import 'features/reminders/data/reminder_service.dart';
 import 'features/snooze/presentation/snooze_screen.dart';
 import 'services/local_storage_service.dart';
+import 'services/theme_service.dart';
+import 'services/theme_notifier.dart';
 import 'shared/widgets/onboarding_gate.dart';
 
 // Global navigator key for navigation from notification handlers
@@ -63,6 +65,15 @@ void main() async {
 
   // Initialize Firebase
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // Initialize theme notifier with saved preferences
+  final themeService = ThemeService();
+  final savedColor = await themeService.getAccentColor();
+  final savedTheme = await themeService.getThemePreference();
+  ThemeNotifier.instance.initialize(
+    accentColor: savedColor,
+    themeMode: savedTheme,
+  );
 
   // Initialize notification service with error handling
   try {

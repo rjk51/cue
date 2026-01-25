@@ -3,6 +3,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
 
 import '../domain/recurrence_rule.dart';
+import '../../../services/theme_service.dart';
+import '../../../services/theme_notifier.dart';
 
 class RecurrenceRuleScreen extends StatefulWidget {
   const RecurrenceRuleScreen({
@@ -21,12 +23,14 @@ class RecurrenceRuleScreen extends StatefulWidget {
 }
 
 class _RecurrenceRuleScreenState extends State<RecurrenceRuleScreen> {
+  final ThemeService _themeService = ThemeService();
   late RecurrenceFrequency _selectedFrequency;
   late Set<int> _selectedDays;
   late TimeOfDay _selectedTime;
   late DateTime _startDate;
   DateTime? _endDate;
   bool _endDateEnabled = false;
+  Color _accentColor = const Color(0xFFFFB4A3);
 
   // Map day indices to abbreviated names
   final List<String> _dayAbbreviations = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -53,6 +57,31 @@ class _RecurrenceRuleScreenState extends State<RecurrenceRuleScreen> {
     _startDate = seedRule?.startDate ?? seedStart;
     _endDate = seedRule?.endDate;
     _endDateEnabled = _endDate != null;
+    _loadAccentColor();
+    ThemeNotifier.instance.addListener(_onThemeChanged);
+  }
+
+  @override
+  void dispose() {
+    ThemeNotifier.instance.removeListener(_onThemeChanged);
+    super.dispose();
+  }
+
+  void _onThemeChanged() {
+    if (mounted) {
+      setState(() {
+        _accentColor = ThemeNotifier.instance.accentColor;
+      });
+    }
+  }
+
+  Future<void> _loadAccentColor() async {
+    final color = await _themeService.getAccentColor();
+    if (mounted) {
+      setState(() {
+        _accentColor = color;
+      });
+    }
   }
 
   void _toggleDay(int dayIndex) {
@@ -556,7 +585,7 @@ class _RecurrenceRuleScreenState extends State<RecurrenceRuleScreen> {
                                     }
                                   });
                                 },
-                                activeColor: const Color(0xFF4FC3A1),
+                                activeColor: _accentColor,
                               ),
                             ],
                           ),
@@ -701,11 +730,11 @@ class _RecurrenceRuleScreenState extends State<RecurrenceRuleScreen> {
         width: 44.w,
         height: 44.w,
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF2D8A7A) : const Color(0xFF1A1F2E),
+          color: isSelected ? _accentColor.withOpacity(0.3) : const Color(0xFF1A1F2E),
           shape: BoxShape.circle,
           border: isSelected 
               ? Border.all(
-                  color: const Color(0xFF4FC3A1),
+                  color: _accentColor,
                   width: 2.w,
                 )
               : null,

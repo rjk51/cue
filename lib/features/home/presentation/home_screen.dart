@@ -7,6 +7,7 @@ import '../../reminders/data/reminder_service.dart';
 import '../../reminders/presentation/create_reminder_screen.dart';
 import '../../calendar/presentation/calendar_screen.dart';
 import '../../../services/theme_service.dart';
+import '../../../services/theme_notifier.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
 import 'widgets/current_cue_card.dart';
 import 'widgets/bottom_nav_bar.dart';
@@ -30,6 +31,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _loadThemeSettings();
+    // Listen for theme changes
+    ThemeNotifier.instance.addListener(_onThemeChanged);
+  }
+
+  @override
+  void dispose() {
+    ThemeNotifier.instance.removeListener(_onThemeChanged);
+    super.dispose();
+  }
+
+  void _onThemeChanged() {
+    if (mounted) {
+      setState(() {
+        _accentColor = ThemeNotifier.instance.accentColor;
+        _isDarkMode = ThemeNotifier.instance.isDarkMode;
+      });
+    }
   }
 
   Future<void> _loadThemeSettings() async {
