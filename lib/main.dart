@@ -75,71 +75,8 @@ void main() async {
     themeMode: savedTheme,
   );
 
-  // Initialize notification service with error handling
-  try {
-    final notificationService = NotificationService();
-    await notificationService.initialize();
-
-    // Check for any pending reminders that might have been missed
-    await notificationService.checkPendingReminders('demo_user');
-
-    // Set background message handler
-    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-
-    // Set up notification action handler
-    notificationService.onNotificationAction = (reminderId, action) async {
-      print('🎯 Notification action handler called:');
-      print('  - Action: $action');
-      print('  - Reminder ID: $reminderId');
-
-      final reminderService = ReminderService();
-
-      if (action == 'mark_done' || action == 'done') {
-        print('✅ Handling mark_done/done action');
-        // Mark reminder as completed
-        if (!reminderId.startsWith('test_reminder')) {
-          await reminderService.markAsCompleted(reminderId);
-          await notificationService.cancelNotification(reminderId);
-        }
-      } else if (action == 'snooze') {
-        print('⏰ Handling snooze action');
-        // Navigate to snooze screen
-        final context = navigatorKey.currentContext;
-        print('  - Navigator context: ${context != null ? "available" : "null"}');
-
-        if (context != null) {
-          String reminderTitle = '🧪 Test Reminder';
-
-          // Get reminder details if it's a real reminder
-          if (!reminderId.startsWith('test_reminder')) {
-            final reminder = await reminderService.getReminder(reminderId);
-            if (reminder != null) {
-              reminderTitle = reminder.name;
-            }
-          }
-
-          print('  - Navigating to SnoozeScreen with title: $reminderTitle');
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => SnoozeScreen(
-                reminderId: reminderId,
-                reminderTitle: reminderTitle,
-              ),
-            ),
-          );
-        } else {
-          print('❌ Cannot navigate: context is null');
-        }
-      } else {
-        print('⚠️ Unknown action: $action');
-      }
-    };
-  } catch (e, stackTrace) {
-    print('❌ Error initializing notification service: $e');
-    print('Stack trace: $stackTrace');
-    // Continue anyway - the app will work without notifications
-  }
+  // Set background message handler (needs to be set early)
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
   runApp(const MyApp());
 }
@@ -177,6 +114,71 @@ class MyApp extends StatelessWidget {
 
             // Show home screen if user is logged in, otherwise show welcome screen
             if (snapshot.hasData) {
+              // Initialize notifications after user is authenticated
+              WidgetsBinding.instance.addPostFrameCallback((_) async {
+                try {
+                  final notificationService = NotificationService();
+                  await notificationService.initialize();
+
+                  // Check for any pending reminders that might have been missed
+                  await notificationService.checkPendingReminders(snapshot.data!.uid);
+
+                  // Set up notification action handler
+                  notificationService.onNotificationAction = (reminderId, action) async {
+                    print('🎯 Notification action handler called:');
+                    print('  - Action: $action');
+                    print('  - Reminder ID: $reminderId');
+
+                    final reminderService = ReminderService();
+
+                    if (action == 'mark_done' || action == 'done') {
+                      print('✅ Handling mark_done/done action');
+                      // Mark reminder as completed
+                      if (!reminderId.startsWith('test_reminder')) {
+                        await reminderService.markAsCompleted(reminderId);
+                        await notificationService.cancelNotification(reminderId);
+                      }
+                    } else if (action == 'snooze') {
+                      print('⏰ Handling snooze action');
+                      // Navigate to snooze screen
+                      final context = navigatorKey.currentContext;
+                      print('  - Navigator context: ${context != null ? "available" : "null"}');
+
+                      if (context != null) {
+                        String reminderTitle = '🧪 Test Reminder';
+
+                        // Get reminder details if it's a real reminder
+                        if (!reminderId.startsWith('test_reminder')) {
+                          final reminder = await reminderService.getReminder(reminderId);
+                          if (reminder != null) {
+                            reminderTitle = reminder.name;
+                          }
+                        }
+
+                        print('  - Navigating to SnoozeScreen with title: $reminderTitle');
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => SnoozeScreen(
+                              reminderId: reminderId,
+                              reminderTitle: reminderTitle,
+                            ),
+                          ),
+                        );
+                      } else {
+                        print('❌ Cannot navigate: context is null');
+                      }
+                    } else {
+                      print('⚠️ Unknown action: $action');
+                    }
+                  };
+                } catch (e, stackTrace) {
+                  print('❌ Error initializing notification service: $e');
+                  print('Stack trace: $stackTrace');
+                  // Continue anyway - the app will work without notifications
+                }
+              });
+
               return const OnboardingGate();
             } else {
               return const WelcomeScreen();
