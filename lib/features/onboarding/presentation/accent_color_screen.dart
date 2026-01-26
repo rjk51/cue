@@ -288,13 +288,14 @@ class _AccentColorScreenState extends State<AccentColorScreen> {
                             ],
                           ),
 
-                          SizedBox(height: 20.h),
+                          SizedBox(height: 12.h),
 
-                          Expanded(
+                          Flexible(
                             child: Padding(
                               padding: EdgeInsets.symmetric(horizontal: 20.r),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   // Current Cue Card
                                   Container(
@@ -411,7 +412,7 @@ class _AccentColorScreenState extends State<AccentColorScreen> {
                                     ),
                                   ),
 
-                                  SizedBox(height: 16.h),
+                                  SizedBox(height: 12.h),
 
                                   // Upcoming Section
                                   Text(
@@ -530,7 +531,7 @@ class _AccentColorScreenState extends State<AccentColorScreen> {
                             padding: EdgeInsets.only(
                               bottom: 8.h,
                               right: 20.w,
-                              top: 8.h,
+                              top: 4.h,
                             ),
                             child: Align(
                               alignment: Alignment.bottomRight,
