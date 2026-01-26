@@ -43,10 +43,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   void _onThemeChanged() {
     if (mounted) {
-      setState(() {
-        _accentColor = ThemeNotifier.instance.accentColor;
-        _isDarkMode = ThemeNotifier.instance.isDarkMode;
-      });
+      // Reload from storage to ensure we have the latest values
+      _loadThemeSettings();
     }
   }
 
@@ -71,7 +69,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void _navigateToCreateReminder() async {
     final result = await Navigator.push<Reminder>(
       context,
-      MaterialPageRoute(builder: (context) => const CreateReminderScreen()),
+      MaterialPageRoute(builder: (context) => const NewReminderScreen()),
     );
 
     if (result != null && mounted) {
@@ -146,6 +144,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     return Scaffold(
       backgroundColor: backgroundColor,
+      resizeToAvoidBottomInset: true,
       body: Stack(
         children: [
           SafeArea(
@@ -187,83 +186,219 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ? upcomingReminders.sublist(1)
                     : <Reminder>[];
 
-                return Column(
-                  children: [
-                    // Date header
-                    Padding(
-                      padding: EdgeInsets.symmetric(vertical: 16.h),
-                      child: Text(
-                        DateFormat('EEEE, MMM d').format(now).toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 12.sp,
-                          fontWeight: FontWeight.w600,
-                          color: subtitleColor,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 32.h),
+                final isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
+                final screenHeight = MediaQuery.of(context).size.height - 
+                    MediaQuery.of(context).padding.top;
+                
+                return SingleChildScrollView(
+                  physics: isKeyboardOpen 
+                      ? const ClampingScrollPhysics() 
+                      : const NeverScrollableScrollPhysics(),
+                  child: SizedBox(
+                    height: isKeyboardOpen ? null : screenHeight,
+                    child: Column(
+                      children: [
+                        if (isKeyboardOpen) ...[
+                              // Date header - keyboard open
+                              Padding(
+                                padding: EdgeInsets.symmetric(vertical: 16.h),
+                                child: Text(
+                                  DateFormat('EEEE, MMM d').format(now).toUpperCase(),
+                                  style: TextStyle(
+                                    fontSize: 12.sp,
+                                    fontWeight: FontWeight.w600,
+                                    color: subtitleColor,
+                                    letterSpacing: 1.5,
+                                  ),
+                                ),
+                              ),
 
-                    // Today's Reminders Count Section (moved here)
-                    _buildRemindersToday(
-                      todayReminders.length,
-                      textColor,
-                      subtitleColor,
-                    ),
+                              // Show full-screen empty state if no reminders at all
+                              if (sortedReminders.isEmpty)
+                                SizedBox(
+                                  height: screenHeight - 100.h,
+                                  child: _buildFullScreenEmptyState(
+                                    textColor,
+                                    subtitleColor,
+                                  ),
+                                )
+                              else ...[
+                                SizedBox(height: 32.h),
 
-                    SizedBox(height: 40.h),
+                                // Today's Reminders Count Section
+                                _buildRemindersToday(
+                                  todayReminders.length,
+                                  textColor,
+                                  subtitleColor,
+                                  todayReminders,
+                                ),
 
-                    Expanded(
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 32.w),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Current/Next Cue Card
-                            if (currentReminder != null)
-                              CurrentCueCard(
-                                reminder: currentReminder,
-                                accentColor: _accentColor,
-                                isDarkMode: _isDarkMode,
-                                cardColor: cardColor,
-                                textColor: textColor,
-                                subtitleColor: subtitleColor,
-                                onMarkCompleted: _markAsCompleted,
-                                getTimeDisplayText: _getTimeDisplayText,
-                                isCurrentCue: _isCurrentCue,
-                              )
-                            else
-                              _buildEmptyCueCard(
-                                cardColor,
+                                SizedBox(height: 40.h),
+
+                                Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 32.w),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      // Current/Next Cue Card
+                                      if (currentReminder != null)
+                                        CurrentCueCard(
+                                          reminder: currentReminder,
+                                          accentColor: _accentColor,
+                                          isDarkMode: _isDarkMode,
+                                          cardColor: cardColor,
+                                          textColor: textColor,
+                                          subtitleColor: subtitleColor,
+                                          onMarkCompleted: _markAsCompleted,
+                                          getTimeDisplayText: _getTimeDisplayText,
+                                          isCurrentCue: _isCurrentCue,
+                                        )
+                                      else
+                                        _buildEmptyCueCard(
+                                          cardColor,
+                                          textColor,
+                                          subtitleColor,
+                                        ),
+
+                                      SizedBox(height: 24.h),
+
+                                      // Upcoming Section
+                                      _buildUpcomingSection(
+                                        upcomingAfterCurrent,
+                                        cardColor,
+                                        textColor,
+                                        subtitleColor,
+                                      ),
+
+                                      // Add bottom padding to account for keyboard and FAB
+                                      SizedBox(height: 150.h),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                        ] else ...[
+                          // Date header - always shown
+                          Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16.h),
+                            child: Text(
+                              DateFormat('EEEE, MMM d').format(now).toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 12.sp,
+                                fontWeight: FontWeight.w600,
+                                color: subtitleColor,
+                                letterSpacing: 1.5,
+                              ),
+                            ),
+                          ),
+
+                          // Show full-screen empty state if no reminders at all
+                          if (sortedReminders.isEmpty)
+                            Expanded(
+                              child: _buildFullScreenEmptyState(
                                 textColor,
                                 subtitleColor,
                               ),
+                            )
+                          else ...[
+                            SizedBox(height: 32.h),
 
-                            SizedBox(height: 24.h),
+                            // Today's Reminders Count Section
+                            _buildRemindersToday(
+                              todayReminders.length,
+                              textColor,
+                              subtitleColor,
+                              todayReminders,
+                            ),
 
-                            // Upcoming Section - flexible to avoid overflow
-                            Flexible(
-                              child: _buildUpcomingSection(
-                                upcomingAfterCurrent,
-                                cardColor,
-                                textColor,
-                                subtitleColor,
+                            SizedBox(height: 40.h),
+
+                            Expanded(
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 32.w),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Current/Next Cue Card
+                                    if (currentReminder != null)
+                                      CurrentCueCard(
+                                        reminder: currentReminder,
+                                        accentColor: _accentColor,
+                                        isDarkMode: _isDarkMode,
+                                        cardColor: cardColor,
+                                        textColor: textColor,
+                                        subtitleColor: subtitleColor,
+                                        onMarkCompleted: _markAsCompleted,
+                                        getTimeDisplayText: _getTimeDisplayText,
+                                        isCurrentCue: _isCurrentCue,
+                                      )
+                                    else
+                                      _buildEmptyCueCard(
+                                        cardColor,
+                                        textColor,
+                                        subtitleColor,
+                                      ),
+
+                                    SizedBox(height: 24.h),
+
+                                    // Upcoming Section - flexible to avoid overflow
+                                    Flexible(
+                                      child: _buildUpcomingSection(
+                                        upcomingAfterCurrent,
+                                        cardColor,
+                                        textColor,
+                                        subtitleColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ],
-                        ),
+                        ],
+                        ],
                       ),
                     ),
-                  ],
                 );
               },
+            ),
+          ),
+
+          // Settings icon positioned at top right
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 10.h,
+            right: 20.w,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                  );
+                  // Reload theme settings when coming back
+                  if (mounted) {
+                    await _loadThemeSettings();
+                  }
+                },
+                customBorder: const CircleBorder(),
+                child: Container(
+                  padding: EdgeInsets.all(8.r),
+                  child: Icon(
+                    Icons.settings_outlined,
+                    color: _isDarkMode
+                        ? Colors.white.withOpacity(0.8)
+                        : const Color(0xFF8A8A8A),
+                    size: 24.sp,
+                  ),
+                ),
+              ),
             ),
           ),
 
           // FAB positioned in Stack to avoid layout constraints
           Positioned(
             right: 34.w,
-            bottom: MediaQuery.of(context).padding.bottom + 10.h,
+            bottom: MediaQuery.of(context).padding.bottom + 30.h,
             child: Container(
               width: 64.w,
               height: 64.h,
@@ -290,44 +425,45 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
         ],
       ),
-      bottomNavigationBar: Padding(
-        padding: EdgeInsets.only(left: 16.w, right: 16.w),
-        child: BottomNavBar(
-          accentColor: _accentColor,
-          isDarkMode: _isDarkMode,
-          currentIndex: _currentNavIndex,
-          onTap: (index) async {
-            // Update local index for UI
-            setState(() {
-              _currentNavIndex = index;
-            });
+      // bottomNavigationBar: Padding(
+      //   padding: EdgeInsets.only(left: 16.w, right: 16.w),
+      //   child: BottomNavBar(
+      //     accentColor: _accentColor,
+      //     isDarkMode: _isDarkMode,
+      //     currentIndex: _currentNavIndex,
+      //     onTap: (index) async {
+      //       // Update local index for UI
+      //       setState(() {
+      //         _currentNavIndex = index;
+      //       });
 
-            // Navigate to respective screens
-            if (index == 0) {
-              // Already on home; no-op
-              return;
-            } else if (index == 1) {
-              // Calendar
-              await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const CalendarScreen()),
-              );
-            } else if (index == 2) {
-              // Settings
-              await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const SettingsScreen()),
-              );
-            }
-            // When coming back, reset nav index to home
-            if (mounted) {
-              setState(() {
-                _currentNavIndex = 0;
-              });
-            }
-          },
-        ),
-      ),
+      //       // Navigate to respective screens
+      //       if (index == 0) {
+      //         // Already on home; no-op
+      //         return;
+      //       } else if (index == 1) {
+      //         // Calendar
+      //         await Navigator.push(
+      //           context,
+      //           MaterialPageRoute(builder: (context) => const CalendarScreen()),
+      //         );
+      //       } else if (index == 2) {
+      //         // Settings
+      //         await Navigator.push(
+      //           context,
+      //           MaterialPageRoute(builder: (context) => const SettingsScreen()),
+      //         );
+      //       }
+      //       // When coming back, reset nav index to home and reload theme settings
+      //       if (mounted) {
+      //         await _loadThemeSettings();
+      //         setState(() {
+      //           _currentNavIndex = 0;
+      //         });
+      //       }
+      //     },
+      //   ),
+      // ),
     );
   }
 
@@ -338,7 +474,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   ) {
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(32.r),
+      padding: EdgeInsets.symmetric(horizontal: 32.w, vertical: 64.h),
       decoration: BoxDecoration(
         color: cardColor,
         borderRadius: BorderRadius.circular(24.r),
@@ -354,22 +490,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         children: [
           Icon(
             Icons.check_circle_outline_rounded,
-            size: 48.sp,
+            size: 64.sp,
             color: _accentColor,
           ),
-          SizedBox(height: 16.h),
+          SizedBox(height: 32.h),
           Text(
             'All caught up!',
             style: TextStyle(
-              fontSize: 22.sp,
+              fontSize: 28.sp,
               fontWeight: FontWeight.w700,
               color: textColor,
             ),
           ),
-          SizedBox(height: 8.h),
+          SizedBox(height: 14.h),
           Text(
             'No upcoming reminders',
-            style: TextStyle(fontSize: 14.sp, color: subtitleColor),
+            style: TextStyle(fontSize: 16.sp, color: subtitleColor),
           ),
         ],
       ),
@@ -419,7 +555,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
         // Horizontal scrollable list
         SizedBox(
-          height: 100.h,
+          height: 120.h,
           child: upcomingReminders.isEmpty
               ? Center(
                   child: Text(
@@ -452,18 +588,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     Color textColor,
     Color subtitleColor,
   ) {
-    final formattedTime = DateFormat('HH:mm').format(reminder.time);
+    final timeOnly = DateFormat('hh:mm').format(reminder.time);
+    final amPm = DateFormat('a').format(reminder.time);
 
     return Container(
-      width: 140.w,
-      padding: EdgeInsets.all(16.r),
+      width: 180.w,
+      padding: EdgeInsets.all(20.r),
       decoration: BoxDecoration(
         color: cardColor,
-        borderRadius: BorderRadius.circular(16.r),
+        borderRadius: BorderRadius.circular(20.r),
+        border: Border.all(
+          color: reminder.color.withOpacity(0.2),
+          width: 1.5,
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(_isDarkMode ? 0.2 : 0.05),
-            blurRadius: 10,
+            blurRadius: 12,
             offset: const Offset(0, 4),
           ),
         ],
@@ -472,45 +613,85 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+          // Title and Icon row
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 8.w,
-                height: 8.h,
-                decoration: BoxDecoration(
-                  color: _accentColor.withOpacity(0.5),
-                  shape: BoxShape.circle,
-                ),
-              ),
-              SizedBox(width: 8.w),
+              // Reminder name
               Expanded(
                 child: Text(
                   reminder.name,
                   style: TextStyle(
-                    fontSize: 14.sp,
+                    fontSize: 17.sp,
                     fontWeight: FontWeight.w600,
                     color: textColor,
                   ),
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              SizedBox(width: 8.w),
+              // Icon on the right
+              Container(
+                width: 32.w,
+                height: 32.h,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: reminder.color.withOpacity(0.15),
+                ),
+                child: Icon(
+                  reminder.icon,
+                  color: reminder.color,
+                  size: 20.sp,
                 ),
               ),
             ],
           ),
-          Text(
-            formattedTime,
-            style: TextStyle(
-              fontSize: 20.sp,
-              fontWeight: FontWeight.w700,
-              color: subtitleColor,
-            ),
+          
+          // Time with AM/PM
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                timeOnly,
+                style: TextStyle(
+                  fontSize: 18.sp,
+                  fontWeight: FontWeight.w600,
+                  color: textColor,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              SizedBox(width: 4.w),
+              Padding(
+                padding: EdgeInsets.only(bottom: 2.h),
+                child: Text(
+                  amPm,
+                  style: TextStyle(
+                    fontSize: 11.sp,
+                    fontWeight: FontWeight.w500,
+                    color: subtitleColor,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildRemindersToday(int count, Color textColor, Color subtitleColor) {
+  Widget _buildRemindersToday(
+    int count,
+    Color textColor,
+    Color subtitleColor,
+    List<Reminder> todayReminders,
+  ) {
+    // Sort by time and take only first 3
+    final sortedReminders = List<Reminder>.from(todayReminders)
+      ..sort((a, b) => a.time.compareTo(b.time));
+    final displayReminders = sortedReminders.take(3).toList();
+
     return Center(
       child: Column(
         children: [
@@ -522,39 +703,86 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               color: subtitleColor,
             ),
           ),
-          SizedBox(height: 16.h),
-          // Hardcoded icons row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildCategoryIcon(Icons.medication_outlined),
-              SizedBox(width: 24.w),
-              _buildCategoryIcon(Icons.local_florist_outlined),
-              SizedBox(width: 24.w),
-              _buildCategoryIcon(Icons.directions_bus_outlined),
-            ],
-          ),
+          if (displayReminders.isNotEmpty) ...[
+            SizedBox(height: 16.h),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                for (int i = 0; i < displayReminders.length; i++) ...[
+                  if (i > 0) SizedBox(width: 24.w),
+                  _buildCategoryIcon(
+                    displayReminders[i].icon,
+                    displayReminders[i].color,
+                  ),
+                ],
+              ],
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildCategoryIcon(IconData icon) {
+  Widget _buildCategoryIcon(IconData icon, Color color) {
     return Container(
       width: 44.w,
       height: 44.h,
       decoration: BoxDecoration(
-        color: _isDarkMode
-            ? Colors.white.withOpacity(0.1)
-            : _accentColor.withOpacity(0.08),
+        color: color.withOpacity(0.15),
         shape: BoxShape.circle,
       ),
       child: Icon(
         icon,
-        color: _isDarkMode
-            ? Colors.white.withOpacity(0.7)
-            : _accentColor.withOpacity(0.7),
+        color: color,
         size: 22.sp,
+      ),
+    );
+  }
+
+  Widget _buildFullScreenEmptyState(
+    Color textColor,
+    Color subtitleColor,
+  ) {
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 48.w),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.celebration_outlined,
+              size: 120.sp,
+              color: _accentColor.withOpacity(0.3),
+            ),
+            SizedBox(height: 48.h),
+            Text(
+              'No Reminders Yet',
+              style: TextStyle(
+                fontSize: 32.sp,
+                fontWeight: FontWeight.w700,
+                color: textColor,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 16.h),
+            Text(
+              'Tap the + button to create your first reminder',
+              style: TextStyle(
+                fontSize: 16.sp,
+                color: subtitleColor,
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 64.h),
+            // Arrow pointing to FAB
+            Icon(
+              Icons.arrow_downward_rounded,
+              size: 32.sp,
+              color: _accentColor.withOpacity(0.5),
+            ),
+          ],
+        ),
       ),
     );
   }

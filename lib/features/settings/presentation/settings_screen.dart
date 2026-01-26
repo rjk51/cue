@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../../../services/theme_service.dart';
 import '../../../services/auth_service.dart';
-import '../../home/presentation/widgets/bottom_nav_bar.dart';
 import '../../auth/presentation/welcome_screen.dart';
 import 'appearance_screen.dart';
 
@@ -23,12 +23,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _themeMode = 'light';
   String _userName = 'User';
   String _userEmail = 'user@cue.app';
+  String _version = '1.0.0';
+  String _buildNumber = '1';
 
   @override
   void initState() {
     super.initState();
     _loadThemeSettings();
     _loadUserInfo();
+    _loadVersionInfo();
+  }
+
+  Future<void> _loadVersionInfo() async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      if (mounted) {
+        setState(() {
+          _version = packageInfo.version;
+          _buildNumber = packageInfo.buildNumber;
+        });
+      }
+    } catch (e) {
+      // If package info fails to load, keep default values
+      print('Error loading version info: $e');
+    }
   }
 
   Future<void> _loadThemeSettings() async {
@@ -145,19 +163,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Header
+            // Header with back button
             Padding(
-              padding: EdgeInsets.fromLTRB(32.w, 24.h, 32.w, 32.h),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Settings',
-                  style: TextStyle(
-                    fontSize: 32.sp,
-                    fontWeight: FontWeight.w700,
-                    color: textColor,
+              padding: EdgeInsets.fromLTRB(20.w, 16.h, 32.w, 24.h),
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: Icon(
+                      Icons.arrow_back,
+                      color: textColor,
+                      size: 24.sp,
+                    ),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
                   ),
-                ),
+                  SizedBox(width: 16.w),
+                  Text(
+                    'Settings',
+                    style: TextStyle(
+                      fontSize: 32.sp,
+                      fontWeight: FontWeight.w700,
+                      color: textColor,
+                    ),
+                  ),
+                ],
               ),
             ),
 
@@ -549,15 +579,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     // Version info
                     Center(
                       child: Text(
-                        'Cue v1.0.2 (build 45)',
+                        'Cue v$_version (build $_buildNumber)',
                         style: TextStyle(
-                          fontSize: 12.sp,
-                          color: subtitleColor.withOpacity(0.6),
+                          fontSize: 13.sp,
+                          color: subtitleColor.withValues(alpha: 0.8),
                         ),
                       ),
                     ),
 
-                    SizedBox(height: 16.h),
+                    SizedBox(height: 8.h),
 
                     // Log Out button
                     Center(
@@ -566,7 +596,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         child: Text(
                           'Log Out',
                           style: TextStyle(
-                            fontSize: 16.sp,
+                            fontSize: 18.sp,
                             fontWeight: FontWeight.w600,
                             color: const Color.fromARGB(255, 232, 96, 86),
                           ),
@@ -574,7 +604,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
 
-                    SizedBox(height: 120.h),
+                    SizedBox(height: 50.h),
                   ],
                 ),
               ),
@@ -582,81 +612,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: BottomNavBar(
-        accentColor: _accentColor,
-        isDarkMode: _isDarkMode,
-        currentIndex: 2, // Settings tab is active
-        onTap: (index) {
-          if (index == 0) {
-            // Navigate back to home
-            Navigator.pop(context);
-          } else if (index == 1) {
-            // TODO: Navigate to calendar
-          }
-          // index == 2 is current screen (settings)
-        },
-      ),
     );
   }
 
-  Widget _buildSettingsItem({
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    String? trailing,
-    required Color cardColor,
-    required Color textColor,
-    required Color subtitleColor,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 16.h),
-        decoration: BoxDecoration(
-          color: cardColor,
-          borderRadius: BorderRadius.circular(16.r),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(_isDarkMode ? 0.2 : 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40.w,
-              height: 40.h,
-              decoration: BoxDecoration(
-                color: iconColor.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(10.r),
-              ),
-              child: Icon(icon, color: iconColor, size: 22.sp),
-            ),
-            SizedBox(width: 16.w),
-            Expanded(
-              child: Text(
-                title,
-                style: TextStyle(
-                  fontSize: 16.sp,
-                  fontWeight: FontWeight.w500,
-                  color: textColor,
-                ),
-              ),
-            ),
-            if (trailing != null) ...[
-              Text(
-                trailing,
-                style: TextStyle(fontSize: 14.sp, color: subtitleColor),
-              ),
-              SizedBox(width: 8.w),
-            ],
-            Icon(Icons.chevron_right, color: subtitleColor, size: 20.sp),
-          ],
-        ),
-      ),
-    );
-  }
 }
