@@ -105,22 +105,51 @@ class ReminderService {
     }
   }
 
-  // Snooze a reminder (add 10 minutes to the time)
-  Future<void> snoozeReminder(String reminderId) async {
+  // Snooze a reminder with custom duration (in minutes)
+  Future<void> snoozeReminder(String reminderId, {int minutes = 10}) async {
     try {
       final doc = await _firestore.collection(_collection).doc(reminderId).get();
       if (doc.exists) {
         final reminder = Reminder.fromMap(doc.data()!, doc.id);
-        final newTime = DateTime.now().add(const Duration(minutes: 10));
+        final newTime = DateTime.now().add(Duration(minutes: minutes));
         
         await _firestore.collection(_collection).doc(reminderId).update({
           'time': Timestamp.fromDate(newTime),
+          'scheduledTime': Timestamp.fromDate(newTime),
+          'notifiedAt': FieldValue.delete(),  // Clear notifiedAt so it can notify again
           'updatedAt': FieldValue.serverTimestamp(),
         });
-        print('Reminder snoozed: $reminderId');
+        
+        // Create a new pending notification for the snoozed time
+        await _firestore.collection('pending_notifications').doc(reminderId).set({
+          'reminderId': reminderId,
+          'scheduledTime': Timestamp.fromDate(newTime),
+          'reminderName': reminder.name,
+          'reminderDescription': reminder.name,  // Use name as description
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+        
+        print('Reminder snoozed by $minutes minutes: $reminderId to $newTime');
       }
     } catch (e) {
       print('Error snoozing reminder: $e');
+      rethrow;
+    }
+  }
+
+  // Dismiss notification on all devices (without marking as completed)
+  // This triggers the same dismiss notification as Done button
+  Future<void> dismissOnAllDevices(String reminderId) async {
+    try {
+      // Just update isCompleted temporarily to trigger onReminderUpdated Cloud Function
+      // then immediately revert it. The Cloud Function will send dismiss notifications.
+      await _firestore.collection(_collection).doc(reminderId).update({
+        'isCompleted': true,
+        'completedAt': FieldValue.serverTimestamp(),
+      });
+      print('Triggered dismiss on all devices for: $reminderId');
+    } catch (e) {
+      print('Error dismissing on all devices: $e');
       rethrow;
     }
   }

@@ -51,21 +51,42 @@ import UserNotifications
       options: [.foreground]
     )
     
-    let snoozeAction = UNNotificationAction(
-      identifier: "snooze",
-      title: "Snooze",
-      options: [.foreground]
+    let snooze5Action = UNNotificationAction(
+      identifier: "snooze_5",
+      title: "Snooze 5 min",
+      options: []
+    )
+    
+    let snooze10Action = UNNotificationAction(
+      identifier: "snooze_10",
+      title: "Snooze 10 min",
+      options: []
+    )
+    
+    let snooze15Action = UNNotificationAction(
+      identifier: "snooze_15",
+      title: "Snooze 15 min",
+      options: []
+    )
+    
+    // Text input action for custom snooze duration
+    let snoozeCustomInputAction = UNTextInputNotificationAction(
+      identifier: "snooze_input",
+      title: "Custom (min)",
+      options: [],
+      textInputButtonTitle: "Snooze",
+      textInputPlaceholder: "Enter minutes (e.g., 22)"
     )
     
     let reminderCategory = UNNotificationCategory(
       identifier: "reminder_category",
-      actions: [doneAction, snoozeAction],
+      actions: [doneAction, snooze5Action, snooze10Action, snoozeCustomInputAction],
       intentIdentifiers: [],
       options: [.customDismissAction]
     )
     
     UNUserNotificationCenter.current().setNotificationCategories([reminderCategory])
-    print("✅ Notification categories registered")
+    print("✅ Notification categories registered with custom snooze input")
   }
   
   override func application(_ application: UIApplication,
@@ -120,8 +141,26 @@ extension AppDelegate {
     print("📱 Action: \(actionIdentifier)")
     print("📱 UserInfo: \(userInfo)")
     
-    // Handle custom actions (mark_done, snooze)
-    if actionIdentifier == "mark_done" || actionIdentifier == "snooze" {
+    // Handle text input for custom snooze
+    if let textResponse = response as? UNTextInputNotificationResponse,
+       actionIdentifier == "snooze_input" {
+      let userInput = textResponse.userText
+      print("📱 User entered custom snooze: \(userInput) minutes")
+      
+      if let reminderId = userInfo["reminderId"] as? String {
+        // Send the custom minutes along with the action
+        NotificationActionStreamHandler.sendActionWithInput(
+          action: actionIdentifier,
+          reminderId: reminderId,
+          userInput: userInput
+        )
+        
+        // Dismiss notification
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [response.notification.request.identifier])
+      }
+    }
+    // Handle custom actions (mark_done, snooze presets)
+    else if actionIdentifier == "mark_done" || actionIdentifier.starts(with: "snooze") {
       // Extract reminderId from userInfo
       if let reminderId = userInfo["reminderId"] as? String {
         print("📱 Processing action '\(actionIdentifier)' for reminder: \(reminderId)")
@@ -131,6 +170,11 @@ extension AppDelegate {
           action: actionIdentifier,
           reminderId: reminderId
         )
+        
+        // Dismiss notification for quick snooze actions (not custom)
+        if actionIdentifier != "snooze_custom" {
+          UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [response.notification.request.identifier])
+        }
       }
     }
     
@@ -166,6 +210,22 @@ class NotificationActionStreamHandler: NSObject, FlutterStreamHandler {
     ]
     
     print("📱 Sending action to Flutter: \(event)")
+    sink(event)
+  }
+  
+  static func sendActionWithInput(action: String, reminderId: String, userInput: String) {
+    guard let sink = eventSink else {
+      print("❌ No event sink available")
+      return
+    }
+    
+    let event: [String: String] = [
+      "action": action,
+      "reminderId": reminderId,
+      "userInput": userInput
+    ]
+    
+    print("📱 Sending action with input to Flutter: \(event)")
     sink(event)
   }
 }

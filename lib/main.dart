@@ -130,17 +130,59 @@ class MyApp extends StatelessWidget {
                     print('  - Reminder ID: $reminderId');
 
                     final reminderService = ReminderService();
+                    
+                    // Check if reminderId contains custom input (format: reminderId:minutes)
+                    String actualReminderId = reminderId;
+                    int? customMinutes;
+                    
+                    if (reminderId.contains(':')) {
+                      final parts = reminderId.split(':');
+                      actualReminderId = parts[0];
+                      customMinutes = int.tryParse(parts[1]);
+                      print('  - Parsed custom minutes: $customMinutes');
+                    }
 
                     if (action == 'mark_done' || action == 'done') {
                       print('✅ Handling mark_done/done action');
                       // Mark reminder as completed
-                      if (!reminderId.startsWith('test_reminder')) {
-                        await reminderService.markAsCompleted(reminderId);
-                        await notificationService.cancelNotification(reminderId);
+                      if (!actualReminderId.startsWith('test_reminder')) {
+                        await reminderService.markAsCompleted(actualReminderId);
+                        await notificationService.cancelNotification(actualReminderId);
                       }
-                    } else if (action == 'snooze') {
-                      print('⏰ Handling snooze action');
-                      // Navigate to snooze screen
+                    } else if (action == 'snooze_input') {
+                      print('⏰ Handling custom snooze input');
+                      if (customMinutes != null && customMinutes > 0 && customMinutes <= 1440) {
+                        // Valid input (1-1440 minutes = 24 hours max)
+                        if (!actualReminderId.startsWith('test_reminder')) {
+                          await reminderService.snoozeReminder(actualReminderId, minutes: customMinutes);
+                          await notificationService.cancelNotification(actualReminderId);
+                        }
+                      } else {
+                        print('❌ Invalid custom minutes: $customMinutes');
+                      }
+                    } else if (action == 'snooze_5') {
+                      print('⏰ Handling snooze 5 minutes action');
+                      if (!actualReminderId.startsWith('test_reminder')) {
+                        await reminderService.snoozeReminder(actualReminderId, minutes: 5);
+                        await notificationService.cancelNotification(actualReminderId);
+                      }
+                    } else if (action == 'snooze_10') {
+                      print('⏰ Handling snooze 10 minutes action');
+                      if (!actualReminderId.startsWith('test_reminder')) {
+                        await reminderService.snoozeReminder(actualReminderId, minutes: 10);
+                        await notificationService.cancelNotification(actualReminderId);
+                      }
+                    } else if (action == 'snooze_15') {
+                      print('⏰ Handling snooze 15 minutes action');
+                      if (!actualReminderId.startsWith('test_reminder')) {
+                        await reminderService.snoozeReminder(actualReminderId, minutes: 15);
+                        await notificationService.cancelNotification(actualReminderId);
+                        // Dismiss notification on all devices (Done button logic)
+                        // await reminderService.dismissOnAllDevices(actualReminderId);
+                      }
+                    } else if (action == 'snooze' || action == 'snooze_custom') {
+                      print('⏰ Handling custom snooze action - opening snooze screen');
+                      // Navigate to snooze screen for custom time
                       final context = navigatorKey.currentContext;
                       print('  - Navigator context: ${context != null ? "available" : "null"}');
 
@@ -148,8 +190,8 @@ class MyApp extends StatelessWidget {
                         String reminderTitle = '🧪 Test Reminder';
 
                         // Get reminder details if it's a real reminder
-                        if (!reminderId.startsWith('test_reminder')) {
-                          final reminder = await reminderService.getReminder(reminderId);
+                        if (!actualReminderId.startsWith('test_reminder')) {
+                          final reminder = await reminderService.getReminder(actualReminderId);
                           if (reminder != null) {
                             reminderTitle = reminder.name;
                           }
@@ -160,7 +202,7 @@ class MyApp extends StatelessWidget {
                           context,
                           MaterialPageRoute(
                             builder: (context) => SnoozeScreen(
-                              reminderId: reminderId,
+                              reminderId: actualReminderId,
                               reminderTitle: reminderTitle,
                             ),
                           ),
