@@ -169,10 +169,18 @@ class NotificationService {
       if (event is Map) {
         final action = event['action'] as String?;
         final reminderId = event['reminderId'] as String?;
+        final userInput = event['userInput'] as String?;
         
         if (action != null && reminderId != null && onNotificationAction != null) {
           print('✅ Processing iOS action: $action for reminder: $reminderId');
-          onNotificationAction!(reminderId, action);
+          
+          // For custom snooze input, append the user input to reminderId
+          if (action == 'snooze_input' && userInput != null) {
+            print('⏰ Custom snooze input: $userInput');
+            onNotificationAction!('$reminderId:$userInput', action);
+          } else {
+            onNotificationAction!(reminderId, action);
+          }
         }
       }
     }, onError: (error) {
