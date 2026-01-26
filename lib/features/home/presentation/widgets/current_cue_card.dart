@@ -59,6 +59,20 @@ class _CurrentCueCardState extends State<CurrentCueCard>
     });
   }
 
+  @override
+  void didUpdateWidget(CurrentCueCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Update notes controller when reminder changes
+    if (oldWidget.reminder.id != widget.reminder.id) {
+      _notesController.text = widget.reminder.notes ?? '';
+      // Reset snooze slider state when reminder changes
+      _dragOffset = 0;
+      _isSnoozeMode = false;
+      _isSnoozeExpanded = false;
+      _swipeController.reset();
+    }
+  }
+
   void _initAnimations() {
     _swipeController = AnimationController(
       duration: const Duration(milliseconds: 300),
@@ -105,7 +119,17 @@ class _CurrentCueCardState extends State<CurrentCueCard>
           reminderTitle: widget.reminder.name,
         ),
       ),
-    );
+    ).then((_) {
+      // Reset snooze slider state when returning from snooze screen
+      if (mounted) {
+        setState(() {
+          _dragOffset = 0;
+          _isSnoozeMode = false;
+          _isSnoozeExpanded = false;
+        });
+        _swipeController.reset();
+      }
+    });
   }
 
   @override
@@ -147,18 +171,18 @@ class _CurrentCueCardState extends State<CurrentCueCard>
                       Text(
                         timeOnly,
                         style: TextStyle(
-                          fontSize: 42.sp,
+                          fontSize: 28.sp,
                           fontWeight: FontWeight.w600,
                           color: widget.textColor,
                         ),
                       ),
                       SizedBox(width: 8.w),
                       Padding(
-                        padding: EdgeInsets.only(bottom: 10.h),
+                        padding: EdgeInsets.only(bottom: 6.h),
                         child: Text(
                           amPm,
                           style: TextStyle(
-                            fontSize: 26.sp,
+                            fontSize: 18.sp,
                             fontWeight: FontWeight.w500,
                             color: widget.subtitleColor,
                           ),
