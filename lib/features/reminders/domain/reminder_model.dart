@@ -13,6 +13,7 @@ class Reminder {
   final DateTime? nextDueAt;
   final int? iconCodePoint;
   final int? colorValue;
+  final String? notes;
 
   Reminder({
     required this.id,
@@ -26,6 +27,7 @@ class Reminder {
     this.nextDueAt,
     this.iconCodePoint,
     this.colorValue,
+    this.notes,
   });
 
   // Convert Reminder to Map for Firestore
@@ -44,6 +46,7 @@ class Reminder {
       if (nextDueAt != null) 'nextDueAt': Timestamp.fromDate(nextDueAt!),
       if (iconCodePoint != null) 'iconCodePoint': iconCodePoint,
       if (colorValue != null) 'colorValue': colorValue,
+      if (notes != null) 'notes': notes,
     };
   }
 
@@ -65,6 +68,7 @@ class Reminder {
           : null,
       iconCodePoint: map['iconCodePoint'] as int?,
       colorValue: map['colorValue'] as int?,
+      notes: map['notes'] as String?,
     );
   }
 
@@ -81,6 +85,7 @@ class Reminder {
     DateTime? nextDueAt,
     int? iconCodePoint,
     int? colorValue,
+    String? notes,
   }) {
     return Reminder(
       id: id ?? this.id,
@@ -94,6 +99,7 @@ class Reminder {
       nextDueAt: nextDueAt ?? this.nextDueAt,
       iconCodePoint: iconCodePoint ?? this.iconCodePoint,
       colorValue: colorValue ?? this.colorValue,
+      notes: notes ?? this.notes,
     );
   }
   

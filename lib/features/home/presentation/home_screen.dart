@@ -144,6 +144,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     return Scaffold(
       backgroundColor: backgroundColor,
+      resizeToAvoidBottomInset: true,
       body: Stack(
         children: [
           SafeArea(
@@ -185,95 +186,219 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ? upcomingReminders.sublist(1)
                     : <Reminder>[];
 
-                return Column(
-                  children: [
-                    // Date header - always shown
-                    Padding(
-                      padding: EdgeInsets.symmetric(vertical: 16.h),
-                      child: Text(
-                        DateFormat('EEEE, MMM d').format(now).toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 12.sp,
-                          fontWeight: FontWeight.w600,
-                          color: subtitleColor,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                    ),
-
-                    // Show full-screen empty state if no reminders at all
-                    if (sortedReminders.isEmpty)
-                      Expanded(
-                        child: _buildFullScreenEmptyState(
-                          textColor,
-                          subtitleColor,
-                        ),
-                      )
-                    else ...[
-                      SizedBox(height: 32.h),
-
-                      // Today's Reminders Count Section
-                      _buildRemindersToday(
-                        todayReminders.length,
-                        textColor,
-                        subtitleColor,
-                        todayReminders,
-                      ),
-
-                      SizedBox(height: 40.h),
-
-                      Expanded(
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 32.w),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Current/Next Cue Card
-                              if (currentReminder != null)
-                                CurrentCueCard(
-                                  reminder: currentReminder,
-                                  accentColor: _accentColor,
-                                  isDarkMode: _isDarkMode,
-                                  cardColor: cardColor,
-                                  textColor: textColor,
-                                  subtitleColor: subtitleColor,
-                                  onMarkCompleted: _markAsCompleted,
-                                  getTimeDisplayText: _getTimeDisplayText,
-                                  isCurrentCue: _isCurrentCue,
-                                )
-                              else
-                                _buildEmptyCueCard(
-                                  cardColor,
-                                  textColor,
-                                  subtitleColor,
-                                ),
-
-                              SizedBox(height: 24.h),
-
-                              // Upcoming Section - flexible to avoid overflow
-                              Flexible(
-                                child: _buildUpcomingSection(
-                                  upcomingAfterCurrent,
-                                  cardColor,
-                                  textColor,
-                                  subtitleColor,
+                final isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
+                final screenHeight = MediaQuery.of(context).size.height - 
+                    MediaQuery.of(context).padding.top;
+                
+                return SingleChildScrollView(
+                  physics: isKeyboardOpen 
+                      ? const ClampingScrollPhysics() 
+                      : const NeverScrollableScrollPhysics(),
+                  child: SizedBox(
+                    height: isKeyboardOpen ? null : screenHeight,
+                    child: Column(
+                      children: [
+                        if (isKeyboardOpen) ...[
+                              // Date header - keyboard open
+                              Padding(
+                                padding: EdgeInsets.symmetric(vertical: 16.h),
+                                child: Text(
+                                  DateFormat('EEEE, MMM d').format(now).toUpperCase(),
+                                  style: TextStyle(
+                                    fontSize: 12.sp,
+                                    fontWeight: FontWeight.w600,
+                                    color: subtitleColor,
+                                    letterSpacing: 1.5,
+                                  ),
                                 ),
                               ),
-                            ],
+
+                              // Show full-screen empty state if no reminders at all
+                              if (sortedReminders.isEmpty)
+                                SizedBox(
+                                  height: screenHeight - 100.h,
+                                  child: _buildFullScreenEmptyState(
+                                    textColor,
+                                    subtitleColor,
+                                  ),
+                                )
+                              else ...[
+                                SizedBox(height: 32.h),
+
+                                // Today's Reminders Count Section
+                                _buildRemindersToday(
+                                  todayReminders.length,
+                                  textColor,
+                                  subtitleColor,
+                                  todayReminders,
+                                ),
+
+                                SizedBox(height: 40.h),
+
+                                Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 32.w),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      // Current/Next Cue Card
+                                      if (currentReminder != null)
+                                        CurrentCueCard(
+                                          reminder: currentReminder,
+                                          accentColor: _accentColor,
+                                          isDarkMode: _isDarkMode,
+                                          cardColor: cardColor,
+                                          textColor: textColor,
+                                          subtitleColor: subtitleColor,
+                                          onMarkCompleted: _markAsCompleted,
+                                          getTimeDisplayText: _getTimeDisplayText,
+                                          isCurrentCue: _isCurrentCue,
+                                        )
+                                      else
+                                        _buildEmptyCueCard(
+                                          cardColor,
+                                          textColor,
+                                          subtitleColor,
+                                        ),
+
+                                      SizedBox(height: 24.h),
+
+                                      // Upcoming Section
+                                      _buildUpcomingSection(
+                                        upcomingAfterCurrent,
+                                        cardColor,
+                                        textColor,
+                                        subtitleColor,
+                                      ),
+
+                                      // Add bottom padding to account for keyboard and FAB
+                                      SizedBox(height: 150.h),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                        ] else ...[
+                          // Date header - always shown
+                          Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16.h),
+                            child: Text(
+                              DateFormat('EEEE, MMM d').format(now).toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 12.sp,
+                                fontWeight: FontWeight.w600,
+                                color: subtitleColor,
+                                letterSpacing: 1.5,
+                              ),
+                            ),
                           ),
-                        ),
+
+                          // Show full-screen empty state if no reminders at all
+                          if (sortedReminders.isEmpty)
+                            Expanded(
+                              child: _buildFullScreenEmptyState(
+                                textColor,
+                                subtitleColor,
+                              ),
+                            )
+                          else ...[
+                            SizedBox(height: 32.h),
+
+                            // Today's Reminders Count Section
+                            _buildRemindersToday(
+                              todayReminders.length,
+                              textColor,
+                              subtitleColor,
+                              todayReminders,
+                            ),
+
+                            SizedBox(height: 40.h),
+
+                            Expanded(
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 32.w),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Current/Next Cue Card
+                                    if (currentReminder != null)
+                                      CurrentCueCard(
+                                        reminder: currentReminder,
+                                        accentColor: _accentColor,
+                                        isDarkMode: _isDarkMode,
+                                        cardColor: cardColor,
+                                        textColor: textColor,
+                                        subtitleColor: subtitleColor,
+                                        onMarkCompleted: _markAsCompleted,
+                                        getTimeDisplayText: _getTimeDisplayText,
+                                        isCurrentCue: _isCurrentCue,
+                                      )
+                                    else
+                                      _buildEmptyCueCard(
+                                        cardColor,
+                                        textColor,
+                                        subtitleColor,
+                                      ),
+
+                                    SizedBox(height: 24.h),
+
+                                    // Upcoming Section - flexible to avoid overflow
+                                    Flexible(
+                                      child: _buildUpcomingSection(
+                                        upcomingAfterCurrent,
+                                        cardColor,
+                                        textColor,
+                                        subtitleColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                        ],
                       ),
-                    ],
-                  ],
+                    ),
                 );
               },
+            ),
+          ),
+
+          // Settings icon positioned at top right
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 10.h,
+            right: 20.w,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                  );
+                  // Reload theme settings when coming back
+                  if (mounted) {
+                    await _loadThemeSettings();
+                  }
+                },
+                customBorder: const CircleBorder(),
+                child: Container(
+                  padding: EdgeInsets.all(8.r),
+                  child: Icon(
+                    Icons.settings_outlined,
+                    color: _isDarkMode
+                        ? Colors.white.withOpacity(0.8)
+                        : const Color(0xFF8A8A8A),
+                    size: 24.sp,
+                  ),
+                ),
+              ),
             ),
           ),
 
           // FAB positioned in Stack to avoid layout constraints
           Positioned(
             right: 34.w,
-            bottom: MediaQuery.of(context).padding.bottom + 10.h,
+            bottom: MediaQuery.of(context).padding.bottom + 30.h,
             child: Container(
               width: 64.w,
               height: 64.h,
@@ -300,45 +425,45 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
         ],
       ),
-      bottomNavigationBar: Padding(
-        padding: EdgeInsets.only(left: 16.w, right: 16.w),
-        child: BottomNavBar(
-          accentColor: _accentColor,
-          isDarkMode: _isDarkMode,
-          currentIndex: _currentNavIndex,
-          onTap: (index) async {
-            // Update local index for UI
-            setState(() {
-              _currentNavIndex = index;
-            });
+      // bottomNavigationBar: Padding(
+      //   padding: EdgeInsets.only(left: 16.w, right: 16.w),
+      //   child: BottomNavBar(
+      //     accentColor: _accentColor,
+      //     isDarkMode: _isDarkMode,
+      //     currentIndex: _currentNavIndex,
+      //     onTap: (index) async {
+      //       // Update local index for UI
+      //       setState(() {
+      //         _currentNavIndex = index;
+      //       });
 
-            // Navigate to respective screens
-            if (index == 0) {
-              // Already on home; no-op
-              return;
-            } else if (index == 1) {
-              // Calendar
-              await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const CalendarScreen()),
-              );
-            } else if (index == 2) {
-              // Settings
-              await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const SettingsScreen()),
-              );
-            }
-            // When coming back, reset nav index to home and reload theme settings
-            if (mounted) {
-              await _loadThemeSettings();
-              setState(() {
-                _currentNavIndex = 0;
-              });
-            }
-          },
-        ),
-      ),
+      //       // Navigate to respective screens
+      //       if (index == 0) {
+      //         // Already on home; no-op
+      //         return;
+      //       } else if (index == 1) {
+      //         // Calendar
+      //         await Navigator.push(
+      //           context,
+      //           MaterialPageRoute(builder: (context) => const CalendarScreen()),
+      //         );
+      //       } else if (index == 2) {
+      //         // Settings
+      //         await Navigator.push(
+      //           context,
+      //           MaterialPageRoute(builder: (context) => const SettingsScreen()),
+      //         );
+      //       }
+      //       // When coming back, reset nav index to home and reload theme settings
+      //       if (mounted) {
+      //         await _loadThemeSettings();
+      //         setState(() {
+      //           _currentNavIndex = 0;
+      //         });
+      //       }
+      //     },
+      //   ),
+      // ),
     );
   }
 
@@ -430,7 +555,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
         // Horizontal scrollable list
         SizedBox(
-          height: 100.h,
+          height: 120.h,
           child: upcomingReminders.isEmpty
               ? Center(
                   child: Text(
@@ -463,18 +588,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     Color textColor,
     Color subtitleColor,
   ) {
-    final formattedTime = DateFormat('HH:mm').format(reminder.time);
+    final timeOnly = DateFormat('hh:mm').format(reminder.time);
+    final amPm = DateFormat('a').format(reminder.time);
 
     return Container(
-      width: 140.w,
-      padding: EdgeInsets.all(16.r),
+      width: 180.w,
+      padding: EdgeInsets.all(20.r),
       decoration: BoxDecoration(
         color: cardColor,
-        borderRadius: BorderRadius.circular(16.r),
+        borderRadius: BorderRadius.circular(20.r),
+        border: Border.all(
+          color: reminder.color.withOpacity(0.2),
+          width: 1.5,
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(_isDarkMode ? 0.2 : 0.05),
-            blurRadius: 10,
+            blurRadius: 12,
             offset: const Offset(0, 4),
           ),
         ],
@@ -483,38 +613,68 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+          // Title and Icon row
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 8.w,
-                height: 8.h,
-                decoration: BoxDecoration(
-                  color: _accentColor.withOpacity(0.5),
-                  shape: BoxShape.circle,
-                ),
-              ),
-              SizedBox(width: 8.w),
+              // Reminder name
               Expanded(
                 child: Text(
                   reminder.name,
                   style: TextStyle(
-                    fontSize: 14.sp,
+                    fontSize: 17.sp,
                     fontWeight: FontWeight.w600,
                     color: textColor,
                   ),
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              SizedBox(width: 8.w),
+              // Icon on the right
+              Container(
+                width: 32.w,
+                height: 32.h,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: reminder.color.withOpacity(0.15),
+                ),
+                child: Icon(
+                  reminder.icon,
+                  color: reminder.color,
+                  size: 20.sp,
                 ),
               ),
             ],
           ),
-          Text(
-            formattedTime,
-            style: TextStyle(
-              fontSize: 20.sp,
-              fontWeight: FontWeight.w700,
-              color: subtitleColor,
-            ),
+          
+          // Time with AM/PM
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                timeOnly,
+                style: TextStyle(
+                  fontSize: 18.sp,
+                  fontWeight: FontWeight.w600,
+                  color: textColor,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              SizedBox(width: 4.w),
+              Padding(
+                padding: EdgeInsets.only(bottom: 2.h),
+                child: Text(
+                  amPm,
+                  style: TextStyle(
+                    fontSize: 11.sp,
+                    fontWeight: FontWeight.w500,
+                    color: subtitleColor,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
