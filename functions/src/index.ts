@@ -124,11 +124,8 @@ export const triggerReminderNotification = functions.https.onCall(
         };
 
         if (platform === "android") {
-          // Android: notification + data format (system handles display)
-          message.notification = {
-            title: reminder.name || "Reminder",
-            body: reminder.description || "Your reminder is due!",
-          };
+          // Android: data-only message (Flutter controls display with action buttons)
+          // No notification field - prevents system from showing notification without buttons
           message.data = {
             reminderId: reminderId,
             title: reminder.name || "Reminder",
@@ -139,6 +136,7 @@ export const triggerReminderNotification = functions.https.onCall(
           message.android = {
             priority: "high" as const,
           };
+          console.log("🤖 [ANDROID] Using data-only message for action button support");
         } else {
           // iOS: Silent push with content-available (Flutter controls display)
           // Use obscure key names to prevent Firebase SDK from auto-displaying
@@ -397,7 +395,18 @@ export const onReminderUpdated = functions.firestore
     console.log(`   - Is NOW completed: ${isNowCompleted}`);
     console.log(`   - Should send dismiss: ${wasNotCompleted && isNowCompleted}`);
 
-    // If reminder was just marked as completed, notify all devices to dismiss notification
+    // Check if reminder was snoozed (time changed AND notifiedAt was cleared)
+    const wasSnoozed = before.notifiedAt && !after.notifiedAt &&
+      (after.time?.toMillis() !== before.time?.toMillis() ||
+       after.scheduledTime?.toMillis() !== before.scheduledTime?.toMillis());
+
+    console.log("🔍 SNOOZE CHECK:");
+    console.log(`   - Had notifiedAt before: ${!!before.notifiedAt}`);
+    console.log(`   - No notifiedAt now: ${!after.notifiedAt}`);
+    console.log(`   - Time changed: ${after.time?.toMillis() !== before.time?.toMillis()}`);
+    console.log(`   - Should send dismiss: ${wasSnoozed}`);
+
+    // If reminder was just marked as completed OR snoozed, dismiss notifications on all devices
     if (wasNotCompleted && isNowCompleted) {
       console.log(`✅ [onReminderUpdated] Reminder marked as completed: ${reminderId}`);
       console.log("📤 Initiating dismiss notification to user's devices...");
@@ -540,10 +549,101 @@ export const onReminderUpdated = functions.firestore
         console.error("❌ [onReminderUpdated] Error sending dismiss notifications:", error);
         console.error("❌ Error details:", JSON.stringify(error, null, 2));
       }
+    } else if (wasSnoozed) {
+      console.log(`⏰ [onReminderUpdated] Reminder snoozed: ${reminderId}`);
+      console.log("📤 Sending dismiss notifications to all devices...");
+
+      try {
+        const userId = after.userId;
+        if (!userId) {
+          console.log("⚠️  No userId in reminder, skipping dismiss");
+          return null;
+        }
+
+        console.log(`📤 Fetching devices for user: ${userId}`);
+        const devicesSnapshot = await db
+          .collection("devices")
+          .where("userId", "==", userId)
+          .where("active", "==", true)
+          .get();
+
+        if (devicesSnapshot.empty) {
+          console.log("No active devices found");
+          return null;
+        }
+
+        console.log(`📤 Sending dismiss to ${devicesSnapshot.size} devices`);
+
+        const sendPromises = devicesSnapshot.docs.map(async (deviceDoc) => {
+          const deviceId = deviceDoc.id;
+          const fcmToken = deviceDoc.data().fcmToken;
+          const platform = deviceDoc.data().platform || "unknown";
+
+          if (!fcmToken) {
+            console.log(`⏭️  Skipping device [${deviceId}] - no FCM token`);
+            return;
+          }
+
+          console.log(`📱 Sending dismiss to [${platform.toUpperCase()}] device [${deviceId}]`);
+
+          try {
+            const notificationId = Math.abs(reminderId.split("").reduce((hash, char) => {
+              return ((hash << 5) - hash) + char.charCodeAt(0);
+            }, 0));
+
+            const message = {
+              token: fcmToken,
+              data: {
+                type: "dismiss_notification",
+                reminderId: reminderId,
+                notificationId: String(notificationId),
+                action: "snoozed",
+              },
+            } as admin.messaging.Message;
+
+            if (platform.toLowerCase() === "ios") {
+              message.apns = {
+                headers: {
+                  "apns-priority": "10",
+                  "apns-push-type": "alert",
+                  "apns-collapse-id": reminderId,
+                },
+                payload: {
+                  aps: {
+                    "alert": "\u200B",
+                    "badge": 0,
+                    "content-available": 1,
+                    "mutable-content": 1,
+                    "thread-id": reminderId,
+                  },
+                  type: "dismiss_notification",
+                  reminderId: reminderId,
+                  notificationId: String(notificationId),
+                  action: "snoozed",
+                },
+              };
+            } else {
+              message.android = {
+                priority: "high" as const,
+              };
+            }
+
+            await messaging.send(message);
+            console.log(`✅ [${platform.toUpperCase()}] Dismiss sent for snooze!`);
+          } catch (error: unknown) {
+            console.error(`❌ Failed to send dismiss: ${error}`);
+          }
+        });
+
+        await Promise.all(sendPromises);
+        console.log(`✅ Dismiss notifications sent for snoozed reminder ${reminderId}`);
+      } catch (error) {
+        console.error("❌ Error sending snooze dismiss notifications:", error);
+      }
     } else {
       console.log("───────────────────────────────────────────────────────────");
       console.log(`ℹ️  [onReminderUpdated] No dismiss action needed for ${reminderId}`);
-      console.log("   Reason: Completion status did not change from false→true");
+      console.log("   Reason: Neither completion nor snooze detected");
       // Log what fields actually changed
       const changedFields: string[] = [];
       Object.keys(after).forEach((key) => {
@@ -775,6 +875,16 @@ export const processPendingNotifications = functions.pubsub
           await Promise.all(sendPromises);
 
           console.log(`✅ Processed notification for ${reminderId}`);
+
+          // Check if this was a snoozed reminder that should auto-complete
+          if (notification.autoComplete === true) {
+            console.log(`🎯 Auto-completing snoozed reminder: ${reminderId}`);
+            await reminderDoc.ref.update({
+              isCompleted: true,
+              completedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            console.log(`✅ Snoozed reminder auto-completed: ${reminderId}`);
+          }
         } catch (error) {
           console.error(`❌ Error processing ${reminderId}:`, error);
           console.error("❌ Error details:", JSON.stringify(error, null, 2));

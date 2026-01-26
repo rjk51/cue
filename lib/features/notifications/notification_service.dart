@@ -233,7 +233,13 @@ class NotificationService {
     print('  - Action ID: $actionId');
     print('  - Notification ID: ${response.id}');
 
-    if (payload != null && actionId != null) {
+    if (payload != null) {
+      // If actionId is null, user tapped the notification body (not a button)
+      if (actionId == null) {
+        print('⚠️  Notification body tapped, no action');
+        return;
+      }
+
       // Handle action button tap (Done/Snooze)
       if (onNotificationAction != null) {
         print('✅ Calling onNotificationAction callback');
@@ -242,7 +248,7 @@ class NotificationService {
         print('❌ onNotificationAction callback is null');
       }
     } else {
-      print('⚠️ Payload or actionId is null');
+      print('⚠️  Payload is null');
     }
   }
 
@@ -250,6 +256,17 @@ class NotificationService {
     print('Foreground message received');
     print('Data: ${message.data}');
     print('Notification: ${message.notification}');
+    
+    // Check if this is a dismiss notification
+    if (message.data.containsKey('type') && 
+        message.data['type'] == 'dismiss_notification') {
+      final reminderId = message.data['reminderId'] ?? '';
+      if (reminderId.isNotEmpty) {
+        print('📤 Dismissing notification for reminder: $reminderId');
+        cancelNotification(reminderId);
+      }
+      return;
+    }
     
     // Check if this is a reminder notification AND if system didn't already show it
     // iOS/Android system shows notifications natively with action buttons
@@ -320,10 +337,22 @@ class NotificationService {
           cancelNotification: true,
         ),
         const AndroidNotificationAction(
-          'snooze',
-          'Snooze',
+          'snooze_5',
+          '5 min',
           showsUserInterface: true,
           cancelNotification: true,
+        ),
+        const AndroidNotificationAction(
+          'snooze_10',
+          '10 min',
+          showsUserInterface: true,
+          cancelNotification: true,
+        ),
+        const AndroidNotificationAction(
+          'snooze_custom',
+          'Custom',
+          showsUserInterface: true,
+          cancelNotification: false,
         ),
       ],
     );
