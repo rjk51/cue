@@ -14,11 +14,27 @@
       },
       "oauth_client": [
         {
+          "client_id": "300393022724-7f142dkksovbuuhusqn1tf9t656iq4i6.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.cuehq.app",
+            "certificate_hash": "52658e042b5c306b7866c083454d37825bce8c1a"
+          }
+        },
+        {
           "client_id": "300393022724-c12sddmja1qhtmnie21snti8gj47djsp.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.cuehq.app",
             "certificate_hash": "8c8d51c642a6214ef88ac0e6c5a24d2340a25d15"
+          }
+        },
+        {
+          "client_id": "300393022724-emlv1sb51cq4ene3aobqnkp2bnhiocc8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.cuehq.app",
+            "certificate_hash": "63cbc405c816791bfdeb71b3eaabde9d443f0326"
           }
         },
         {
