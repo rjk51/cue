@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 
 class Reminder {
   final String id;
@@ -10,6 +11,8 @@ class Reminder {
   final DateTime? notifiedAt;
   final Map<String, dynamic>? recurrence;
   final DateTime? nextDueAt;
+  final int? iconCodePoint;
+  final int? colorValue;
 
   Reminder({
     required this.id,
@@ -21,6 +24,8 @@ class Reminder {
     this.notifiedAt,
     this.recurrence,
     this.nextDueAt,
+    this.iconCodePoint,
+    this.colorValue,
   });
 
   // Convert Reminder to Map for Firestore
@@ -37,6 +42,8 @@ class Reminder {
       if (notifiedAt != null) 'notifiedAt': Timestamp.fromDate(notifiedAt!),
       if (recurrence != null) 'recurrence': recurrence,
       if (nextDueAt != null) 'nextDueAt': Timestamp.fromDate(nextDueAt!),
+      if (iconCodePoint != null) 'iconCodePoint': iconCodePoint,
+      if (colorValue != null) 'colorValue': colorValue,
     };
   }
 
@@ -56,6 +63,8 @@ class Reminder {
         nextDueAt: map['nextDueAt'] != null
           ? (map['nextDueAt'] as Timestamp).toDate()
           : null,
+      iconCodePoint: map['iconCodePoint'] as int?,
+      colorValue: map['colorValue'] as int?,
     );
   }
 
@@ -70,6 +79,8 @@ class Reminder {
     DateTime? notifiedAt,
     Map<String, dynamic>? recurrence,
     DateTime? nextDueAt,
+    int? iconCodePoint,
+    int? colorValue,
   }) {
     return Reminder(
       id: id ?? this.id,
@@ -81,6 +92,18 @@ class Reminder {
       notifiedAt: notifiedAt ?? this.notifiedAt,
       recurrence: recurrence ?? this.recurrence,
       nextDueAt: nextDueAt ?? this.nextDueAt,
+      iconCodePoint: iconCodePoint ?? this.iconCodePoint,
+      colorValue: colorValue ?? this.colorValue,
     );
   }
+  
+  // Helper to get icon as IconData
+  IconData get icon => iconCodePoint != null 
+      ? IconData(iconCodePoint!, fontFamily: 'MaterialIcons')
+      : Icons.notification_important_outlined;
+  
+  // Helper to get color as Color
+  Color get color => colorValue != null 
+      ? Color(colorValue!)
+      : const Color(0xFFFFB4A3);
 }

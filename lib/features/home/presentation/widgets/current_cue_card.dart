@@ -128,17 +128,17 @@ class _CurrentCueCardState extends State<CurrentCueCard>
                   ),
                 ],
               ),
-              // Medicine icon (hardcoded for now)
+              // Dynamic icon from reminder
               Container(
                 width: 50.w,
                 height: 50.h,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: widget.accentColor.withOpacity(0.15),
+                  color: widget.reminder.color.withOpacity(0.15),
                 ),
                 child: Icon(
-                  Icons.medication_outlined,
-                  color: widget.accentColor,
+                  widget.reminder.icon,
+                  color: widget.reminder.color,
                   size: 30.sp,
                 ),
               ),

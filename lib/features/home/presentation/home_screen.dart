@@ -43,10 +43,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   void _onThemeChanged() {
     if (mounted) {
-      setState(() {
-        _accentColor = ThemeNotifier.instance.accentColor;
-        _isDarkMode = ThemeNotifier.instance.isDarkMode;
-      });
+      // Reload from storage to ensure we have the latest values
+      _loadThemeSettings();
     }
   }
 
@@ -71,7 +69,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void _navigateToCreateReminder() async {
     final result = await Navigator.push<Reminder>(
       context,
-      MaterialPageRoute(builder: (context) => const CreateReminderScreen()),
+      MaterialPageRoute(builder: (context) => const NewReminderScreen()),
     );
 
     if (result != null && mounted) {
@@ -189,7 +187,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
                 return Column(
                   children: [
-                    // Date header
+                    // Date header - always shown
                     Padding(
                       padding: EdgeInsets.symmetric(vertical: 16.h),
                       child: Text(
@@ -202,58 +200,70 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         ),
                       ),
                     ),
-                    SizedBox(height: 32.h),
 
-                    // Today's Reminders Count Section (moved here)
-                    _buildRemindersToday(
-                      todayReminders.length,
-                      textColor,
-                      subtitleColor,
-                    ),
+                    // Show full-screen empty state if no reminders at all
+                    if (sortedReminders.isEmpty)
+                      Expanded(
+                        child: _buildFullScreenEmptyState(
+                          textColor,
+                          subtitleColor,
+                        ),
+                      )
+                    else ...[
+                      SizedBox(height: 32.h),
 
-                    SizedBox(height: 40.h),
+                      // Today's Reminders Count Section
+                      _buildRemindersToday(
+                        todayReminders.length,
+                        textColor,
+                        subtitleColor,
+                        todayReminders,
+                      ),
 
-                    Expanded(
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 32.w),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Current/Next Cue Card
-                            if (currentReminder != null)
-                              CurrentCueCard(
-                                reminder: currentReminder,
-                                accentColor: _accentColor,
-                                isDarkMode: _isDarkMode,
-                                cardColor: cardColor,
-                                textColor: textColor,
-                                subtitleColor: subtitleColor,
-                                onMarkCompleted: _markAsCompleted,
-                                getTimeDisplayText: _getTimeDisplayText,
-                                isCurrentCue: _isCurrentCue,
-                              )
-                            else
-                              _buildEmptyCueCard(
-                                cardColor,
-                                textColor,
-                                subtitleColor,
+                      SizedBox(height: 40.h),
+
+                      Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 32.w),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Current/Next Cue Card
+                              if (currentReminder != null)
+                                CurrentCueCard(
+                                  reminder: currentReminder,
+                                  accentColor: _accentColor,
+                                  isDarkMode: _isDarkMode,
+                                  cardColor: cardColor,
+                                  textColor: textColor,
+                                  subtitleColor: subtitleColor,
+                                  onMarkCompleted: _markAsCompleted,
+                                  getTimeDisplayText: _getTimeDisplayText,
+                                  isCurrentCue: _isCurrentCue,
+                                )
+                              else
+                                _buildEmptyCueCard(
+                                  cardColor,
+                                  textColor,
+                                  subtitleColor,
+                                ),
+
+                              SizedBox(height: 24.h),
+
+                              // Upcoming Section - flexible to avoid overflow
+                              Flexible(
+                                child: _buildUpcomingSection(
+                                  upcomingAfterCurrent,
+                                  cardColor,
+                                  textColor,
+                                  subtitleColor,
+                                ),
                               ),
-
-                            SizedBox(height: 24.h),
-
-                            // Upcoming Section - flexible to avoid overflow
-                            Flexible(
-                              child: _buildUpcomingSection(
-                                upcomingAfterCurrent,
-                                cardColor,
-                                textColor,
-                                subtitleColor,
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ],
                 );
               },
@@ -319,8 +329,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 MaterialPageRoute(builder: (context) => const SettingsScreen()),
               );
             }
-            // When coming back, reset nav index to home
+            // When coming back, reset nav index to home and reload theme settings
             if (mounted) {
+              await _loadThemeSettings();
               setState(() {
                 _currentNavIndex = 0;
               });
@@ -338,7 +349,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   ) {
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(32.r),
+      padding: EdgeInsets.symmetric(horizontal: 32.w, vertical: 64.h),
       decoration: BoxDecoration(
         color: cardColor,
         borderRadius: BorderRadius.circular(24.r),
@@ -354,22 +365,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         children: [
           Icon(
             Icons.check_circle_outline_rounded,
-            size: 48.sp,
+            size: 64.sp,
             color: _accentColor,
           ),
-          SizedBox(height: 16.h),
+          SizedBox(height: 32.h),
           Text(
             'All caught up!',
             style: TextStyle(
-              fontSize: 22.sp,
+              fontSize: 28.sp,
               fontWeight: FontWeight.w700,
               color: textColor,
             ),
           ),
-          SizedBox(height: 8.h),
+          SizedBox(height: 14.h),
           Text(
             'No upcoming reminders',
-            style: TextStyle(fontSize: 14.sp, color: subtitleColor),
+            style: TextStyle(fontSize: 16.sp, color: subtitleColor),
           ),
         ],
       ),
@@ -510,7 +521,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildRemindersToday(int count, Color textColor, Color subtitleColor) {
+  Widget _buildRemindersToday(
+    int count,
+    Color textColor,
+    Color subtitleColor,
+    List<Reminder> todayReminders,
+  ) {
+    // Sort by time and take only first 3
+    final sortedReminders = List<Reminder>.from(todayReminders)
+      ..sort((a, b) => a.time.compareTo(b.time));
+    final displayReminders = sortedReminders.take(3).toList();
+
     return Center(
       child: Column(
         children: [
@@ -522,39 +543,86 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               color: subtitleColor,
             ),
           ),
-          SizedBox(height: 16.h),
-          // Hardcoded icons row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildCategoryIcon(Icons.medication_outlined),
-              SizedBox(width: 24.w),
-              _buildCategoryIcon(Icons.local_florist_outlined),
-              SizedBox(width: 24.w),
-              _buildCategoryIcon(Icons.directions_bus_outlined),
-            ],
-          ),
+          if (displayReminders.isNotEmpty) ...[
+            SizedBox(height: 16.h),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                for (int i = 0; i < displayReminders.length; i++) ...[
+                  if (i > 0) SizedBox(width: 24.w),
+                  _buildCategoryIcon(
+                    displayReminders[i].icon,
+                    displayReminders[i].color,
+                  ),
+                ],
+              ],
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildCategoryIcon(IconData icon) {
+  Widget _buildCategoryIcon(IconData icon, Color color) {
     return Container(
       width: 44.w,
       height: 44.h,
       decoration: BoxDecoration(
-        color: _isDarkMode
-            ? Colors.white.withOpacity(0.1)
-            : _accentColor.withOpacity(0.08),
+        color: color.withOpacity(0.15),
         shape: BoxShape.circle,
       ),
       child: Icon(
         icon,
-        color: _isDarkMode
-            ? Colors.white.withOpacity(0.7)
-            : _accentColor.withOpacity(0.7),
+        color: color,
         size: 22.sp,
+      ),
+    );
+  }
+
+  Widget _buildFullScreenEmptyState(
+    Color textColor,
+    Color subtitleColor,
+  ) {
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 48.w),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.celebration_outlined,
+              size: 120.sp,
+              color: _accentColor.withOpacity(0.3),
+            ),
+            SizedBox(height: 48.h),
+            Text(
+              'No Reminders Yet',
+              style: TextStyle(
+                fontSize: 32.sp,
+                fontWeight: FontWeight.w700,
+                color: textColor,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 16.h),
+            Text(
+              'Tap the + button to create your first reminder',
+              style: TextStyle(
+                fontSize: 16.sp,
+                color: subtitleColor,
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 64.h),
+            // Arrow pointing to FAB
+            Icon(
+              Icons.arrow_downward_rounded,
+              size: 32.sp,
+              color: _accentColor.withOpacity(0.5),
+            ),
+          ],
+        ),
       ),
     );
   }
