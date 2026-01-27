@@ -32,10 +32,21 @@ interface RecurrenceConfig {
 }
 
 /**
+ * Consistency tracking for recurring reminders
+ */
+interface ConsistencyData {
+  completedCount: number;
+  missedCount: number;
+  lastEvaluatedDate: string; // YYYY-MM-DD format in user timezone
+  completedDates: string[]; // Array of completed dates (YYYY-MM-DD), limited to last 90 days
+}
+
+/**
  * Reminder document structure
  */
 interface Reminder {
   id: string;
+  userId: string;
   title: string;
   status: "active" | "paused";
   nextDueAt?: admin.firestore.Timestamp;
@@ -43,11 +54,137 @@ interface Reminder {
   lastCompletedAt?: admin.firestore.Timestamp;
   updatedAt: admin.firestore.Timestamp;
   version: number;
+  consistency?: ConsistencyData;
 }
 
 // ============================================================================
 // PURE UTILITY FUNCTIONS
 // ============================================================================
+
+/**
+ * Convert a Date object to YYYY-MM-DD string in local timezone
+ * @param {Date} date - The date to convert
+ * @return {string} Date string in YYYY-MM-DD format
+ */
+function formatDateToYYYYMMDD(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Get the scheduled day (YYYY-MM-DD) from a Firestore Timestamp
+ * @param {admin.firestore.Timestamp} timestamp - The scheduled time
+ * @return {string} Date string in YYYY-MM-DD format
+ */
+function getScheduledDay(timestamp: admin.firestore.Timestamp): string {
+  return formatDateToYYYYMMDD(timestamp.toDate());
+}
+
+/**
+ * Check if a scheduled day has already been evaluated for consistency
+ * @param {ConsistencyData | undefined} consistency - Current consistency data
+ * @param {string} scheduledDay - The day to check (YYYY-MM-DD)
+ * @return {boolean} True if already evaluated
+ */
+function isDayAlreadyEvaluated(
+  consistency: ConsistencyData | undefined,
+  scheduledDay: string
+): boolean {
+  if (!consistency || !consistency.lastEvaluatedDate) {
+    return false;
+  }
+  return consistency.lastEvaluatedDate === scheduledDay;
+}
+
+/**
+ * Mark a scheduled day as completed for consistency tracking
+ * @param {ConsistencyData | undefined} consistency - Current consistency data
+ * @param {string} scheduledDay - The day to mark (YYYY-MM-DD)
+ * @return {ConsistencyData} Updated consistency data
+ */
+function markDayCompleted(
+  consistency: ConsistencyData | undefined,
+  scheduledDay: string
+): ConsistencyData {
+  const current = consistency || {
+    completedCount: 0,
+    missedCount: 0,
+    lastEvaluatedDate: "",
+    completedDates: [],
+  };
+
+  // Add the completed date to the array
+  const completedDates = [...(current.completedDates || []), scheduledDay];
+
+  // Keep only the last 90 days to prevent unbounded growth
+  const ninetyDaysAgo = new Date();
+  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+  const ninetyDaysAgoStr = formatDateToYYYYMMDD(ninetyDaysAgo);
+
+  const recentDates = completedDates.filter((date) => date >= ninetyDaysAgoStr);
+
+  return {
+    completedCount: current.completedCount + 1,
+    missedCount: current.missedCount,
+    lastEvaluatedDate: scheduledDay,
+    completedDates: recentDates,
+  };
+}
+
+/**
+ * Mark a scheduled day as missed for consistency tracking
+ * @param {ConsistencyData | undefined} consistency - Current consistency data
+ * @param {string} scheduledDay - The day to mark (YYYY-MM-DD)
+ * @return {ConsistencyData} Updated consistency data
+ */
+function markDayMissed(
+  consistency: ConsistencyData | undefined,
+  scheduledDay: string
+): ConsistencyData {
+  const current = consistency || {
+    completedCount: 0,
+    missedCount: 0,
+    lastEvaluatedDate: "",
+    completedDates: [],
+  };
+
+  return {
+    completedCount: current.completedCount,
+    missedCount: current.missedCount + 1,
+    lastEvaluatedDate: scheduledDay,
+    completedDates: current.completedDates || [],
+  };
+}
+
+/**
+ * Evaluate if a scheduled day should be marked as missed
+ * Called before calculating next recurrence to check if previous day was missed
+ * @param {Reminder} reminder - The reminder document
+ * @return {boolean} True if the scheduled day should be marked as missed
+ */
+function shouldMarkAsMissed(reminder: Reminder): boolean {
+  // Only evaluate recurring reminders
+  if (!reminder.recurrence || !reminder.nextDueAt) {
+    return false;
+  }
+
+  const scheduledDay = getScheduledDay(reminder.nextDueAt);
+  const today = formatDateToYYYYMMDD(new Date());
+
+  // Only mark as missed if we're past the scheduled day
+  if (scheduledDay >= today) {
+    return false;
+  }
+
+  // Check if this day has already been evaluated
+  if (isDayAlreadyEvaluated(reminder.consistency, scheduledDay)) {
+    return false;
+  }
+
+  return true;
+}
 
 /**
  * Calculate the next due date for a reminder based on its recurrence rule.
@@ -426,11 +563,10 @@ export const completeReminder = functions.https.onCall(
       );
 
       // Get the reminder document
+      // Note: Reminders are stored in a flat 'reminders' collection with userId field
       const db = admin.firestore();
       const messaging = admin.messaging();
       const reminderRef = db
-        .collection("users")
-        .doc(userId)
         .collection("reminders")
         .doc(reminderId);
 
@@ -446,6 +582,14 @@ export const completeReminder = functions.https.onCall(
         }
 
         const reminder = reminderDoc.data() as Reminder;
+
+        // Verify the reminder belongs to the authenticated user
+        if (reminder.userId !== userId) {
+          throw new functions.https.HttpsError(
+            "permission-denied",
+            "You don't have permission to complete this reminder"
+          );
+        }
 
         // Idempotency check: If version is provided and matches current
         // version, this completion has already been processed
@@ -475,6 +619,71 @@ export const completeReminder = functions.https.onCall(
           admin.firestore.Timestamp.fromMillis(completedAt) :
           admin.firestore.Timestamp.now();
 
+        // CONSISTENCY TRACKING: Evaluate if previous scheduled day was missed
+        // This must happen BEFORE we calculate the next recurrence
+        if (shouldMarkAsMissed(reminder)) {
+          const scheduledDay = reminder.nextDueAt ?
+            getScheduledDay(reminder.nextDueAt) : "";
+          console.log(
+            `Marking scheduled day ${scheduledDay} as MISSED (completed late or never)`
+          );
+          const updatedConsistency = markDayMissed(
+            reminder.consistency,
+            scheduledDay
+          );
+          // We'll include this in the update below
+          reminder.consistency = updatedConsistency;
+        }
+
+        // CONSISTENCY TRACKING: Mark current completion day
+        // Check if user completed on the scheduled day
+        console.log("=== CONSISTENCY TRACKING START ===");
+        console.log("Has recurrence:", !!reminder.recurrence);
+        console.log("Has nextDueAt:", !!reminder.nextDueAt);
+        console.log("Current consistency:", JSON.stringify(reminder.consistency));
+
+        if (reminder.recurrence && reminder.nextDueAt) {
+          const scheduledDay = getScheduledDay(reminder.nextDueAt);
+          const completionDay = formatDateToYYYYMMDD(completionTimestamp.toDate());
+
+          console.log("Scheduled day:", scheduledDay);
+          console.log("Completion day:", completionDay);
+          console.log("Days match:", completionDay === scheduledDay);
+
+          // If completing on the same calendar day as scheduled
+          if (completionDay === scheduledDay) {
+            // Check if not already evaluated
+            const alreadyEvaluated = isDayAlreadyEvaluated(
+              reminder.consistency,
+              scheduledDay
+            );
+            console.log("Already evaluated:", alreadyEvaluated);
+
+            if (!alreadyEvaluated) {
+              console.log(
+                `Marking scheduled day ${scheduledDay} as COMPLETED`
+              );
+              const updatedConsistency = markDayCompleted(
+                reminder.consistency,
+                scheduledDay
+              );
+              console.log("Updated consistency:", JSON.stringify(updatedConsistency));
+              reminder.consistency = updatedConsistency;
+            } else {
+              console.log(
+                `Day ${scheduledDay} already evaluated, skipping consistency update`
+              );
+            }
+          } else {
+            console.log(
+              `Completion day ${completionDay} differs from scheduled ` +
+              `day ${scheduledDay}, not marking as completed`
+            );
+          }
+        }
+        console.log("=== CONSISTENCY TRACKING END ===");
+        console.log("Final consistency:", JSON.stringify(reminder.consistency));
+
         // Calculate the next due date using the recurrence rule
         const updatedReminder: Reminder = {
           ...reminder,
@@ -489,6 +698,24 @@ export const completeReminder = functions.https.onCall(
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           version: admin.firestore.FieldValue.increment(1),
         };
+
+        // For recurring reminders, DON'T set completedAt
+        // Completion is tracked via consistency data instead
+        // For non-recurring reminders, set completedAt
+        if (!reminder.recurrence) {
+          updateData.completedAt = completionTimestamp;
+        }
+
+        // Include updated consistency data if it changed
+        if (reminder.consistency) {
+          updateData.consistency = reminder.consistency;
+          console.log("Including consistency in update:", JSON.stringify(reminder.consistency));
+        } else {
+          console.log("WARNING: No consistency data to include in update!");
+        }
+
+        console.log("=== UPDATE DATA ===");
+        console.log(JSON.stringify(updateData, null, 2));
 
         // If there's a next occurrence, update nextDueAt
         if (nextDueDate) {
@@ -622,9 +849,8 @@ export const updateReminderRecurrence = functions.https.onCall(
 
       // Get the reminder document
       const db = admin.firestore();
+      // Note: Reminders are stored in a flat 'reminders' collection with userId field
       const reminderRef = db
-        .collection("users")
-        .doc(userId)
         .collection("reminders")
         .doc(reminderId);
 
@@ -638,6 +864,14 @@ export const updateReminderRecurrence = functions.https.onCall(
       }
 
       const reminder = reminderDoc.data() as Reminder;
+
+      // Verify the reminder belongs to the authenticated user
+      if (reminder.userId !== userId) {
+        throw new functions.https.HttpsError(
+          "permission-denied",
+          "You don't have permission to update this reminder"
+        );
+      }
 
       // Update the reminder with new recurrence rule
       const updatedReminder: Reminder = {

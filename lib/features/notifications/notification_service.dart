@@ -469,19 +469,38 @@ class NotificationService {
   // Listen to reminder updates to dismiss notifications on other devices
   void _listenToReminderUpdates() {
     print('📡 Starting listener for reminder updates...');
+    
+    // Get current user ID
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) {
+      print('⚠️ No user logged in, cannot listen to reminder updates');
+      return;
+    }
+    
     _reminderSubscription = FirebaseFirestore.instance
         .collection('reminders')
-        .where('isCompleted', isEqualTo: true)
+        .where('userId', isEqualTo: userId)
         .snapshots()
         .listen((snapshot) {
       for (var change in snapshot.docChanges) {
-        if (change.type == DocumentChangeType.added || 
-            change.type == DocumentChangeType.modified) {
+        if (change.type == DocumentChangeType.modified) {
           final reminder = change.doc.data();
-          if (reminder != null && reminder['isCompleted'] == true) {
+          if (reminder != null) {
             final reminderId = change.doc.id;
-            print('✅ Reminder completed, dismissing notification: $reminderId');
-            cancelNotification(reminderId);
+            final isCompleted = reminder['isCompleted'] == true;
+            final lastCompletedAt = reminder['lastCompletedAt'] as Timestamp?;
+            
+            // Dismiss notification if:
+            // 1. Non-recurring reminder is marked as completed (isCompleted = true)
+            // 2. Recurring reminder was just completed (lastCompletedAt updated in last 5 seconds)
+            final shouldDismiss = isCompleted || 
+                (lastCompletedAt != null && 
+                 DateTime.now().difference(lastCompletedAt.toDate()).inSeconds < 5);
+            
+            if (shouldDismiss) {
+              print('✅ Reminder completed, dismissing notification: $reminderId');
+              cancelNotification(reminderId);
+            }
           }
         }
       }
