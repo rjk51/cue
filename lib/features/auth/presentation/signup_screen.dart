@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../../services/auth_service.dart';
@@ -493,31 +492,32 @@ class _SignupScreenState extends State<SignupScreen> {
                   ],
                 ),
                 SizedBox(height: 24.h),
-                // Apple/Google Sign Up button (platform-specific)
-                SizedBox(
-                  width: double.infinity,
-                  height: 56.h,
-                  child: OutlinedButton(
-                    onPressed: _isLoading ? null : (_isIOS ? _handleAppleSignIn : _handleGoogleSignIn),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.black,
-                      side: BorderSide(
-                        color: Colors.grey[300]!,
-                        width: 1,
+                // Social sign up buttons
+                if (_isIOS) ...[
+                  // Apple sign up (iOS only)
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56.h,
+                    child: OutlinedButton(
+                      onPressed: _isLoading ? null : _handleAppleSignIn,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.black,
+                        side: BorderSide(
+                          color: Colors.grey[300]!,
+                          width: 1,
+                        ),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(28.r),
+                        ),
                       ),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(28.r),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        if (_isIOS) ...[
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
                           Container(
                             width: 20.w,
                             height: 20.h,
-                            decoration: BoxDecoration(
+                            decoration: const BoxDecoration(
                               shape: BoxShape.circle,
                             ),
                             child: FaIcon(
@@ -526,12 +526,43 @@ class _SignupScreenState extends State<SignupScreen> {
                               color: Colors.black54,
                             ),
                           ),
-                        ]
-                        else
+                          SizedBox(width: 12.w),
+                          Text(
+                            'Sign up with Apple',
+                            style: TextStyle(
+                              fontSize: 16.sp,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 12.h),
+                  // Google sign up (iOS)
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56.h,
+                    child: OutlinedButton(
+                      onPressed: _isLoading ? null : _handleGoogleSignIn,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.black,
+                        side: BorderSide(
+                          color: Colors.grey[300]!,
+                          width: 1,
+                        ),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(28.r),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
                           Container(
                             width: 20.w,
                             height: 20.h,
-                            decoration: BoxDecoration(
+                            decoration: const BoxDecoration(
                               shape: BoxShape.circle,
                             ),
                             child: FaIcon(
@@ -540,18 +571,63 @@ class _SignupScreenState extends State<SignupScreen> {
                               color: Colors.black54,
                             ),
                           ),
-                        SizedBox(width: 12.w),
-                        Text(
-                          _isIOS ? 'Sign up with Apple' : 'Sign up with Google',
-                          style: TextStyle(
-                            fontSize: 16.sp,
-                            fontWeight: FontWeight.w500,
+                          SizedBox(width: 12.w),
+                          Text(
+                            'Sign up with Google',
+                            style: TextStyle(
+                              fontSize: 16.sp,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
+                ] else
+                  // Google sign up (Android/web)
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56.h,
+                    child: OutlinedButton(
+                      onPressed: _isLoading ? null : _handleGoogleSignIn,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.black,
+                        side: BorderSide(
+                          color: Colors.grey[300]!,
+                          width: 1,
+                        ),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(28.r),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 20.w,
+                            height: 20.h,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                            ),
+                            child: FaIcon(
+                              FontAwesomeIcons.google,
+                              size: 18.sp,
+                              color: Colors.black54,
+                            ),
+                          ),
+                          SizedBox(width: 12.w),
+                          Text(
+                            'Sign up with Google',
+                            style: TextStyle(
+                              fontSize: 16.sp,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 SizedBox(height: 32.h),
                 // Login link
                 Center(

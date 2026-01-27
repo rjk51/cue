@@ -5,12 +5,11 @@ import 'package:intl/intl.dart';
 import '../../reminders/domain/reminder_model.dart';
 import '../../reminders/data/reminder_service.dart';
 import '../../reminders/presentation/create_reminder_screen.dart';
-import '../../calendar/presentation/calendar_screen.dart';
+import '../../reminders/presentation/reminder_list_screen.dart';
 import '../../../services/theme_service.dart';
 import '../../../services/theme_notifier.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
 import 'widgets/current_cue_card.dart';
-import 'widgets/bottom_nav_bar.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -25,7 +24,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Color _accentColor = const Color(0xFF2D7A78); // Default teal
   bool _isDarkMode = false;
-  int _currentNavIndex = 0;
 
   @override
   void initState() {
@@ -78,16 +76,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _markAsCompleted(String reminderId) async {
-    try {
-      await _reminderService.markAsCompleted(reminderId);
-      if (mounted) {
-        context.showSuccessSnackbar('Marked as done!');
-      }
-    } catch (e) {
+    // Show snackbar immediately (optimistic UI)
+    if (mounted) {
+      context.showSuccessSnackbar('Marked as done!');
+    }
+    
+    // Execute in background without blocking UI
+    _reminderService.markAsCompleted(reminderId).catchError((e) {
+      // Only show error if it fails
       if (mounted) {
         context.showErrorSnackbar('Error: $e');
       }
-    }
+    });
   }
 
   String _getTimeDisplayText(DateTime reminderTime) {
@@ -163,14 +163,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   return r.time.year == now.year &&
                       r.time.month == now.month &&
                       r.time.day == now.day &&
-                      !r.isCompleted;
+                      !r.isCompletedToday; // Uses helper method that checks both isCompleted and consistency
                 }).toList();
 
                 // Get current/next reminder (first uncompleted)
                 final upcomingReminders = sortedReminders
                     .where(
                       (r) =>
-                          !r.isCompleted &&
+                          !r.isCompletedToday && // Uses helper method that checks both isCompleted and consistency
                           r.time.isAfter(
                             now.subtract(const Duration(hours: 1)),
                           ),
@@ -536,7 +536,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
             GestureDetector(
               onTap: () {
-                // TODO: Navigate to full list view
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ReminderListScreen(),
+                  ),
+                );
               },
               child: Text(
                 'VIEW ALL',

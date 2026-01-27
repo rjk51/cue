@@ -50,9 +50,10 @@ class _CurrentCueCardState extends State<CurrentCueCard>
     super.initState();
     _initAnimations();
     _notesController = TextEditingController(text: widget.reminder.notes ?? '');
-    
-    // Listen to focus changes to save notes
+
+    // Listen to focus changes to update UI and save notes on blur
     _notesFocusNode.addListener(() {
+      setState(() {});
       if (!_notesFocusNode.hasFocus) {
         _saveNotes();
       }
@@ -134,10 +135,8 @@ class _CurrentCueCardState extends State<CurrentCueCard>
 
   @override
   Widget build(BuildContext context) {
-    final isCurrent = widget.isCurrentCue(widget.reminder.time);
     final timeText = widget.getTimeDisplayText(widget.reminder.time);
-    final timeOnly = DateFormat('hh:mm').format(widget.reminder.time);
-    final amPm = DateFormat('a').format(widget.reminder.time);
+    final formattedTime = DateFormat('hh:mm a').format(widget.reminder.time);
 
     return Container(
       width: double.infinity,
@@ -156,52 +155,10 @@ class _CurrentCueCardState extends State<CurrentCueCard>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header row with time and icon
+          // Header row with label and icon
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              // Time info
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Time display
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Text(
-                        timeOnly,
-                        style: TextStyle(
-                          fontSize: 28.sp,
-                          fontWeight: FontWeight.w600,
-                          color: widget.textColor,
-                        ),
-                      ),
-                      SizedBox(width: 8.w),
-                      Padding(
-                        padding: EdgeInsets.only(bottom: 6.h),
-                        child: Text(
-                          amPm,
-                          style: TextStyle(
-                            fontSize: 18.sp,
-                            fontWeight: FontWeight.w500,
-                            color: widget.subtitleColor,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 2.h),
-                  // Relative time text
-                  Text(
-                    timeText,
-                    style: TextStyle(
-                      fontSize: 16.sp,
-                      fontWeight: FontWeight.w500,
-                      color: widget.accentColor,
-                    ),
-                  ),
-                ],
-              ),
               // Dynamic icon from reminder
               Container(
                 width: 50.w,
@@ -219,20 +176,58 @@ class _CurrentCueCardState extends State<CurrentCueCard>
             ],
           ),
 
-          SizedBox(height: 42.h),
+          SizedBox(height: 12.h),
 
           // Reminder title
           Text(
             widget.reminder.name,
             style: TextStyle(
-              fontSize: 42.sp,
+              fontSize: 46.sp,
               fontWeight: FontWeight.w700,
               color: widget.textColor,
               height: 1.2,
             ),
           ),
 
-          SizedBox(height: 24.h),
+          SizedBox(height: 12.h),
+
+          // Time info (below title)
+          Row(
+            children: [
+              Icon(
+                Icons.access_time_filled,
+                size: 18.sp,
+                color: widget.subtitleColor,
+              ),
+              SizedBox(width: 6.w),
+              Text(
+                timeText,
+                style: TextStyle(
+                  fontSize: 16.sp,
+                  fontWeight: FontWeight.w600,
+                  color: widget.accentColor,
+                ),
+              ),
+              SizedBox(width: 8.w),
+              Text(
+                '·',
+                style: TextStyle(
+                  fontSize: 16.sp,
+                  color: widget.subtitleColor,
+                ),
+              ),
+              SizedBox(width: 8.w),
+              Text(
+                formattedTime,
+                style: TextStyle(
+                  fontSize: 16.sp,
+                  color: widget.subtitleColor,
+                ),
+              ),
+            ],
+          ),
+
+          SizedBox(height: 32.h),
 
           // Notes section
           _buildNotesSection(),
@@ -292,6 +287,27 @@ class _CurrentCueCardState extends State<CurrentCueCard>
               },
             ),
           ),
+          if (_notesFocusNode.hasFocus) ...[
+            SizedBox(width: 10.w),
+            GestureDetector(
+              onTap: () {
+                _notesFocusNode.unfocus();
+              },
+              child: Container(
+                width: 32.w,
+                height: 32.w,
+                decoration: BoxDecoration(
+                  color: widget.accentColor,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.check_rounded,
+                  size: 18.sp,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

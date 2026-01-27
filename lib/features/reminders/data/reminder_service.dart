@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import '../domain/reminder_model.dart';
 
 class ReminderService {
@@ -9,6 +10,7 @@ class ReminderService {
   ReminderService._internal();
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseFunctions _functions = FirebaseFunctions.instance;
   final String _collection = 'reminders';
 
   // Get current user ID from Firebase Auth
@@ -49,12 +51,23 @@ class ReminderService {
       reminderData['scheduledTime'] = reminderData['nextDueAt'] ?? reminderData['time'];
       reminderData['status'] = reminderData['status'] ?? 'active';
       
+      // Initialize consistency tracking for recurring reminders
+      if (reminder.recurrence != null) {
+        reminderData['consistency'] = {
+          'completedCount': 0,
+          'missedCount': 0,
+          'lastEvaluatedDate': '',
+          'completedDates': [],
+        };
+      }
+      
       final docRef = await _firestore.collection(_collection).add({
         ...reminderData,
         'userId': userId,
         'deviceToken': fcmToken,
         'createdAt': FieldValue.serverTimestamp(),
       });
+      
       print('Reminder added with ID: ${docRef.id}');
       return docRef.id;
     } catch (e) {
@@ -64,19 +77,51 @@ class ReminderService {
   }
 
   // Mark reminder as completed (this will trigger cross-device sync)
+  // Consistency tracking is handled by Firebase Functions
   Future<void> markAsCompleted(String reminderId) async {
     try {
-      await _firestore.collection(_collection).doc(reminderId).update({
-        'isCompleted': true,
-        'completedAt': FieldValue.serverTimestamp(),
+      // Call Firebase Functions to handle completion
+      // This ensures consistency tracking is properly updated
+      final callable = _functions.httpsCallable('completeReminder');
+      final result = await callable.call({
+        'reminderId': reminderId,
+        'completedAt': DateTime.now().millisecondsSinceEpoch,
       });
-      print('Reminder marked as completed: $reminderId');
+      
+      print('Reminder marked as completed via Cloud Function: $reminderId');
+      print('Result: ${result.data}');
       
       // Trigger a notification to other devices
       await _notifyOtherDevices(reminderId, 'completed');
     } catch (e) {
       print('Error marking reminder as completed: $e');
-      rethrow;
+      
+      // Fallback: If Cloud Function fails, update Firestore directly
+      // This ensures the app still works even if Functions are down
+      try {
+        final doc = await _firestore.collection(_collection).doc(reminderId).get();
+        if (doc.exists) {
+          final reminderData = doc.data()!;
+          final isRecurring = reminderData['recurrence'] != null;
+          
+          final updates = <String, dynamic>{
+            'lastCompletedAt': FieldValue.serverTimestamp(),
+          };
+          
+          // Only mark as completed and set completedAt if it's NOT a recurring reminder
+          // For recurring reminders, completion is tracked via consistency data
+          if (!isRecurring) {
+            updates['isCompleted'] = true;
+            updates['completedAt'] = FieldValue.serverTimestamp();
+          }
+          
+          await _firestore.collection(_collection).doc(reminderId).update(updates);
+          print('Fallback: Reminder marked as completed directly in Firestore');
+        }
+      } catch (fallbackError) {
+        print('Fallback also failed: $fallbackError');
+        rethrow;
+      }
     }
   }
 

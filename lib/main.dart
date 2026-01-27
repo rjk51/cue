@@ -86,20 +86,58 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final themeNotifier = ThemeNotifier.instance;
+
     return ScreenUtilInit(
       designSize: const Size(484, 1048),
       useInheritedMediaQuery: true,
       minTextAdapt: true,
       splitScreenMode: true,
-      child: MaterialApp(
-        title: 'Cue',
-        navigatorKey: navigatorKey,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-          useMaterial3: true,
-        ),
-        debugShowCheckedModeBanner: false,
-        home: StreamBuilder<User?>(
+      child: AnimatedBuilder(
+        animation: themeNotifier,
+        builder: (context, _) {
+          final isDark = themeNotifier.isDarkMode;
+          final bgColor = isDark ? const Color(0xFF121212) : Colors.white;
+
+          // Map stored string to Flutter ThemeMode
+          final modeString = themeNotifier.themeMode;
+          final themeMode = modeString == 'dark'
+              ? ThemeMode.dark
+              : modeString == 'system'
+                  ? ThemeMode.system
+                  : ThemeMode.light;
+
+          final lightColorScheme = ColorScheme.fromSeed(
+            seedColor: themeNotifier.accentColor,
+            brightness: Brightness.light,
+          );
+
+          final darkColorScheme = ColorScheme.fromSeed(
+            seedColor: themeNotifier.accentColor,
+            brightness: Brightness.dark,
+            surface: bgColor,
+          );
+
+          return MaterialApp(
+            title: 'Cue',
+            navigatorKey: navigatorKey,
+            themeMode: themeMode,
+            theme: ThemeData(
+              colorScheme: lightColorScheme.copyWith(
+                surface: bgColor,
+              ),
+              scaffoldBackgroundColor: bgColor,
+              canvasColor: bgColor,
+              useMaterial3: true,
+            ),
+            darkTheme: ThemeData(
+              colorScheme: darkColorScheme,
+              scaffoldBackgroundColor: bgColor,
+              canvasColor: bgColor,
+              useMaterial3: true,
+            ),
+            debugShowCheckedModeBanner: false,
+            home: StreamBuilder<User?>(
           stream: FirebaseAuth.instance.authStateChanges(),
           builder: (context, snapshot) {
             // Show loading while checking auth state
@@ -237,6 +275,7 @@ class MyApp extends StatelessWidget {
             }
           },
         ),
+      );},
       ),
     );
   }
