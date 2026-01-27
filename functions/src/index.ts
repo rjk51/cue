@@ -905,3 +905,165 @@ export const processPendingNotifications = functions.pubsub
       return {success: false, error};
     }
   });
+
+/**
+ * Scheduled function that runs every minute to check for reminders
+ * that need auto-snoozing
+ */
+export const processAutoSnooze = functions.pubsub
+  .schedule("every 1 minutes")
+  .onRun(async () => {
+    console.log("🔄 [processAutoSnooze] Scheduled function triggered");
+
+    const now = admin.firestore.Timestamp.now();
+    const currentTime = now.toDate();
+    console.log(`⏰ Current time: ${currentTime.toISOString()}`);
+
+    try {
+      // Find reminders that:
+      // 1. Have auto-snooze enabled
+      // 2. Have been notified
+      // 3. Haven't been completed
+      // 4. Haven't reached max snooze count
+      // 5. Notification time + interval has passed
+      const remindersSnapshot = await db
+        .collection("reminders")
+        .where("autoSnoozeEnabled", "==", true)
+        .where("isCompleted", "==", false)
+        .where("notifiedAt", "!=", null)
+        .limit(50)
+        .get();
+
+      if (remindersSnapshot.empty) {
+        console.log("No reminders eligible for auto-snooze");
+        return {success: true, processed: 0};
+      }
+
+      console.log(`Found ${remindersSnapshot.size} potential auto-snooze candidates`);
+      let autoSnoozedCount = 0;
+
+      for (const reminderDoc of remindersSnapshot.docs) {
+        const reminder = reminderDoc.data();
+        const reminderId = reminderDoc.id;
+
+        try {
+          // Check if max snooze count reached
+          const autoSnoozeCount = reminder.autoSnoozeCount || 0;
+          const autoSnoozeMaxCount = reminder.autoSnoozeMaxCount || 3;
+
+          if (autoSnoozeCount >= autoSnoozeMaxCount) {
+            console.log(
+              `Reminder ${reminderId} reached max snooze count ` +
+              `(${autoSnoozeCount}/${autoSnoozeMaxCount})`
+            );
+            continue;
+          }
+
+          // Check if enough time has passed since notification
+          const notifiedAt = reminder.notifiedAt?.toDate();
+          if (!notifiedAt) continue;
+
+          const autoSnoozeInterval = reminder.autoSnoozeInterval || 10; // minutes
+          const autoSnoozeTime = new Date(notifiedAt.getTime() + (autoSnoozeInterval * 60 * 1000));
+
+          if (currentTime < autoSnoozeTime) {
+            // Not yet time to auto-snooze
+            continue;
+          }
+
+          console.log(`🔄 Auto-snoozing reminder ${reminderId}: "${reminder.name}"`);
+
+          // Calculate new snooze time
+          const intervalMs = autoSnoozeInterval * 60 * 1000;
+          const newTime = new Date(currentTime.getTime() + intervalMs);
+
+          // Update reminder with new time and increment snooze count
+          await reminderDoc.ref.update({
+            time: admin.firestore.Timestamp.fromDate(newTime),
+            scheduledTime: admin.firestore.Timestamp.fromDate(newTime),
+            notifiedAt: admin.firestore.FieldValue.delete(), // Clear notifiedAt
+            autoSnoozeCount: autoSnoozeCount + 1,
+          });
+
+          // Create pending notification for the new time
+          await db.collection("pending_notifications").add({
+            reminderId: reminderId,
+            reminderName: reminder.name || reminder.title,
+            reminderDescription: reminder.description || "",
+            userId: reminder.userId,
+            scheduledTime: admin.firestore.Timestamp.fromDate(newTime),
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+
+          // Send dismiss notification to all devices
+          const userId = reminder.userId;
+          if (userId) {
+            const devicesSnapshot = await db
+              .collection("devices")
+              .where("userId", "==", userId)
+              .get();
+
+            const tokens: string[] = [];
+            devicesSnapshot.forEach((doc) => {
+              const deviceData = doc.data();
+              if (deviceData.fcmToken) {
+                tokens.push(deviceData.fcmToken);
+              }
+            });
+
+            if (tokens.length > 0) {
+              const message = {
+                data: {
+                  type: "dismiss_notification",
+                  reminderId: reminderId,
+                  title: "Auto-snoozed",
+                  body:
+                    `"${reminder.name}" was auto-snoozed for ` +
+                    `${autoSnoozeInterval} minutes`,
+                },
+                tokens: tokens,
+              };
+
+              try {
+                const response =
+                  await messaging.sendEachForMulticast(message);
+                console.log(
+                  "📤 Sent auto-snooze notification to " +
+                  `${response.successCount} devices`
+                );
+
+                if (response.failureCount > 0) {
+                  console.log(
+                    `⚠️  ${response.failureCount} devices ` +
+                    "failed to receive notification"
+                  );
+                }
+              } catch (error) {
+                console.error("❌ Error sending auto-snooze notification:", error);
+              }
+            }
+          }
+
+          autoSnoozedCount++;
+          console.log(
+            "✅ Auto-snoozed reminder " + reminderId + " " +
+            "(" + (autoSnoozeCount + 1) + "/" + autoSnoozeMaxCount + ")"
+          );
+        } catch (error) {
+          console.error(
+            "❌ Error auto-snoozing reminder " + reminderId + ":",
+            error
+          );
+        }
+      }
+
+      console.log(
+        "✅ [processAutoSnooze] Completed - Auto-snoozed " +
+        autoSnoozedCount + " reminders"
+      );
+      return {success: true, processed: autoSnoozedCount};
+    } catch (error) {
+      console.error("❌ [processAutoSnooze] Critical error:", error);
+      return {success: false, error};
+    }
+  });

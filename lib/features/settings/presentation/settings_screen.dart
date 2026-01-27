@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../../services/theme_service.dart';
 import '../../../services/auth_service.dart';
@@ -136,6 +137,158 @@ class _SettingsScreenState extends State<SettingsScreen> {
             SnackBar(
               content: Text('Error signing out: $e'),
               backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _handleDeleteAccount() async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: _isDarkMode ? const Color(0xFF2A2A2A) : Colors.white,
+        title: Text(
+          'Delete Account',
+          style: TextStyle(
+            color: _isDarkMode ? Colors.white : const Color(0xFF2D2D2D),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        content: Text(
+          'Are you sure you want to delete your account? This action cannot be undone. All your data will be permanently deleted.',
+          style: TextStyle(
+            color: _isDarkMode ? Colors.white70 : const Color(0xFF666666),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel', style: TextStyle(color: _accentColor)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              backgroundColor: Colors.red.withOpacity(0.1),
+            ),
+            child: const Text(
+              'Delete',
+              style: TextStyle(
+                color: Colors.red,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldDelete == true) {
+      try {
+        // Show loading indicator
+        if (mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => Center(
+              child: Container(
+                padding: EdgeInsets.all(24.r),
+                decoration: BoxDecoration(
+                  color: _isDarkMode ? const Color(0xFF2A2A2A) : Colors.white,
+                  borderRadius: BorderRadius.circular(16.r),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(color: _accentColor),
+                    SizedBox(height: 16.h),
+                    Text(
+                      'Deleting account...',
+                      style: TextStyle(
+                        color: _isDarkMode ? Colors.white : const Color(0xFF2D2D2D),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+
+        // Delete user data from Firestore and Firebase Auth
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          final userId = user.uid;
+          
+          // Delete user's reminders first
+          final remindersSnapshot = await FirebaseFirestore.instance
+              .collection('reminders')
+              .where('userId', isEqualTo: userId)
+              .get();
+          
+          for (var doc in remindersSnapshot.docs) {
+            await doc.reference.delete();
+          }
+          
+          // Delete user's devices
+          final devicesSnapshot = await FirebaseFirestore.instance
+              .collection('devices')
+              .where('userId', isEqualTo: userId)
+              .get();
+          
+          for (var doc in devicesSnapshot.docs) {
+            await doc.reference.delete();
+          }
+          
+          // Delete user's pending notifications
+          final pendingNotificationsSnapshot = await FirebaseFirestore.instance
+              .collection('pending_notifications')
+              .where('userId', isEqualTo: userId)
+              .get();
+          
+          for (var doc in pendingNotificationsSnapshot.docs) {
+            await doc.reference.delete();
+          }
+          
+          // Delete user document from Firestore
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(userId)
+              .delete();
+          
+          // Delete the Firebase Auth user - THIS MUST BE LAST
+          await user.delete();
+          
+          // Sign out to clear any cached credentials
+          await FirebaseAuth.instance.signOut();
+        }
+
+        if (mounted) {
+          // Close loading dialog
+          Navigator.pop(context);
+          
+          // Navigate to welcome screen
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => const WelcomeScreen()),
+            (route) => false,
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          // Close loading dialog if it's open
+          Navigator.pop(context);
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                e.toString().contains('requires-recent-login')
+                    ? 'Please log out and log back in before deleting your account'
+                    : 'Error deleting account: $e',
+              ),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 4),
             ),
           );
         }
@@ -599,6 +752,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             fontSize: 18.sp,
                             fontWeight: FontWeight.w600,
                             color: const Color.fromARGB(255, 232, 96, 86),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    SizedBox(height: 8.h),
+
+                    // Delete Account button
+                    Center(
+                      child: TextButton(
+                        onPressed: _handleDeleteAccount,
+                        child: Text(
+                          'Delete Account',
+                          style: TextStyle(
+                            fontSize: 16.sp,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.red.withOpacity(0.7),
                           ),
                         ),
                       ),
