@@ -44,6 +44,11 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
   IconData _selectedIcon = Icons.notification_important_outlined;
   Color _selectedColor = const Color(0xFFFFB4A3);
 
+  // Auto-snooze fields
+  bool _autoSnoozeEnabled = false;
+  int _autoSnoozeInterval = 10; // default 10 minutes
+  int _autoSnoozeMaxCount = 3; // default 3 times
+
   // Map day indices to abbreviated names
   final List<String> _dayAbbreviations = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
@@ -471,6 +476,10 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
         userId: 'demo_user',
         iconCodePoint: _selectedIcon.codePoint,
         colorValue: _selectedColor.value,
+        autoSnoozeEnabled: _autoSnoozeEnabled,
+        autoSnoozeInterval: _autoSnoozeInterval,
+        autoSnoozeMaxCount: _autoSnoozeMaxCount,
+        autoSnoozeCount: 0,
       );
 
       final reminderId = await _reminderService.addReminder(
@@ -810,6 +819,136 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
                         ],
                       ),
                     ),
+
+                    Divider(color: dividerColor, height: 1.h),
+
+                    // Auto-snooze Switch
+                    Padding(
+                      padding: EdgeInsets.all(16.r),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Auto-snooze',
+                                style: TextStyle(
+                                  color: textColor,
+                                  fontSize: 16.sp,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              SizedBox(height: 2.h),
+                              Text(
+                                'Snooze if no response',
+                                style: TextStyle(
+                                  color: subtitleColor,
+                                  fontSize: 12.sp,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Switch(
+                            value: _autoSnoozeEnabled,
+                            onChanged: (value) {
+                              setState(() {
+                                _autoSnoozeEnabled = value;
+                              });
+                            },
+                            activeColor: _accentColor,
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Auto-snooze Settings (only show when enabled)
+                    if (_autoSnoozeEnabled) ...[
+                      Divider(color: dividerColor, height: 1.h),
+                      Padding(
+                        padding: EdgeInsets.all(16.r),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Snooze Interval',
+                              style: TextStyle(
+                                color: textColor,
+                                fontSize: 14.sp,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            SizedBox(height: 8.h),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Slider(
+                                    value: _autoSnoozeInterval.toDouble(),
+                                    min: 1,
+                                    max: 60,
+                                    divisions: 59,
+                                    label: '$_autoSnoozeInterval min',
+                                    activeColor: _accentColor,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        _autoSnoozeInterval = value.toInt();
+                                      });
+                                    },
+                                  ),
+                                ),
+                                SizedBox(width: 8.w),
+                                Text(
+                                  '$_autoSnoozeInterval min',
+                                  style: TextStyle(
+                                    color: textColor,
+                                    fontSize: 14.sp,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: 16.h),
+                            Text(
+                              'Max Snoozes',
+                              style: TextStyle(
+                                color: textColor,
+                                fontSize: 14.sp,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            SizedBox(height: 8.h),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Slider(
+                                    value: _autoSnoozeMaxCount.toDouble(),
+                                    min: 1,
+                                    max: 10,
+                                    divisions: 9,
+                                    label: '$_autoSnoozeMaxCount times',
+                                    activeColor: _accentColor,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        _autoSnoozeMaxCount = value.toInt();
+                                      });
+                                    },
+                                  ),
+                                ),
+                                SizedBox(width: 8.w),
+                                Text(
+                                  '$_autoSnoozeMaxCount times',
+                                  style: TextStyle(
+                                    color: textColor,
+                                    fontSize: 14.sp,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

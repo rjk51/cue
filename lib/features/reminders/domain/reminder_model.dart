@@ -14,6 +14,10 @@ class Reminder {
   final int? iconCodePoint;
   final int? colorValue;
   final String? notes;
+  final bool autoSnoozeEnabled;
+  final int autoSnoozeInterval; // in minutes
+  final int autoSnoozeMaxCount; // maximum number of auto-snoozes
+  final int autoSnoozeCount; // current auto-snooze count
 
   Reminder({
     required this.id,
@@ -28,6 +32,10 @@ class Reminder {
     this.iconCodePoint,
     this.colorValue,
     this.notes,
+    this.autoSnoozeEnabled = false,
+    this.autoSnoozeInterval = 10, // default 10 minutes
+    this.autoSnoozeMaxCount = 3, // default 3 times
+    this.autoSnoozeCount = 0,
   });
 
   // Convert Reminder to Map for Firestore
@@ -47,6 +55,10 @@ class Reminder {
       if (iconCodePoint != null) 'iconCodePoint': iconCodePoint,
       if (colorValue != null) 'colorValue': colorValue,
       if (notes != null) 'notes': notes,
+      'autoSnoozeEnabled': autoSnoozeEnabled,
+      'autoSnoozeInterval': autoSnoozeInterval,
+      'autoSnoozeMaxCount': autoSnoozeMaxCount,
+      'autoSnoozeCount': autoSnoozeCount,
     };
   }
 
@@ -69,6 +81,10 @@ class Reminder {
       iconCodePoint: map['iconCodePoint'] as int?,
       colorValue: map['colorValue'] as int?,
       notes: map['notes'] as String?,
+      autoSnoozeEnabled: map['autoSnoozeEnabled'] ?? false,
+      autoSnoozeInterval: map['autoSnoozeInterval'] ?? 10,
+      autoSnoozeMaxCount: map['autoSnoozeMaxCount'] ?? 3,
+      autoSnoozeCount: map['autoSnoozeCount'] ?? 0,
     );
   }
 
@@ -86,6 +102,10 @@ class Reminder {
     int? iconCodePoint,
     int? colorValue,
     String? notes,
+    bool? autoSnoozeEnabled,
+    int? autoSnoozeInterval,
+    int? autoSnoozeMaxCount,
+    int? autoSnoozeCount,
   }) {
     return Reminder(
       id: id ?? this.id,
@@ -100,6 +120,10 @@ class Reminder {
       iconCodePoint: iconCodePoint ?? this.iconCodePoint,
       colorValue: colorValue ?? this.colorValue,
       notes: notes ?? this.notes,
+      autoSnoozeEnabled: autoSnoozeEnabled ?? this.autoSnoozeEnabled,
+      autoSnoozeInterval: autoSnoozeInterval ?? this.autoSnoozeInterval,
+      autoSnoozeMaxCount: autoSnoozeMaxCount ?? this.autoSnoozeMaxCount,
+      autoSnoozeCount: autoSnoozeCount ?? this.autoSnoozeCount,
     );
   }
   
