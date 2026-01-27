@@ -129,58 +129,56 @@ class MyApp extends StatelessWidget {
                     print('  - Action: $action');
                     print('  - Reminder ID: $reminderId');
 
-                    final reminderService = ReminderService();
-                    
-                    // Check if reminderId contains custom input (format: reminderId:minutes)
+                    // Declare variables outside try block so they're accessible in catch
                     String actualReminderId = reminderId;
                     int? customMinutes;
-                    
-                    if (reminderId.contains(':')) {
-                      final parts = reminderId.split(':');
-                      actualReminderId = parts[0];
-                      customMinutes = int.tryParse(parts[1]);
-                      print('  - Parsed custom minutes: $customMinutes');
-                    }
 
-                    if (action == 'mark_done' || action == 'done') {
-                      print('✅ Handling mark_done/done action');
-                      // Mark reminder as completed
-                      if (!actualReminderId.startsWith('test_reminder')) {
-                        await reminderService.markAsCompleted(actualReminderId);
-                        await notificationService.cancelNotification(actualReminderId);
+                    try {
+                      final reminderService = ReminderService();
+                      
+                      // Check if reminderId contains custom input (format: reminderId:minutes)
+                      if (reminderId.contains(':')) {
+                        final parts = reminderId.split(':');
+                        actualReminderId = parts[0];
+                        customMinutes = int.tryParse(parts[1]);
+                        print('  - Parsed custom minutes: $customMinutes from input: ${parts[1]}');
                       }
-                    } else if (action == 'snooze_input') {
-                      print('⏰ Handling custom snooze input');
-                      if (customMinutes != null && customMinutes > 0 && customMinutes <= 1440) {
-                        // Valid input (1-1440 minutes = 24 hours max)
+
+                      if (action == 'mark_done' || action == 'done') {
+                        print('✅ Handling mark_done/done action');
+                        // Mark reminder as completed
                         if (!actualReminderId.startsWith('test_reminder')) {
-                          await reminderService.snoozeReminder(actualReminderId, minutes: customMinutes);
-                          await notificationService.cancelNotification(actualReminderId);
+                          await reminderService.markAsCompleted(actualReminderId);
                         }
-                      } else {
-                        print('❌ Invalid custom minutes: $customMinutes');
-                      }
-                    } else if (action == 'snooze_5') {
-                      print('⏰ Handling snooze 5 minutes action');
-                      if (!actualReminderId.startsWith('test_reminder')) {
-                        await reminderService.snoozeReminder(actualReminderId, minutes: 5);
-                        await notificationService.cancelNotification(actualReminderId);
-                      }
-                    } else if (action == 'snooze_10') {
-                      print('⏰ Handling snooze 10 minutes action');
-                      if (!actualReminderId.startsWith('test_reminder')) {
-                        await reminderService.snoozeReminder(actualReminderId, minutes: 10);
-                        await notificationService.cancelNotification(actualReminderId);
-                      }
-                    } else if (action == 'snooze_15') {
-                      print('⏰ Handling snooze 15 minutes action');
-                      if (!actualReminderId.startsWith('test_reminder')) {
-                        await reminderService.snoozeReminder(actualReminderId, minutes: 15);
-                        await notificationService.cancelNotification(actualReminderId);
-                        // Dismiss notification on all devices (Done button logic)
-                        // await reminderService.dismissOnAllDevices(actualReminderId);
-                      }
-                    } else if (action == 'snooze' || action == 'snooze_custom') {
+                      } else if (action == 'snooze_input') {
+                        print('⏰ Handling custom snooze input');
+                        print('  - customMinutes value: $customMinutes');
+                        
+                        if (customMinutes != null && customMinutes > 0 && customMinutes <= 59) {
+                          // Valid input (1-59 minutes)
+                          print('✅ Valid input, snoozing for $customMinutes minutes');
+                          if (!actualReminderId.startsWith('test_reminder')) {
+                            await reminderService.snoozeReminder(actualReminderId, minutes: customMinutes);
+                          }
+                        } else {
+                          print('❌ Invalid custom minutes: $customMinutes (must be 1-59)');
+                        }
+                      } else if (action == 'snooze_5') {
+                        print('⏰ Handling 5-minute snooze');
+                        if (!actualReminderId.startsWith('test_reminder')) {
+                          await reminderService.snoozeReminder(actualReminderId, minutes: 5);
+                        }
+                      } else if (action == 'snooze_10') {
+                        print('⏰ Handling 10-minute snooze');
+                        if (!actualReminderId.startsWith('test_reminder')) {
+                          await reminderService.snoozeReminder(actualReminderId, minutes: 10);
+                        }
+                      } else if (action == 'snooze_15') {
+                        print('⏰ Handling 15-minute snooze');
+                        if (!actualReminderId.startsWith('test_reminder')) {
+                          await reminderService.snoozeReminder(actualReminderId, minutes: 15);
+                        }
+                      } else if (action == 'snooze' || action == 'snooze_custom') {
                       print('⏰ Handling custom snooze action - opening snooze screen');
                       // Navigate to snooze screen for custom time
                       final context = navigatorKey.currentContext;
@@ -213,6 +211,18 @@ class MyApp extends StatelessWidget {
                     } else {
                       print('⚠️ Unknown action: $action');
                     }
+                    print('✅ Action handler completed successfully');
+                  } catch (e, stackTrace) {
+                    print('❌ Error in notification action handler:');
+                    print('  - Error: $e');
+                    print('  - Stack trace: $stackTrace');
+                    // Cancel notification even on error to prevent "loading" state
+                    try {
+                      await notificationService.cancelNotification(actualReminderId);
+                    } catch (cancelError) {
+                      print('❌ Failed to cancel notification: $cancelError');
+                    }
+                  }
                   };
                 } catch (e, stackTrace) {
                   print('❌ Error initializing notification service: $e');

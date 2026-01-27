@@ -11,6 +11,16 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+// Top-level function for handling background notification responses
+@pragma('vm:entry-point')
+void notificationTapBackground(NotificationResponse response) {
+  print('🔔 BACKGROUND notification tap received:');
+  print('  - Payload: ${response.payload}');
+  print('  - Action ID: ${response.actionId}');
+  print('  - Input: ${response.input}');
+  print('  - Notification ID: ${response.id}');
+}
+
 // Top-level function for background message handling
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -222,6 +232,7 @@ class NotificationService {
     final initialized = await _localNotifications.initialize(
       initSettings,
       onDidReceiveNotificationResponse: _onNotificationResponse,
+      onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
     );
 
     print('📱 Local notifications initialized: $initialized');
@@ -235,11 +246,20 @@ class NotificationService {
   void _onNotificationResponse(NotificationResponse response) {
     final payload = response.payload;
     final actionId = response.actionId;
+    final input = response.input;
 
     print('📱 Notification response received:');
     print('  - Payload: $payload');
     print('  - Action ID: $actionId');
+    print('  - Input: $input');
     print('  - Notification ID: ${response.id}');
+
+    // CRITICAL: Cancel notification IMMEDIATELY using the notification ID
+    // This prevents the "loading" state on Android RemoteInput
+    print('🔔 Canceling notification immediately (ID: ${response.id})');
+    _localNotifications.cancel(response.id!).then((_) {
+      print('✅ Notification canceled');
+    });
 
     if (payload != null) {
       // If actionId is null, user tapped the notification body (not a button)
@@ -251,7 +271,14 @@ class NotificationService {
       // Handle action button tap (Done/Snooze)
       if (onNotificationAction != null) {
         print('✅ Calling onNotificationAction callback');
-        onNotificationAction!(payload, actionId);
+        
+        // For Android custom snooze input, append the input to reminderId
+        if (actionId == 'snooze_input' && input != null && input.isNotEmpty) {
+          print('⏰ Android custom snooze input: $input');
+          onNotificationAction!('$payload:$input', actionId);
+        } else {
+          onNotificationAction!(payload, actionId);
+        }
       } else {
         print('❌ onNotificationAction callback is null');
       }
@@ -350,17 +377,17 @@ class NotificationService {
           showsUserInterface: true,
           cancelNotification: true,
         ),
-        const AndroidNotificationAction(
-          'snooze_10',
-          '10 min',
-          showsUserInterface: true,
-          cancelNotification: true,
-        ),
-        const AndroidNotificationAction(
-          'snooze_custom',
+        AndroidNotificationAction(
+          'snooze_input',
           'Custom',
           showsUserInterface: true,
           cancelNotification: false,
+          inputs: <AndroidNotificationActionInput>[
+            AndroidNotificationActionInput(
+              label: '1-59 minutes',
+              allowFreeFormInput: true,
+            ),
+          ],
         ),
       ],
     );

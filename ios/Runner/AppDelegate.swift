@@ -57,30 +57,18 @@ import UserNotifications
       options: []
     )
     
-    let snooze10Action = UNNotificationAction(
-      identifier: "snooze_10",
-      title: "Snooze 10 min",
-      options: []
-    )
-    
-    let snooze15Action = UNNotificationAction(
-      identifier: "snooze_15",
-      title: "Snooze 15 min",
-      options: []
-    )
-    
     // Text input action for custom snooze duration
     let snoozeCustomInputAction = UNTextInputNotificationAction(
       identifier: "snooze_input",
-      title: "Custom (min)",
+      title: "Custom",
       options: [],
       textInputButtonTitle: "Snooze",
-      textInputPlaceholder: "Enter minutes (e.g., 22)"
+      textInputPlaceholder: "1-59 minutes"
     )
     
     let reminderCategory = UNNotificationCategory(
       identifier: "reminder_category",
-      actions: [doneAction, snooze5Action, snooze10Action, snoozeCustomInputAction],
+      actions: [doneAction, snooze5Action, snoozeCustomInputAction],
       intentIdentifiers: [],
       options: [.customDismissAction]
     )
