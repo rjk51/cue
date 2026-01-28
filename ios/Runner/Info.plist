@@ -52,5 +52,16 @@
 	</array>
 	<key>FirebaseAppDelegateProxyEnabled</key>
 	<false/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.300393022724-rep9rlge6o94muivh3oeporgqgmpuorg</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>
