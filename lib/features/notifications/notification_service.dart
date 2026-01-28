@@ -288,7 +288,7 @@ class NotificationService {
   }
 
   void _handleForegroundMessage(RemoteMessage message) {
-    print('Foreground message received');
+    print('📨 Foreground message received');
     print('Data: ${message.data}');
     print('Notification: ${message.notification}');
     
@@ -303,25 +303,18 @@ class NotificationService {
       return;
     }
     
-    // Check if this is a reminder notification AND if system didn't already show it
-    // iOS/Android system shows notifications natively with action buttons
-    // We only show manually for data-only messages (when notification field is null)
+    // Check if this is a reminder notification
     if (message.data.containsKey('type') && 
         message.data['type'] == 'reminder_notification') {
       
-      // If message has notification field, system already displayed it
-      if (message.notification != null) {
-        print('⏭️  System already displayed notification, skipping local notification');
-        return;
-      }
-      
-      // Data-only message - show local notification with action buttons
       final reminderId = message.data['reminderId'] ?? '';
-      final title = message.data['title'] ?? 'Reminder';
-      final body = message.data['body'] ?? 'Your reminder is due!';
+      final title = message.notification?.title ?? message.data['title'] ?? 'Reminder';
+      final body = message.notification?.body ?? message.data['body'] ?? 'Your reminder is due!';
       
-      print('📱 Showing local notification with action buttons: $title');
+      print('🔔 Showing foreground notification: $title');
       
+      // CRITICAL: iOS doesn't show notifications when app is in foreground
+      // We MUST manually show them using local notifications
       _showLocalNotificationWithActions(
         id: reminderId.hashCode,
         title: title,
