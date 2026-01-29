@@ -330,10 +330,43 @@ export const scheduleReminderOnCreate = functions.firestore
       return null;
     }
 
-    const reminderTime = reminderData.time.toDate();
+    // For recurring reminders, use nextDueAt if available, otherwise use time
+    // For non-recurring reminders, use time
+    let scheduledTime = reminderData.nextDueAt || reminderData.time;
+    let reminderTime = scheduledTime.toDate();
+
+    // Apply per-date overrides (time changes / skipped occurrences)
+    const overrides = reminderData.overrides || {};
+    const dateKey = reminderTime.toISOString().slice(0, 10); // YYYY-MM-DD (UTC-based)
+    const override = overrides[dateKey];
+    if (override?.skipped === true) {
+      console.log(
+        `⏭️  [scheduleReminderOnCreate] Occurrence ${dateKey} is skipped by override; 
+        no notification`
+      );
+      return null;
+    }
+    if (override?.time) {
+      const timeStr: string = override.time;
+      const [hh, mm] = timeStr.split(":").map((v: string) => parseInt(v, 10));
+      if (!Number.isNaN(hh) && !Number.isNaN(mm)) {
+        const adjusted = new Date(reminderTime.getTime());
+        adjusted.setUTCHours(hh, mm, 0, 0);
+        reminderTime = adjusted;
+        scheduledTime = admin.firestore.Timestamp.fromDate(adjusted);
+        console.log(
+          `🛠️  [scheduleReminderOnCreate] Applied time override for ${dateKey}: ${timeStr}`
+        );
+      }
+    }
     const now = new Date();
     console.log(`⏰ Reminder time: ${reminderTime.toISOString()}`);
     console.log(`⏰ Current time: ${now.toISOString()}`);
+    console.log(
+      `📅 Using ${
+        reminderData.nextDueAt ? "nextDueAt" : "time"
+      } for scheduling`
+    );
 
     // Skip if time is in the past
     if (reminderTime <= now) {
@@ -350,7 +383,7 @@ export const scheduleReminderOnCreate = functions.firestore
     // Create a document in pending_notifications collection
     await db.collection("pending_notifications").doc(reminderId).set({
       reminderId: reminderId,
-      scheduledTime: reminderData.time,
+      scheduledTime: scheduledTime,
       reminderName: reminderData.name || "Reminder",
       reminderDescription: reminderData.description || "Your reminder is due!",
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -641,22 +674,102 @@ export const onReminderUpdated = functions.firestore
         console.error("❌ Error sending snooze dismiss notifications:", error);
       }
     } else {
-      console.log("───────────────────────────────────────────────────────────");
-      console.log(`ℹ️  [onReminderUpdated] No dismiss action needed for ${reminderId}`);
-      console.log("   Reason: Neither completion nor snooze detected");
-      // Log what fields actually changed
-      const changedFields: string[] = [];
-      Object.keys(after).forEach((key) => {
-        const beforeVal = JSON.stringify(before[key]);
-        const afterVal = JSON.stringify(after[key]);
-        if (beforeVal !== afterVal) {
-          changedFields.push(`${key}: ${beforeVal} → ${afterVal}`);
+      // Check if nextDueAt was updated for a recurring reminder
+      const nextDueAtChanged =
+        after.nextDueAt &&
+        after.recurrence &&
+        before.nextDueAt?.toMillis() !== after.nextDueAt?.toMillis();
+
+      const overridesChanged =
+        after.recurrence &&
+        JSON.stringify(before.overrides || {}) !== JSON.stringify(after.overrides || {});
+
+      if ((nextDueAtChanged || overridesChanged) && after.recurrence && !after.isCompleted) {
+        console.log(
+          `🔄 [onReminderUpdated] Next occurrence scheduled for recurring reminder: ${reminderId}`
+        );
+        console.log(
+          `   Next due date: ${after.nextDueAt.toDate().toISOString()}`
+        );
+
+        try {
+          // Schedule notification for the next occurrence
+          let nextDueDate = after.nextDueAt.toDate();
+          let scheduledTime = after.nextDueAt;
+
+          // Apply per-date overrides (time changes / skipped occurrences)
+          const overrides = after.overrides || {};
+          const dateKey = nextDueDate.toISOString().slice(0, 10); // YYYY-MM-DD (UTC-based)
+          const override = overrides[dateKey];
+          if (override?.skipped === true) {
+            console.log(
+              `⏭️  [onReminderUpdated] Occurrence ${dateKey} is skipped by override; 
+              no notification`
+            );
+            return null;
+          }
+          if (override?.time) {
+            const timeStr: string = override.time;
+            const [hh, mm] = timeStr.split(":").map((v: string) => parseInt(v, 10));
+            if (!Number.isNaN(hh) && !Number.isNaN(mm)) {
+              const adjusted = new Date(nextDueDate.getTime());
+              adjusted.setUTCHours(hh, mm, 0, 0);
+              nextDueDate = adjusted;
+              scheduledTime = admin.firestore.Timestamp.fromDate(adjusted);
+              console.log(
+                `🛠️  [onReminderUpdated] Applied time override for ${dateKey}: ${timeStr}`
+              );
+            }
+          }
+          const now = new Date();
+
+          // Only schedule if the next occurrence is in the future
+          if (nextDueDate > now) {
+            await db
+              .collection("pending_notifications")
+              .doc(reminderId)
+              .set({
+                reminderId: reminderId,
+                scheduledTime: scheduledTime,
+                reminderName: after.name || after.title || "Reminder",
+                reminderDescription:
+                  after.description || "Your reminder is due!",
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              });
+            console.log(
+              `✅ Scheduled next occurrence at: ${nextDueDate.toISOString()}`
+            );
+          } else {
+            console.log(
+              "⏭️  Next occurrence is in the past, skipping scheduling"
+            );
+          }
+        } catch (error) {
+          console.error(
+            `❌ Error scheduling next notification for ${reminderId}:`,
+            error
+          );
         }
-      });
-      const changedFieldsStr = changedFields.length > 0 ?
-        changedFields.join(", ") : "none";
-      console.log("   Changed fields:", changedFieldsStr);
-      console.log("───────────────────────────────────────────────────────────");
+      } else {
+        console.log("───────────────────────────────────────────────────────────");
+        console.log(
+          `[onReminderUpdated] No dismiss action needed for ${reminderId}`
+        );
+        console.log("   Reason: Neither completion nor snooze detected");
+        // Log what fields actually changed
+        const changedFields: string[] = [];
+        Object.keys(after).forEach((key) => {
+          const beforeVal = JSON.stringify(before[key]);
+          const afterVal = JSON.stringify(after[key]);
+          if (beforeVal !== afterVal) {
+            changedFields.push(`${key}: ${beforeVal} → ${afterVal}`);
+          }
+        });
+        const changedFieldsStr =
+          changedFields.length > 0 ? changedFields.join(", ") : "none";
+        console.log("   Changed fields:", changedFieldsStr);
+        console.log("───────────────────────────────────────────────────────────");
+      }
     }
 
     console.log("═══════════════════════════════════════════════════════════");

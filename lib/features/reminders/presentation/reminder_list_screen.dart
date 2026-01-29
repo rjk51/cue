@@ -103,12 +103,49 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
   bool _shouldShowRecurringReminderOnDate(Reminder reminder, DateTime selectedDate) {
     if (reminder.recurrence == null) return false;
     
+    final selectedDateStr = '${selectedDate.year.toString().padLeft(4, '0')}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}';
+    
     // Check if the reminder was completed on this specific date
     // If so, it should be shown in the completed section
     if (reminder.consistency != null) {
-      final selectedDateStr = '${selectedDate.year.toString().padLeft(4, '0')}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}';
       if (reminder.consistency!.wasCompletedOnDate(selectedDateStr)) {
         return true; // Always show if it was completed on this date
+      }
+    }
+    
+    // Check if nextDueAt is for this date or a recent missed date
+    // This handles missed occurrences - show them until they're completed or skipped
+    if (reminder.nextDueAt != null) {
+      final nextDueDate = reminder.nextDueAt!;
+      final nextDueDateStr = '${nextDueDate.year.toString().padLeft(4, '0')}-${nextDueDate.month.toString().padLeft(2, '0')}-${nextDueDate.day.toString().padLeft(2, '0')}';
+      
+      // If nextDueAt matches selected date and hasn't been completed/skipped, show it
+      if (nextDueDateStr == selectedDateStr) {
+        final isCompleted = reminder.consistency != null && 
+            reminder.consistency!.wasCompletedOnDate(selectedDateStr);
+        final isSkipped = reminder.isSkippedOnDate(selectedDateStr);
+        
+        if (!isCompleted && !isSkipped) {
+          return true; // Show missed occurrence
+        }
+      }
+      
+      // Also show missed reminders: if nextDueAt is within last 24 hours and we're viewing today
+      final now = DateTime.now();
+      final todayStr = '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      
+      if (selectedDateStr == todayStr) {
+        final hoursDiff = now.difference(nextDueDate).inHours;
+        // Show if nextDueAt was within last 24 hours and hasn't been completed/skipped
+        if (hoursDiff >= 0 && hoursDiff < 24) {
+          final isCompleted = reminder.consistency != null && 
+              reminder.consistency!.wasCompletedOnDate(nextDueDateStr);
+          final isSkipped = reminder.isSkippedOnDate(nextDueDateStr);
+          
+          if (!isCompleted && !isSkipped) {
+            return true; // Show missed reminder on today's list
+          }
+        }
       }
     }
     
@@ -657,10 +694,18 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
     bool isCompleted, {
     bool isPaused = false,
   }) {
-    // Use nextDueAt for recurring reminders, otherwise use time
-    final displayTime = (reminder.recurrence != null && reminder.nextDueAt != null)
-        ? reminder.nextDueAt!
+    // Use override-aware display values for recurring reminders
+    final displayTime = reminder.recurrence != null
+        ? reminder.getEffectiveDisplayTime()
         : reminder.time;
+
+    final dateKey = DateFormat('yyyy-MM-dd').format(displayTime);
+    if (reminder.recurrence != null && reminder.isSkippedOnDate(dateKey)) {
+      return const SizedBox.shrink();
+    }
+    final displayTitle = reminder.recurrence != null
+        ? reminder.getEffectiveDisplayName()
+        : reminder.name;
     
     final timeOnly = DateFormat('hh:mm a').format(displayTime);
     final dateText = DateFormat('MMM d').format(displayTime);
@@ -728,7 +773,7 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    reminder.name,
+                    displayTitle,
                     style: TextStyle(
                       fontSize: 16.sp,
                       fontWeight: FontWeight.w600,

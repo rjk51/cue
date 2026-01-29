@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'recurrence_rule.dart';
 
 /// Consistency tracking data for recurring reminders
 class ConsistencyData {
@@ -65,6 +67,7 @@ class Reminder {
   final int autoSnoozeMaxCount; // maximum number of auto-snoozes
   final int autoSnoozeCount; // current auto-snooze count
   final ConsistencyData? consistency;
+  final Map<String, Map<String, dynamic>>? overrides; // Per-date overrides: { "YYYY-MM-DD": { time, title, skipped, ... } }
 
   Reminder({
     required this.id,
@@ -84,6 +87,7 @@ class Reminder {
     this.autoSnoozeMaxCount = 3, // default 3 times
     this.autoSnoozeCount = 0,
     this.consistency,
+    this.overrides,
   });
 
   // Convert Reminder to Map for Firestore
@@ -108,6 +112,7 @@ class Reminder {
       'autoSnoozeMaxCount': autoSnoozeMaxCount,
       'autoSnoozeCount': autoSnoozeCount,
       if (consistency != null) 'consistency': consistency!.toMap(),
+      if (overrides != null && overrides!.isNotEmpty) 'overrides': overrides,
     };
   }
 
@@ -136,6 +141,16 @@ class Reminder {
       autoSnoozeCount: map['autoSnoozeCount'] ?? 0,
       consistency: map['consistency'] != null
           ? ConsistencyData.fromMap(map['consistency'] as Map<String, dynamic>)
+          : null,
+      overrides: map['overrides'] != null
+          ? Map<String, Map<String, dynamic>>.from(
+              (map['overrides'] as Map).map(
+                (key, value) => MapEntry(
+                  key.toString(),
+                  Map<String, dynamic>.from(value as Map),
+                ),
+              ),
+            )
           : null,
     );
   }
@@ -176,6 +191,7 @@ class Reminder {
     int? autoSnoozeMaxCount,
     int? autoSnoozeCount,
     ConsistencyData? consistency,
+    Map<String, Map<String, dynamic>>? overrides,
   }) {
     return Reminder(
       id: id ?? this.id,
@@ -195,6 +211,7 @@ class Reminder {
       autoSnoozeMaxCount: autoSnoozeMaxCount ?? this.autoSnoozeMaxCount,
       autoSnoozeCount: autoSnoozeCount ?? this.autoSnoozeCount,
       consistency: consistency ?? this.consistency,
+      overrides: overrides ?? this.overrides,
     );
   }
   
@@ -214,5 +231,120 @@ class Reminder {
       return 0.0;
     }
     return consistency!.percentage;
+  }
+  
+  /// Get override for a specific date (YYYY-MM-DD format)
+  Map<String, dynamic>? getOverrideForDate(String date) {
+    return overrides?[date];
+  }
+
+  /// Check if a specific date is skipped
+  bool isSkippedOnDate(String date) {
+    final override = getOverrideForDate(date);
+    return override?['skipped'] == true;
+  }
+
+  /// Get effective time for a specific date (considering overrides)
+  DateTime? getEffectiveTimeForDate(String date) {
+    final override = getOverrideForDate(date);
+    if (override != null && override['time'] != null) {
+      // Parse time string (HH:mm format) and combine with date
+      final timeStr = override['time'] as String;
+      final parts = timeStr.split(':');
+      final hour = int.tryParse(parts[0]) ?? 9;
+      final minute = int.tryParse(parts[1]) ?? 0;
+      final dateParts = date.split('-');
+      return DateTime(
+        int.parse(dateParts[0]),
+        int.parse(dateParts[1]),
+        int.parse(dateParts[2]),
+        hour,
+        minute,
+      );
+    }
+    return null;
+  }
+
+  /// Get effective title for a specific date (considering overrides)
+  String? getEffectiveTitleForDate(String date) {
+    final override = getOverrideForDate(date);
+    return override?['title'] as String?;
+  }
+
+  /// Get effective display time for the current occurrence (considering overrides)
+  /// Returns the time that should be displayed, which may be overridden
+  DateTime getEffectiveDisplayTime() {
+    final nextDue = effectiveNextDueAt;
+    final dateStr = DateFormat('yyyy-MM-dd').format(nextDue);
+    final override = getOverrideForDate(dateStr);
+    
+    // If there's a time override, use it
+    if (override != null && override['time'] != null) {
+      final timeStr = override['time'] as String;
+      final parts = timeStr.split(':');
+      final hour = int.tryParse(parts[0]) ?? nextDue.hour;
+      final minute = int.tryParse(parts[1]) ?? nextDue.minute;
+      return DateTime(nextDue.year, nextDue.month, nextDue.day, hour, minute);
+    }
+    
+    return nextDue;
+  }
+
+  /// Get effective display name for the current occurrence (considering overrides)
+  String getEffectiveDisplayName() {
+    final nextDue = effectiveNextDueAt;
+    final dateStr = DateFormat('yyyy-MM-dd').format(nextDue);
+    final overrideTitle = getEffectiveTitleForDate(dateStr);
+    return overrideTitle ?? name;
+  }
+
+  /// Get the effective next due date for this reminder.
+  /// For recurring reminders:
+  /// - If nextDueAt hasn't been completed today, return it (even if in the past) to show missed occurrences
+  /// - If nextDueAt has been completed or is in the future, return it
+  /// - Otherwise, calculate the next occurrence
+  /// For non-recurring reminders, returns the original time.
+  DateTime get effectiveNextDueAt {
+    if (recurrence == null) {
+      // Non-recurring reminder - just return the original time
+      return time;
+    }
+    
+    final now = DateTime.now();
+    
+    // If nextDueAt exists and hasn't been completed today, show it (even if in the past)
+    // This ensures missed occurrences are displayed until they're handled
+    if (nextDueAt != null) {
+      final nextDueDate = nextDueAt!;
+      final nextDueDateStr = DateFormat('yyyy-MM-dd').format(nextDueDate);
+      
+      // Check if this occurrence has been completed today
+      final isCompletedToday = consistency != null && 
+          consistency!.wasCompletedOnDate(nextDueDateStr);
+      
+      // Check if this occurrence is skipped
+      final isSkipped = isSkippedOnDate(nextDueDateStr);
+      
+      // If not completed and not skipped, show it (even if in the past)
+      // This allows users to see and complete missed occurrences
+      if (!isCompletedToday && !isSkipped) {
+        return nextDueDate;
+      }
+      
+      // If completed or skipped, and it's still in the future, return it
+      if (nextDueDate.isAfter(now)) {
+        return nextDueDate;
+      }
+    }
+    
+    // nextDueAt is null, completed, or skipped and in the past - calculate the next occurrence
+    try {
+      final rule = RecurrenceRule.fromBackendConfig(recurrence!);
+      final nextOccurrence = rule.nextOccurrence(from: now);
+      return nextOccurrence ?? time; // Fallback to original time if calculation fails
+    } catch (e) {
+      print('Error calculating next occurrence: $e');
+      return nextDueAt ?? time; // Fallback to nextDueAt or original time
+    }
   }
 }

@@ -136,8 +136,11 @@ class _CurrentCueCardState extends State<CurrentCueCard>
 
   @override
   Widget build(BuildContext context) {
-    final timeText = widget.getTimeDisplayText(widget.reminder.time);
-    final formattedTime = DateFormat('hh:mm a').format(widget.reminder.time);
+    // Use effective display time to respect per-day overrides
+    final displayTime = widget.reminder.getEffectiveDisplayTime();
+    final timeText = widget.getTimeDisplayText(displayTime);
+    final formattedTime = DateFormat('hh:mm a').format(displayTime);
+    final displayTitle = widget.reminder.getEffectiveDisplayName();
 
     return GestureDetector(
       onTap: () {
@@ -192,7 +195,7 @@ class _CurrentCueCardState extends State<CurrentCueCard>
 
             // Reminder title
             Text(
-              widget.reminder.name,
+              displayTitle,
               style: TextStyle(
                 fontSize: 46.sp,
                 fontWeight: FontWeight.w700,

@@ -55,6 +55,11 @@ interface Reminder {
   updatedAt: admin.firestore.Timestamp;
   version: number;
   consistency?: ConsistencyData;
+  overrides?: Record<string, {
+    time?: string; // HH:mm format
+    title?: string;
+    skipped?: boolean;
+  }>;
 }
 
 // ============================================================================
@@ -180,6 +185,17 @@ function shouldMarkAsMissed(reminder: Reminder): boolean {
 
   // Check if this day has already been evaluated
   if (isDayAlreadyEvaluated(reminder.consistency, scheduledDay)) {
+    return false;
+  }
+
+  // Check if this day has a skipped override - if so, don't mark as missed
+  // Skipped days are intentionally ignored and shouldn't count against consistency
+  const overrides = reminder.overrides || {};
+  const override = overrides[scheduledDay];
+  if (override?.skipped === true) {
+    console.log(
+      `⏭️  Day ${scheduledDay} has skipped override - not marking as missed`
+    );
     return false;
   }
 
@@ -652,27 +668,37 @@ export const completeReminder = functions.https.onCall(
 
           // If completing on the same calendar day as scheduled
           if (completionDay === scheduledDay) {
-            // Check if not already evaluated
-            const alreadyEvaluated = isDayAlreadyEvaluated(
-              reminder.consistency,
-              scheduledDay
-            );
-            console.log("Already evaluated:", alreadyEvaluated);
-
-            if (!alreadyEvaluated) {
+            // Check if this day has a skipped override - if so, don't mark as completed
+            // (This is defensive - skipped days shouldn't show up, but just in case)
+            const overrides = reminder.overrides || {};
+            const override = overrides[scheduledDay];
+            if (override?.skipped === true) {
               console.log(
-                `Marking scheduled day ${scheduledDay} as COMPLETED`
+                `⏭️  Day ${scheduledDay} has skipped override - not marking as completed`
               );
-              const updatedConsistency = markDayCompleted(
+            } else {
+              // Check if not already evaluated
+              const alreadyEvaluated = isDayAlreadyEvaluated(
                 reminder.consistency,
                 scheduledDay
               );
-              console.log("Updated consistency:", JSON.stringify(updatedConsistency));
-              reminder.consistency = updatedConsistency;
-            } else {
-              console.log(
-                `Day ${scheduledDay} already evaluated, skipping consistency update`
-              );
+              console.log("Already evaluated:", alreadyEvaluated);
+
+              if (!alreadyEvaluated) {
+                console.log(
+                  `Marking scheduled day ${scheduledDay} as COMPLETED`
+                );
+                const updatedConsistency = markDayCompleted(
+                  reminder.consistency,
+                  scheduledDay
+                );
+                console.log("Updated consistency:", JSON.stringify(updatedConsistency));
+                reminder.consistency = updatedConsistency;
+              } else {
+                console.log(
+                  `Day ${scheduledDay} already evaluated, skipping consistency update`
+                );
+              }
             }
           } else {
             console.log(

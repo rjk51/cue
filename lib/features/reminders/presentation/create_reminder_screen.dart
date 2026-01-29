@@ -11,6 +11,7 @@ import '../../notifications/notification_service.dart';
 import '../../../services/theme_service.dart';
 import '../../../services/theme_notifier.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
+import '../../../shared/widgets/edit_recurring_dialog.dart';
 import 'widgets/icon_picker_sheet.dart';
 import 'widgets/sticky_save_button.dart';
 
@@ -94,10 +95,16 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
   void _initializeEditMode() {
     final reminder = widget.reminderToEdit!;
     
+    // For recurring reminders, use effectiveNextDueAt to get the current occurrence
+    // For non-recurring, use the original time
+    final displayTime = reminder.recurrence != null 
+        ? reminder.effectiveNextDueAt 
+        : reminder.time;
+    
     // Set initial values
     _initialName = reminder.name;
-    _initialDate = reminder.time;
-    _initialTime = TimeOfDay.fromDateTime(reminder.time);
+    _initialDate = displayTime;
+    _initialTime = TimeOfDay.fromDateTime(displayTime);
     _initialIcon = reminder.icon;
     _initialColor = reminder.color;
     _initialAutoSnoozeEnabled = reminder.autoSnoozeEnabled;
@@ -106,8 +113,8 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
     
     // Pre-fill fields
     _reminderController.text = reminder.name;
-    _selectedDate = DateTime(reminder.time.year, reminder.time.month, reminder.time.day);
-    _selectedTime = TimeOfDay.fromDateTime(reminder.time);
+    _selectedDate = DateTime(displayTime.year, displayTime.month, displayTime.day);
+    _selectedTime = TimeOfDay.fromDateTime(displayTime);
     _selectedIcon = reminder.icon;
     _selectedColor = reminder.color;
     _autoSnoozeEnabled = reminder.autoSnoozeEnabled;
@@ -665,10 +672,30 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
 
     try {
       if (widget.reminderToEdit != null) {
-        // Edit mode - update existing reminder
+        // Edit mode - check if it's a recurring reminder
+        final isRecurring = widget.reminderToEdit!.recurrence != null;
+        
+        EditRecurringOption? editOption;
+        if (isRecurring) {
+          // Show dialog to ask user how to apply changes
+          editOption = await EditRecurringDialog.show(
+            context: context,
+            reminderName: reminderText,
+            accentColor: _accentColor,
+            isDarkMode: _isDarkMode,
+          );
+          
+          // User cancelled the dialog
+          if (editOption == null) {
+            setState(() {
+              _isSaving = false;
+            });
+            return;
+          }
+        }
+        
+        // Prepare updates
         final updates = <String, dynamic>{
-          'name': reminderText,
-          'time': Timestamp.fromDate(finalScheduledTime),
           'iconCodePoint': _selectedIcon.codePoint,
           'colorValue': _selectedColor.value,
           'autoSnoozeEnabled': _autoSnoozeEnabled,
@@ -676,19 +703,47 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
           'autoSnoozeMaxCount': _autoSnoozeMaxCount,
         };
         
-        if (recurrenceRule != null) {
-          updates['recurrence'] = recurrenceRule.toBackendConfig();
-          updates['nextDueAt'] = Timestamp.fromDate(finalScheduledTime);
+        if (isRecurring && editOption == EditRecurringOption.thisOccurrenceOnly) {
+          // Create override for this occurrence only
+          final occurrenceDate = DateFormat('yyyy-MM-dd').format(scheduledDateTime);
+          final timeStr = '${_selectedTime.hour.toString().padLeft(2, '0')}:${_selectedTime.minute.toString().padLeft(2, '0')}';
+          
+          // Get existing overrides or create new map
+          final existingOverrides = widget.reminderToEdit!.overrides ?? {};
+          final newOverrides = Map<String, Map<String, dynamic>>.from(existingOverrides);
+          
+          // Create or update override for this date
+          newOverrides[occurrenceDate] = {
+            'time': timeStr,
+            if (reminderText != widget.reminderToEdit!.name) 'title': reminderText,
+          };
+          
+          updates['overrides'] = newOverrides;
+          
+          // Don't update base fields (name, recurrence, etc.) for single occurrence
         } else {
-          updates['recurrence'] = null;
-          updates['nextDueAt'] = null;
+          // Update the entire series (or non-recurring reminder)
+          updates['name'] = reminderText;
+          updates['time'] = Timestamp.fromDate(finalScheduledTime);
+          
+          if (recurrenceRule != null) {
+            updates['recurrence'] = recurrenceRule.toBackendConfig();
+            updates['nextDueAt'] = Timestamp.fromDate(finalScheduledTime);
+          } else {
+            updates['recurrence'] = null;
+            updates['nextDueAt'] = null;
+          }
         }
         
         await _reminderService.updateReminder(widget.reminderToEdit!.id, updates);
         
         if (mounted) {
           Navigator.pop(context, true); // Return true to indicate update
-          context.showSuccessSnackbar('Reminder updated successfully!');
+          context.showSuccessSnackbar(
+            isRecurring && editOption == EditRecurringOption.thisOccurrenceOnly
+              ? 'Reminder occurrence updated!'
+              : 'Reminder updated successfully!'
+          );
         }
       } else {
         // Create mode - add new reminder
