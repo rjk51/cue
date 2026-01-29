@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
 import 'package:flex_color_picker/flex_color_picker.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../domain/recurrence_rule.dart';
 import '../domain/reminder_model.dart';
@@ -11,9 +12,15 @@ import '../../../services/theme_service.dart';
 import '../../../services/theme_notifier.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
 import 'widgets/icon_picker_sheet.dart';
+import 'widgets/sticky_save_button.dart';
 
 class NewReminderScreen extends StatefulWidget {
-  const NewReminderScreen({super.key});
+  final Reminder? reminderToEdit;
+  
+  const NewReminderScreen({
+    super.key,
+    this.reminderToEdit,
+  });
 
   @override
   State<NewReminderScreen> createState() => _NewReminderScreenState();
@@ -51,13 +58,166 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
 
   // Map day indices to abbreviated names
   final List<String> _dayAbbreviations = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  
+  // Track initial values to detect changes
+  String _initialName = '';
+  DateTime? _initialDate;
+  TimeOfDay? _initialTime;
+  bool _initialRepeatEnabled = false;
+  RecurrenceFrequency? _initialFrequency;
+  Set<int> _initialDays = {};
+  DateTime? _initialEndDate;
+  bool _initialEndDateEnabled = false;
+  IconData? _initialIcon;
+  Color? _initialColor;
+  bool _initialAutoSnoozeEnabled = false;
+  int? _initialAutoSnoozeInterval;
+  int? _initialAutoSnoozeMaxCount;
 
   @override
   void initState() {
     super.initState();
-    _selectedDays = {_selectedDate.weekday};
     _loadThemeSettings();
     ThemeNotifier.instance.addListener(_onThemeChanged);
+    _reminderController.addListener(() {
+      if (mounted) setState(() {});
+    });
+    
+    // If editing, pre-fill fields
+    if (widget.reminderToEdit != null) {
+      _initializeEditMode();
+    } else {
+      _selectedDays = {_selectedDate.weekday};
+    }
+  }
+  
+  void _initializeEditMode() {
+    final reminder = widget.reminderToEdit!;
+    
+    // Set initial values
+    _initialName = reminder.name;
+    _initialDate = reminder.time;
+    _initialTime = TimeOfDay.fromDateTime(reminder.time);
+    _initialIcon = reminder.icon;
+    _initialColor = reminder.color;
+    _initialAutoSnoozeEnabled = reminder.autoSnoozeEnabled;
+    _initialAutoSnoozeInterval = reminder.autoSnoozeInterval;
+    _initialAutoSnoozeMaxCount = reminder.autoSnoozeMaxCount;
+    
+    // Pre-fill fields
+    _reminderController.text = reminder.name;
+    _selectedDate = DateTime(reminder.time.year, reminder.time.month, reminder.time.day);
+    _selectedTime = TimeOfDay.fromDateTime(reminder.time);
+    _selectedIcon = reminder.icon;
+    _selectedColor = reminder.color;
+    _autoSnoozeEnabled = reminder.autoSnoozeEnabled;
+    _autoSnoozeInterval = reminder.autoSnoozeInterval;
+    _autoSnoozeMaxCount = reminder.autoSnoozeMaxCount;
+    
+    // Handle recurrence
+    if (reminder.recurrence != null) {
+      _initialRepeatEnabled = true;
+      _repeatEnabled = true;
+      
+      final recurrence = reminder.recurrence!;
+      final frequency = recurrence['frequency'] as String?;
+      
+      if (frequency == 'daily') {
+        _selectedFrequency = RecurrenceFrequency.daily;
+        _initialFrequency = RecurrenceFrequency.daily;
+      } else if (frequency == 'weekly') {
+        _selectedFrequency = RecurrenceFrequency.weekly;
+        _initialFrequency = RecurrenceFrequency.weekly;
+        final days = recurrence['days'] as List<dynamic>?;
+        if (days != null) {
+          _selectedDays = days.map((d) => d as int).toSet();
+          _initialDays = Set.from(_selectedDays);
+        }
+      } else if (frequency == 'monthly') {
+        _selectedFrequency = RecurrenceFrequency.monthly;
+        _initialFrequency = RecurrenceFrequency.monthly;
+      } else if (frequency == 'yearly') {
+        _selectedFrequency = RecurrenceFrequency.yearly;
+        _initialFrequency = RecurrenceFrequency.yearly;
+      }
+      
+      // Handle end date
+      if (recurrence['endDate'] != null) {
+        Timestamp? endDateTimestamp;
+        if (recurrence['endDate'] is Timestamp) {
+          endDateTimestamp = recurrence['endDate'] as Timestamp;
+        } else if (recurrence['endDate'] is Map) {
+          // Handle case where it's stored as a map
+          final endDateMap = recurrence['endDate'] as Map<String, dynamic>;
+          endDateTimestamp = Timestamp(endDateMap['_seconds'] as int, endDateMap['_nanoseconds'] as int);
+        }
+        if (endDateTimestamp != null) {
+          _endDate = endDateTimestamp.toDate();
+          _endDateEnabled = true;
+          _initialEndDate = _endDate;
+          _initialEndDateEnabled = true;
+        }
+      }
+    } else {
+      _initialRepeatEnabled = false;
+      _selectedDays = {_selectedDate.weekday};
+    }
+    
+    // Store initial values
+    _initialName = reminder.name;
+    _initialDate = _selectedDate;
+    _initialTime = _selectedTime;
+  }
+  
+  bool _hasChanges() {
+    if (widget.reminderToEdit == null) return true; // Always show for new reminders
+    
+    // Check name
+    if (_reminderController.text.trim() != _initialName) return true;
+    
+    // Check date
+    if (_selectedDate.year != _initialDate?.year ||
+        _selectedDate.month != _initialDate?.month ||
+        _selectedDate.day != _initialDate?.day) return true;
+    
+    // Check time
+    if (_selectedTime.hour != _initialTime?.hour ||
+        _selectedTime.minute != _initialTime?.minute) return true;
+    
+    // Check repeat enabled
+    if (_repeatEnabled != _initialRepeatEnabled) return true;
+    
+    // Check frequency
+    if (_repeatEnabled && _selectedFrequency != _initialFrequency) return true;
+    
+    // Check days
+    if (_repeatEnabled && _selectedFrequency == RecurrenceFrequency.weekly) {
+      if (_selectedDays.length != _initialDays.length ||
+          !_selectedDays.every((d) => _initialDays.contains(d))) return true;
+    }
+    
+    // Check end date enabled
+    if (_repeatEnabled && _endDateEnabled != _initialEndDateEnabled) return true;
+    
+    // Check end date
+    if (_repeatEnabled && _endDateEnabled) {
+      if (_endDate?.year != _initialEndDate?.year ||
+          _endDate?.month != _initialEndDate?.month ||
+          _endDate?.day != _initialEndDate?.day) return true;
+    }
+    
+    // Check icon
+    if (_selectedIcon.codePoint != _initialIcon?.codePoint) return true;
+    
+    // Check color
+    if (_selectedColor.value != _initialColor?.value) return true;
+    
+    // Check auto-snooze
+    if (_autoSnoozeEnabled != _initialAutoSnoozeEnabled) return true;
+    if (_autoSnoozeInterval != _initialAutoSnoozeInterval) return true;
+    if (_autoSnoozeMaxCount != _initialAutoSnoozeMaxCount) return true;
+    
+    return false;
   }
 
   @override
@@ -82,7 +242,11 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
     if (mounted) {
       setState(() {
         _accentColor = accentColor;
-        _selectedColor = accentColor;
+        // Only default the reminder color to accent when creating.
+        // In edit mode, keep the reminder's existing chosen color.
+        if (widget.reminderToEdit == null) {
+          _selectedColor = accentColor;
+        }
         if (themePreference == 'system') {
           _isDarkMode =
               WidgetsBinding.instance.platformDispatcher.platformBrightness ==
@@ -92,6 +256,41 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
         }
       });
     }
+  }
+
+  void _resetToInitial() {
+    if (widget.reminderToEdit == null) return;
+
+    FocusScope.of(context).unfocus();
+
+    setState(() {
+      _reminderController.text = _initialName;
+
+      final d = _initialDate ?? DateTime.now();
+      _selectedDate = DateTime(d.year, d.month, d.day);
+      _selectedTime = _initialTime ?? TimeOfDay.fromDateTime(DateTime.now());
+
+      _repeatEnabled = _initialRepeatEnabled;
+      _selectedFrequency = _initialFrequency ?? _selectedFrequency;
+      _selectedDays = Set<int>.from(_initialDays);
+      _endDateEnabled = _initialEndDateEnabled;
+      _endDate = _initialEndDate;
+
+      _selectedIcon = _initialIcon ?? _selectedIcon;
+      _selectedColor = _initialColor ?? _selectedColor;
+
+      _autoSnoozeEnabled = _initialAutoSnoozeEnabled;
+      _autoSnoozeInterval = _initialAutoSnoozeInterval ?? _autoSnoozeInterval;
+      _autoSnoozeMaxCount = _initialAutoSnoozeMaxCount ?? _autoSnoozeMaxCount;
+
+      // Ensure days are sane if repeat is off
+      if (!_repeatEnabled) {
+        _selectedDays = {_selectedDate.weekday};
+      } else if (_selectedFrequency == RecurrenceFrequency.weekly &&
+          _selectedDays.isEmpty) {
+        _selectedDays = {_selectedDate.weekday};
+      }
+    });
   }
 
   Future<void> _selectDate() async {
@@ -465,38 +664,71 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
     });
 
     try {
-      final reminder = Reminder(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        name: reminderText,
-        time: finalScheduledTime,
-        nextDueAt: recurrenceRule != null ? finalScheduledTime : null,
-        recurrence: recurrenceRule?.toBackendConfig(),
-        isCompleted: false,
-        deviceToken: _notificationService.fcmToken,
-        userId: 'demo_user',
-        iconCodePoint: _selectedIcon.codePoint,
-        colorValue: _selectedColor.value,
-        autoSnoozeEnabled: _autoSnoozeEnabled,
-        autoSnoozeInterval: _autoSnoozeInterval,
-        autoSnoozeMaxCount: _autoSnoozeMaxCount,
-        autoSnoozeCount: 0,
-      );
+      if (widget.reminderToEdit != null) {
+        // Edit mode - update existing reminder
+        final updates = <String, dynamic>{
+          'name': reminderText,
+          'time': Timestamp.fromDate(finalScheduledTime),
+          'iconCodePoint': _selectedIcon.codePoint,
+          'colorValue': _selectedColor.value,
+          'autoSnoozeEnabled': _autoSnoozeEnabled,
+          'autoSnoozeInterval': _autoSnoozeInterval,
+          'autoSnoozeMaxCount': _autoSnoozeMaxCount,
+        };
+        
+        if (recurrenceRule != null) {
+          updates['recurrence'] = recurrenceRule.toBackendConfig();
+          updates['nextDueAt'] = Timestamp.fromDate(finalScheduledTime);
+        } else {
+          updates['recurrence'] = null;
+          updates['nextDueAt'] = null;
+        }
+        
+        await _reminderService.updateReminder(widget.reminderToEdit!.id, updates);
+        
+        if (mounted) {
+          Navigator.pop(context, true); // Return true to indicate update
+          context.showSuccessSnackbar('Reminder updated successfully!');
+        }
+      } else {
+        // Create mode - add new reminder
+        final reminder = Reminder(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          name: reminderText,
+          time: finalScheduledTime,
+          nextDueAt: recurrenceRule != null ? finalScheduledTime : null,
+          recurrence: recurrenceRule?.toBackendConfig(),
+          isCompleted: false,
+          deviceToken: _notificationService.fcmToken,
+          userId: 'demo_user',
+          iconCodePoint: _selectedIcon.codePoint,
+          colorValue: _selectedColor.value,
+          autoSnoozeEnabled: _autoSnoozeEnabled,
+          autoSnoozeInterval: _autoSnoozeInterval,
+          autoSnoozeMaxCount: _autoSnoozeMaxCount,
+          autoSnoozeCount: 0,
+        );
 
-      final reminderId = await _reminderService.addReminder(
-        reminder,
-        _notificationService.fcmToken,
-      );
+        final reminderId = await _reminderService.addReminder(
+          reminder,
+          _notificationService.fcmToken,
+        );
 
-      final savedReminder = reminder.copyWith(id: reminderId);
-      await _notificationService.scheduleReminderNotification(savedReminder);
+        final savedReminder = reminder.copyWith(id: reminderId);
+        await _notificationService.scheduleReminderNotification(savedReminder);
 
-      if (mounted) {
-        Navigator.pop(context, savedReminder);
-        context.showSuccessSnackbar('Reminder created successfully!');
+        if (mounted) {
+          Navigator.pop(context, savedReminder);
+          context.showSuccessSnackbar('Reminder created successfully!');
+        }
       }
     } catch (e) {
       if (mounted) {
-        context.showErrorSnackbar('Error creating reminder: $e');
+        context.showErrorSnackbar(
+          widget.reminderToEdit != null 
+            ? 'Error updating reminder: $e'
+            : 'Error creating reminder: $e'
+        );
       }
     } finally {
       if (mounted) {
@@ -542,42 +774,23 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
         ),
         centerTitle: true,
         title: Text(
-          'New Reminder',
+          widget.reminderToEdit != null ? 'Edit Reminder' : 'New Reminder',
           style: TextStyle(
             color: textColor,
             fontSize: 18.sp,
             fontWeight: FontWeight.w600,
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: _isSaving ? null : _saveReminder,
-            child: _isSaving
-                ? SizedBox(
-                    width: 20.w,
-                    height: 20.h,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: _accentColor,
-                    ),
-                  )
-                : Text(
-                    'Save',
-                    style: TextStyle(
-                      color: _accentColor,
-                      fontSize: 16.sp,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-          ),
-        ],
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: EdgeInsets.all(20.r),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: EdgeInsets.all(20.r),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
               // Dynamic Summary Text
               RichText(
                 text: TextSpan(
@@ -620,7 +833,9 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
                           border: InputBorder.none,
                           contentPadding: EdgeInsets.zero,
                         ),
-                        onChanged: (_) => setState(() {}),
+                        onChanged: (_) {
+                          setState(() {}); // Trigger rebuild to check for changes
+                        },
                       ),
                     ),
 
@@ -1205,10 +1420,22 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
                 ),
               ],
 
-              SizedBox(height: 32.h),
-            ],
+                    SizedBox(height: 32.h),
+                  ],
+                ),
+              ),
+            ),
           ),
-        ),
+          if (widget.reminderToEdit == null || _hasChanges())
+            StickySaveButton(
+              onPressed: _saveReminder,
+              onCancel: widget.reminderToEdit != null ? _resetToInitial : null,
+              showCancel: widget.reminderToEdit != null,
+              isLoading: _isSaving,
+              accentColor: _accentColor,
+              isDarkMode: _isDarkMode,
+            ),
+        ],
       ),
     );
   }

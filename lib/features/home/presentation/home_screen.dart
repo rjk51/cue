@@ -6,6 +6,7 @@ import '../../reminders/domain/reminder_model.dart';
 import '../../reminders/data/reminder_service.dart';
 import '../../reminders/presentation/create_reminder_screen.dart';
 import '../../reminders/presentation/reminder_list_screen.dart';
+import '../../reminders/presentation/reminder_details_screen.dart';
 import '../../../services/theme_service.dart';
 import '../../../services/theme_notifier.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
@@ -596,25 +597,36 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final timeOnly = DateFormat('hh:mm').format(reminder.time);
     final amPm = DateFormat('a').format(reminder.time);
 
-    return Container(
-      width: 180.w,
-      padding: EdgeInsets.all(20.r),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(20.r),
-        border: Border.all(
-          color: reminder.color.withOpacity(0.2),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(_isDarkMode ? 0.2 : 0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ReminderDetailsScreen(
+              reminder: reminder,
+            ),
           ),
-        ],
-      ),
-      child: Column(
+        );
+      },
+      child: Container(
+        width: 180.w,
+        padding: EdgeInsets.all(20.r),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(20.r),
+          border: Border.all(
+            color: reminder.color.withOpacity(0.2),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(_isDarkMode ? 0.2 : 0.05),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -682,6 +694,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ],
           ),
         ],
+        ),
       ),
     );
   }

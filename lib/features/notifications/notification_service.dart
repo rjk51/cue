@@ -183,11 +183,23 @@ class NotificationService {
         
         if (action != null && reminderId != null && onNotificationAction != null) {
           print('✅ Processing iOS action: $action for reminder: $reminderId');
-          
-          // For custom snooze input, append the user input to reminderId
-          if (action == 'snooze_input' && userInput != null) {
-            print('⏰ Custom snooze input: $userInput');
-            onNotificationAction!('$reminderId:$userInput', action);
+
+          // For custom snooze input, validate numeric range 1–59
+          if (action == 'snooze_input') {
+            final inputStr = (userInput ?? '').trim();
+            final minutes = int.tryParse(inputStr);
+
+            if (minutes == null) {
+              print('❌ Invalid custom snooze input on iOS (not a number): "$inputStr"');
+              return;
+            }
+            if (minutes < 1 || minutes > 59) {
+              print('❌ Invalid custom snooze input on iOS (out of range 1-59): $minutes');
+              return;
+            }
+
+            print('⏰ Custom snooze input (validated) on iOS: $minutes minutes');
+            onNotificationAction!('$reminderId:$minutes', action);
           } else {
             onNotificationAction!(reminderId, action);
           }
@@ -272,10 +284,22 @@ class NotificationService {
       if (onNotificationAction != null) {
         print('✅ Calling onNotificationAction callback');
         
-        // For Android custom snooze input, append the input to reminderId
-        if (actionId == 'snooze_input' && input != null && input.isNotEmpty) {
-          print('⏰ Android custom snooze input: $input');
-          onNotificationAction!('$payload:$input', actionId);
+        // For Android custom snooze input, validate numeric range 1–59
+        if (actionId == 'snooze_input') {
+          final inputStr = (input ?? '').trim();
+          final minutes = int.tryParse(inputStr);
+
+          if (minutes == null) {
+            print('❌ Invalid custom snooze input on Android (not a number): "$inputStr"');
+            return;
+          }
+          if (minutes < 1 || minutes > 59) {
+            print('❌ Invalid custom snooze input on Android (out of range 1-59): $minutes');
+            return;
+          }
+
+          print('⏰ Android custom snooze input (validated): $minutes minutes');
+          onNotificationAction!('$payload:$minutes', actionId);
         } else {
           onNotificationAction!(payload, actionId);
         }

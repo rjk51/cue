@@ -4,6 +4,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
 import '../../reminders/domain/reminder_model.dart';
 import '../../reminders/data/reminder_service.dart';
+import '../../reminders/presentation/reminder_details_screen.dart';
 import '../../../services/theme_service.dart';
 
 class ReminderListScreen extends StatefulWidget {
@@ -667,7 +668,14 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
 
     return GestureDetector(
       onTap: () {
-        // TODO: Navigate to reminder details/edit screen
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ReminderDetailsScreen(
+              reminder: reminder,
+            ),
+          ),
+        );
       },
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 16.h),
