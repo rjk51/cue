@@ -234,4 +234,55 @@ class RecurrenceRule {
     final clampedDay = day > lastDay ? lastDay : day;
     return DateTime(base.year, base.month, clampedDay, timeOfDay.hour, timeOfDay.minute);
   }
+
+  /// Parse a backend recurrence config back into a RecurrenceRule
+  factory RecurrenceRule.fromBackendConfig(Map<String, dynamic> config) {
+    final frequencyStr = config['frequency'] as String?;
+    final startDateTimestamp = config['startDate'] as Timestamp?;
+    final endDateTimestamp = config['endDate'] as Timestamp?;
+    final timeStr = config['time'] as String? ?? '09:00';
+    
+    // Parse time string (HH:mm format)
+    final timeParts = timeStr.split(':');
+    final hour = int.tryParse(timeParts[0]) ?? 9;
+    final minute = int.tryParse(timeParts[1]) ?? 0;
+    final timeOfDay = TimeOfDay(hour: hour, minute: minute);
+    
+    final startDate = startDateTimestamp?.toDate() ?? DateTime.now();
+    final endDate = endDateTimestamp?.toDate();
+    
+    RecurrenceFrequency frequency;
+    Set<int> selectedDays = {};
+    
+    if (frequencyStr == 'daily') {
+      frequency = RecurrenceFrequency.daily;
+      selectedDays = {startDate.weekday};
+    } else if (frequencyStr == 'weekly') {
+      frequency = RecurrenceFrequency.weekly;
+      final days = config['days'] as List<dynamic>?;
+      if (days != null) {
+        selectedDays = days.map((d) => d as int).toSet();
+      } else {
+        selectedDays = {startDate.weekday};
+      }
+    } else if (frequencyStr == 'monthly') {
+      frequency = RecurrenceFrequency.monthly;
+      selectedDays = {startDate.weekday};
+    } else if (frequencyStr == 'yearly') {
+      frequency = RecurrenceFrequency.yearly;
+      selectedDays = {startDate.weekday};
+    } else {
+      // Default to daily if unknown
+      frequency = RecurrenceFrequency.daily;
+      selectedDays = {startDate.weekday};
+    }
+    
+    return RecurrenceRule(
+      frequency: frequency,
+      selectedWeekDays: selectedDays,
+      timeOfDay: timeOfDay,
+      startDate: startDate,
+      endDate: endDate,
+    );
+  }
 }

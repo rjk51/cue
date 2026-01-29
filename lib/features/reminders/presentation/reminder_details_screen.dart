@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../domain/reminder_model.dart';
 import '../data/reminder_service.dart';
 import '../../../services/theme_service.dart';
 import '../../../services/theme_notifier.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
 import '../../../shared/widgets/confirmation_dialog.dart';
+import '../../../shared/widgets/delete_recurring_dialog.dart';
 import '../../snooze/presentation/snooze_screen.dart';
 import 'create_reminder_screen.dart';
 
@@ -147,10 +149,64 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
   }
 
   Future<void> _handleDelete() async {
+    // For recurring reminders, show dialog to choose between skipping occurrence or deleting series
+    if (widget.reminder.recurrence != null) {
+      final deleteOption = await DeleteRecurringDialog.show(
+        context: context,
+        reminderName: widget.reminder.name,
+        accentColor: _accentColor,
+        isDarkMode: _isDarkMode,
+      );
+
+      // User cancelled the dialog
+      if (deleteOption == null) {
+        return;
+      }
+
+      if (deleteOption == DeleteRecurringOption.thisOccurrenceOnly) {
+        // Skip this occurrence by creating a skipped override
+        try {
+          final occurrenceDate = widget.reminder.effectiveNextDueAt;
+          final dateKey = DateFormat('yyyy-MM-dd').format(occurrenceDate);
+
+          // Get existing overrides or create new map
+          final existingOverrides = widget.reminder.overrides ?? {};
+          final newOverrides = Map<String, Map<String, dynamic>>.from(existingOverrides);
+
+          // Create or update override for this date with skipped flag
+          newOverrides[dateKey] = {
+            ...(newOverrides[dateKey] ?? {}),
+            'skipped': true,
+          };
+
+          await _reminderService.updateReminder(
+            widget.reminder.id,
+            {'overrides': newOverrides},
+          );
+
+          if (mounted) {
+            Navigator.pop(context); // Pop details screen
+            context.showSuccessSnackbar('Occurrence skipped');
+          }
+        } catch (e) {
+          if (mounted) {
+            context.showErrorSnackbar('Error skipping occurrence: $e');
+          }
+        }
+        return;
+      }
+      // If wholeSeries, fall through to show confirmation dialog
+    }
+
+    // For non-recurring reminders or when deleting whole series, show confirmation dialog
     await ConfirmationDialog.show(
       context: context,
-      title: 'Delete Reminder',
-      message: 'Are you sure you want to delete "${widget.reminder.name}"? This action cannot be undone.',
+      title: widget.reminder.recurrence != null
+          ? 'Delete Entire Series'
+          : 'Delete Reminder',
+      message: widget.reminder.recurrence != null
+          ? 'Are you sure you want to permanently delete "${widget.reminder.name}" and all its occurrences? This action cannot be undone.'
+          : 'Are you sure you want to delete "${widget.reminder.name}"? This action cannot be undone.',
       confirmText: 'Delete',
       cancelText: 'Cancel',
       accentColor: _accentColor,
@@ -161,7 +217,11 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
           await _reminderService.deleteReminder(widget.reminder.id);
           if (mounted) {
             Navigator.pop(context); // Pop details screen
-            context.showSuccessSnackbar('Reminder deleted successfully');
+            context.showSuccessSnackbar(
+              widget.reminder.recurrence != null
+                  ? 'Reminder series deleted successfully'
+                  : 'Reminder deleted successfully'
+            );
           }
         } catch (e) {
           if (mounted) {
@@ -292,23 +352,31 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
                             fontWeight: FontWeight.w500,
                           ),
                         ),
-                        SizedBox(width: 12.w),
-                        Icon(
-                          Icons.calendar_today,
-                          size: 16.sp,
-                          color: subtitleColor,
-                        ),
-                        SizedBox(width: 6.w),
-                        Text(
-                          DateFormat('MMM dd, yyyy').format(widget.reminder.time),
-                          style: TextStyle(
+                        if (widget.reminder.recurrence == null) ...[ // If reminder is not recurring, show date
+                          SizedBox(width: 12.w),
+                          Icon(
+                            Icons.calendar_today,
+                            size: 16.sp,
                             color: subtitleColor,
-                            fontSize: 16.sp,
-                            fontWeight: FontWeight.w500,
                           ),
-                        ),
+                          SizedBox(width: 6.w),
+                          Text(
+                            DateFormat('MMM dd, yyyy').format(widget.reminder.time),
+                            style: TextStyle(
+                              color: subtitleColor,
+                              fontSize: 16.sp,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
+
+                    // Recurrence Date Range (for recurring reminders)
+                    if (widget.reminder.recurrence != null) ...[
+                      SizedBox(height: 8.h),
+                      _buildRecurrenceDateRange(subtitleColor),
+                    ],
 
                     SizedBox(height: 32.h),
 
@@ -574,6 +642,80 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildRecurrenceDateRange(Color subtitleColor) {
+    final recurrence = widget.reminder.recurrence;
+    if (recurrence == null) return const SizedBox.shrink();
+
+    DateTime? startDate;
+    DateTime? endDate;
+
+    // Extract start date
+    final startDateValue = recurrence['startDate'];
+    if (startDateValue != null) {
+      if (startDateValue is Timestamp) {
+        startDate = startDateValue.toDate();
+      } else if (startDateValue is Map) {
+        final startDateMap = startDateValue as Map<String, dynamic>;
+        if (startDateMap.containsKey('_seconds')) {
+          startDate = Timestamp(
+            startDateMap['_seconds'] as int,
+            startDateMap['_nanoseconds'] as int? ?? 0,
+          ).toDate();
+        }
+      }
+    }
+
+    // Extract end date
+    final endDateValue = recurrence['endDate'];
+    if (endDateValue != null) {
+      if (endDateValue is Timestamp) {
+        endDate = endDateValue.toDate();
+      } else if (endDateValue is Map) {
+        final endDateMap = endDateValue as Map<String, dynamic>;
+        if (endDateMap.containsKey('_seconds')) {
+          endDate = Timestamp(
+            endDateMap['_seconds'] as int,
+            endDateMap['_nanoseconds'] as int? ?? 0,
+          ).toDate();
+        }
+      }
+    }
+
+    if (startDate == null) return const SizedBox.shrink();
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          DateFormat('MMM dd, yyyy').format(startDate),
+          style: TextStyle(
+            color: subtitleColor,
+            fontSize: 14.sp,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        if (endDate != null) ...[
+          Text(
+            ' - ',
+            style: TextStyle(
+              color: subtitleColor,
+              fontSize: 14.sp,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          Text(
+            DateFormat('MMM dd, yyyy').format(endDate),
+            style: TextStyle(
+              color: subtitleColor,
+              fontSize: 14.sp,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

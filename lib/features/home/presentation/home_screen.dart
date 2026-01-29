@@ -161,22 +161,57 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 // Filter for today's reminders
                 final now = DateTime.now();
                 final todayReminders = sortedReminders.where((r) {
-                  return r.time.year == now.year &&
-                      r.time.month == now.month &&
-                      r.time.day == now.day &&
+                  // Use effectiveNextDueAt which calculates the actual next occurrence
+                  // if nextDueAt is outdated
+                  final effectiveDate = r.effectiveNextDueAt;
+                  final dateKey = DateFormat('yyyy-MM-dd').format(effectiveDate);
+
+                  // For recurring reminders, hide skipped occurrences
+                  if (r.recurrence != null && r.isSkippedOnDate(dateKey)) {
+                    return false;
+                  }
+                  
+                  final isScheduledForToday = effectiveDate.year == now.year &&
+                      effectiveDate.month == now.month &&
+                      effectiveDate.day == now.day;
+
+                  return isScheduledForToday &&
                       !r.isCompletedToday; // Uses helper method that checks both isCompleted and consistency
                 }).toList();
 
                 // Get current/next reminder (first uncompleted)
+                // Use effectiveNextDueAt to handle outdated nextDueAt for recurring reminders
                 final upcomingReminders = sortedReminders
                     .where(
                       (r) =>
                           !r.isCompletedToday && // Uses helper method that checks both isCompleted and consistency
-                          r.time.isAfter(
-                            now.subtract(const Duration(hours: 1)),
-                          ),
+                          (() {
+                            final effectiveDate = r.effectiveNextDueAt;
+                            final dateKey =
+                                DateFormat('yyyy-MM-dd').format(effectiveDate);
+
+                            // For recurring reminders, hide skipped occurrences
+                            if (r.recurrence != null &&
+                                r.isSkippedOnDate(dateKey)) {
+                              return false;
+                            }
+
+                            // Show reminders that are:
+                            // 1. In the future, OR
+                            // 2. In the past but within 24 hours (missed occurrences)
+                            // This allows users to see and complete missed reminders
+                            final hoursDiff = effectiveDate.difference(now).inHours;
+                            return hoursDiff > -24; // Show if within last 24 hours or future
+                          })(),
                     )
                     .toList();
+                
+                // Sort by effectiveNextDueAt instead of time
+                upcomingReminders.sort(
+                  (a, b) => a
+                      .getEffectiveDisplayTime()
+                      .compareTo(b.getEffectiveDisplayTime()),
+                );
 
                 final currentReminder = upcomingReminders.isNotEmpty
                     ? upcomingReminders.first

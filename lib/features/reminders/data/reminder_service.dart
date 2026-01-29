@@ -33,9 +33,53 @@ class ReminderService {
       final reminders = snapshot.docs
           .map((doc) => Reminder.fromMap(doc.data(), doc.id))
           .toList();
+      
+      // Update outdated nextDueAt values for recurring reminders in the background
+      _updateOutdatedNextDueAt(reminders);
+      
       reminders.sort((a, b) => a.time.compareTo(b.time));
       return reminders;
     });
+  }
+  
+  // Update outdated nextDueAt values for recurring reminders
+  Future<void> _updateOutdatedNextDueAt(List<Reminder> reminders) async {
+    final now = DateTime.now();
+    final updates = <String, DateTime>{};
+    
+    for (final reminder in reminders) {
+      if (reminder.recurrence != null && reminder.nextDueAt != null) {
+        // Check if nextDueAt is outdated (in the past)
+        if (reminder.nextDueAt!.isBefore(now)) {
+          try {
+            final effectiveDate = reminder.effectiveNextDueAt;
+            // Only update if the calculated date is different and in the future
+            if (effectiveDate != reminder.nextDueAt && effectiveDate.isAfter(now)) {
+              updates[reminder.id] = effectiveDate;
+            }
+          } catch (e) {
+            print('Error calculating effective date for reminder ${reminder.id}: $e');
+          }
+        }
+      }
+    }
+    
+    // Batch update outdated nextDueAt values
+    if (updates.isNotEmpty) {
+      final batch = _firestore.batch();
+      for (final entry in updates.entries) {
+        batch.update(
+          _firestore.collection(_collection).doc(entry.key),
+          {'nextDueAt': Timestamp.fromDate(entry.value)},
+        );
+      }
+      try {
+        await batch.commit();
+        print('Updated ${updates.length} outdated nextDueAt values');
+      } catch (e) {
+        print('Error updating outdated nextDueAt values: $e');
+      }
+    }
   }
 
   // Add a new reminder
@@ -80,48 +124,73 @@ class ReminderService {
   // Consistency tracking is handled by Firebase Functions
   Future<void> markAsCompleted(String reminderId) async {
     try {
-      // Call Firebase Functions to handle completion
-      // This ensures consistency tracking is properly updated
-      final callable = _functions.httpsCallable('completeReminder');
-      final result = await callable.call({
-        'reminderId': reminderId,
-        'completedAt': DateTime.now().millisecondsSinceEpoch,
-      });
-      
-      print('Reminder marked as completed via Cloud Function: $reminderId');
-      print('Result: ${result.data}');
+      // First try to update Firestore directly for immediate feedback
+      // This ensures the UI updates even if Cloud Functions are slow
+      final doc = await _firestore.collection(_collection).doc(reminderId).get();
+      if (doc.exists) {
+        final reminderData = doc.data()!;
+        final isRecurring = reminderData['recurrence'] != null;
+        
+        final updates = <String, dynamic>{
+          'lastCompletedAt': FieldValue.serverTimestamp(),
+        };
+        
+        if (isRecurring) {
+          // For recurring reminders, update consistency data locally first
+          // This allows immediate UI update while Cloud Function processes in background
+          final today = DateTime.now();
+          final todayStr = '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+          
+          final consistency = reminderData['consistency'] as Map<String, dynamic>? ?? {
+            'completedCount': 0,
+            'missedCount': 0,
+            'lastEvaluatedDate': '',
+            'completedDates': [],
+          };
+          
+          final completedDates = List<String>.from(consistency['completedDates'] ?? []);
+          if (!completedDates.contains(todayStr)) {
+            completedDates.add(todayStr);
+            // Keep only last 90 days
+            if (completedDates.length > 90) {
+              completedDates.sort();
+              completedDates.removeRange(0, completedDates.length - 90);
+            }
+            
+            updates['consistency'] = {
+              ...consistency,
+              'completedCount': (consistency['completedCount'] ?? 0) + 1,
+              'lastEvaluatedDate': todayStr,
+              'completedDates': completedDates,
+            };
+          }
+        } else {
+          // For non-recurring, just mark as completed
+          updates['isCompleted'] = true;
+          updates['completedAt'] = FieldValue.serverTimestamp();
+        }
+        
+        await _firestore.collection(_collection).doc(reminderId).update(updates);
+        print('Reminder marked as completed locally: $reminderId');
+      }
+
+      // Call Firebase Functions to handle complex logic (recurrence scheduling, stats, etc.)
+      try {
+        final callable = _functions.httpsCallable('completeReminder');
+        await callable.call({
+          'reminderId': reminderId,
+          'completedAt': DateTime.now().millisecondsSinceEpoch,
+        });
+        print('Cloud Function completeReminder called successfully');
+      } catch (e) {
+        print('Cloud Function call failed (but local update succeeded): $e');
+      }
       
       // Trigger a notification to other devices
       await _notifyOtherDevices(reminderId, 'completed');
     } catch (e) {
       print('Error marking reminder as completed: $e');
-      
-      // Fallback: If Cloud Function fails, update Firestore directly
-      // This ensures the app still works even if Functions are down
-      try {
-        final doc = await _firestore.collection(_collection).doc(reminderId).get();
-        if (doc.exists) {
-          final reminderData = doc.data()!;
-          final isRecurring = reminderData['recurrence'] != null;
-          
-          final updates = <String, dynamic>{
-            'lastCompletedAt': FieldValue.serverTimestamp(),
-          };
-          
-          // Only mark as completed and set completedAt if it's NOT a recurring reminder
-          // For recurring reminders, completion is tracked via consistency data
-          if (!isRecurring) {
-            updates['isCompleted'] = true;
-            updates['completedAt'] = FieldValue.serverTimestamp();
-          }
-          
-          await _firestore.collection(_collection).doc(reminderId).update(updates);
-          print('Fallback: Reminder marked as completed directly in Firestore');
-        }
-      } catch (fallbackError) {
-        print('Fallback also failed: $fallbackError');
-        rethrow;
-      }
+      rethrow;
     }
   }
 
@@ -157,13 +226,25 @@ class ReminderService {
       if (doc.exists) {
         final reminder = Reminder.fromMap(doc.data()!, doc.id);
         final newTime = DateTime.now().add(Duration(minutes: minutes));
+        final isRecurring = reminder.recurrence != null;
         
-        await _firestore.collection(_collection).doc(reminderId).update({
-          'time': Timestamp.fromDate(newTime),
+        final updates = <String, dynamic>{
           'scheduledTime': Timestamp.fromDate(newTime),
           'notifiedAt': FieldValue.delete(),  // Clear notifiedAt so it can notify again
           'updatedAt': FieldValue.serverTimestamp(),
-        });
+        };
+        
+        // For recurring reminders, update nextDueAt (current occurrence)
+        // For non-recurring reminders, update time (original scheduled time)
+        if (isRecurring) {
+          updates['nextDueAt'] = Timestamp.fromDate(newTime);
+          print('Recurring reminder snoozed - updating nextDueAt');
+        } else {
+          updates['time'] = Timestamp.fromDate(newTime);
+          print('One-time reminder snoozed - updating time');
+        }
+        
+        await _firestore.collection(_collection).doc(reminderId).update(updates);
         
         // Create a new pending notification for the snoozed time
         await _firestore.collection('pending_notifications').doc(reminderId).set({
