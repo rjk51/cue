@@ -1,4 +1,3 @@
-
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 
@@ -670,6 +669,63 @@ export const onReminderUpdated = functions.firestore
 
         await Promise.all(sendPromises);
         console.log(`✅ Dismiss notifications sent for snoozed reminder ${reminderId}`);
+
+        // NEW: Schedule a new pending notification for the snoozed time
+        try {
+          let snoozedTime = after.time || after.scheduledTime;
+          if (!snoozedTime) {
+            console.log("⚠️  No snoozed time found, skipping scheduling");
+            return null;
+          }
+
+          let snoozedDate = snoozedTime.toDate();
+
+          // Round to the nearest minute (remove seconds/milliseconds)
+          // This ensures snoozed notifications align with the 1-minute polling
+          snoozedDate.setSeconds(0, 0);
+          snoozedTime = admin.firestore.Timestamp.fromDate(snoozedDate);
+          console.log(`🔄 Rounded snoozed time to: ${snoozedDate.toISOString()}`);
+
+          // Apply per-date overrides (time changes / skipped occurrences)
+          const overrides = after.overrides || {};
+          const dateKey = snoozedDate.toISOString().slice(0, 10); // YYYY-MM-DD (UTC-based)
+          const override = overrides[dateKey];
+          if (override?.skipped === true) {
+            console.log(`⏭️  [onReminderUpdated] Snoozed occurrence ${dateKey} is skipped by override; no notification`);
+            return null;
+          }
+          if (override?.time) {
+            const timeStr: string = override.time;
+            const [hh, mm] = timeStr.split(":").map((v: string) => parseInt(v, 10));
+            if (!Number.isNaN(hh) && !Number.isNaN(mm)) {
+              const adjusted = new Date(snoozedDate.getTime());
+              adjusted.setUTCHours(hh, mm, 0, 0);
+              snoozedDate = adjusted;
+              snoozedTime = admin.firestore.Timestamp.fromDate(adjusted);
+              console.log(`🛠️  [onReminderUpdated] Applied time override for snoozed ${dateKey}: ${timeStr}`);
+            }
+          }
+
+          const now = new Date();
+          if (snoozedDate <= now) {
+            console.log("⏭️  Snoozed time is in the past, skipping scheduling");
+            return null;
+          }
+
+          // Schedule the pending notification
+          await db.collection("pending_notifications").doc(reminderId).set({
+            reminderId: reminderId,
+            scheduledTime: snoozedTime,
+            reminderName: after.name || after.title || "Reminder",
+            reminderDescription: after.description || "Your reminder is due!",
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+
+          console.log(`✅ Scheduled snoozed notification for ${reminderId}`);
+          console.log(`   At: ${snoozedDate.toISOString()}`);
+        } catch (error) {
+          console.error(`❌ Error scheduling snoozed notification for ${reminderId}:`, error);
+        }
       } catch (error) {
         console.error("❌ Error sending snooze dismiss notifications:", error);
       }
@@ -1160,7 +1216,7 @@ export const processAutoSnooze = functions.pubsub
           autoSnoozedCount++;
           console.log(
             "✅ Auto-snoozed reminder " + reminderId + " " +
-            "(" + (autoSnoozeCount + 1) + "/" + autoSnoozeMaxCount + ")"
+            "(" + (autoSnoozedCount + 1) + "/" + autoSnoozeMaxCount + ")"
           );
         } catch (error) {
           console.error(
