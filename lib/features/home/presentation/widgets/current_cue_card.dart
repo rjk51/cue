@@ -3,6 +3,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
 import '../../../reminders/domain/reminder_model.dart';
 import '../../../reminders/data/reminder_service.dart';
+import '../../../reminders/presentation/reminder_details_screen.dart';
 import '../../../snooze/presentation/snooze_screen.dart';
 
 class CurrentCueCard extends StatefulWidget {
@@ -138,105 +139,117 @@ class _CurrentCueCardState extends State<CurrentCueCard>
     final timeText = widget.getTimeDisplayText(widget.reminder.time);
     final formattedTime = DateFormat('hh:mm a').format(widget.reminder.time);
 
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(42.r),
-      decoration: BoxDecoration(
-        color: widget.cardColor,
-        borderRadius: BorderRadius.circular(28.r),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(widget.isDarkMode ? 0.3 : 0.08),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header row with label and icon
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              // Dynamic icon from reminder
-              Container(
-                width: 50.w,
-                height: 50.h,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: widget.reminder.color.withOpacity(0.15),
-                ),
-                child: Icon(
-                  widget.reminder.icon,
-                  color: widget.reminder.color,
-                  size: 30.sp,
-                ),
-              ),
-            ],
-          ),
-
-          SizedBox(height: 12.h),
-
-          // Reminder title
-          Text(
-            widget.reminder.name,
-            style: TextStyle(
-              fontSize: 46.sp,
-              fontWeight: FontWeight.w700,
-              color: widget.textColor,
-              height: 1.2,
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ReminderDetailsScreen(
+              reminder: widget.reminder,
             ),
           ),
-
-          SizedBox(height: 12.h),
-
-          // Time info (below title)
-          Row(
-            children: [
-              Icon(
-                Icons.access_time_filled,
-                size: 18.sp,
-                color: widget.subtitleColor,
-              ),
-              SizedBox(width: 6.w),
-              Text(
-                timeText,
-                style: TextStyle(
-                  fontSize: 16.sp,
-                  fontWeight: FontWeight.w600,
-                  color: widget.accentColor,
+        );
+      },
+      child: Container(
+        width: double.infinity,
+        padding: EdgeInsets.all(42.r),
+        decoration: BoxDecoration(
+          color: widget.cardColor,
+          borderRadius: BorderRadius.circular(28.r),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(widget.isDarkMode ? 0.3 : 0.08),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header row with label and icon
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                // Dynamic icon from reminder
+                Container(
+                  width: 50.w,
+                  height: 50.h,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: widget.reminder.color.withOpacity(0.15),
+                  ),
+                  child: Icon(
+                    widget.reminder.icon,
+                    color: widget.reminder.color,
+                    size: 30.sp,
+                  ),
                 ),
+              ],
+            ),
+
+            SizedBox(height: 12.h),
+
+            // Reminder title
+            Text(
+              widget.reminder.name,
+              style: TextStyle(
+                fontSize: 46.sp,
+                fontWeight: FontWeight.w700,
+                color: widget.textColor,
+                height: 1.2,
               ),
-              SizedBox(width: 8.w),
-              Text(
-                '·',
-                style: TextStyle(
-                  fontSize: 16.sp,
+            ),
+
+            SizedBox(height: 12.h),
+
+            // Time info (below title)
+            Row(
+              children: [
+                Icon(
+                  Icons.access_time_filled,
+                  size: 18.sp,
                   color: widget.subtitleColor,
                 ),
-              ),
-              SizedBox(width: 8.w),
-              Text(
-                formattedTime,
-                style: TextStyle(
-                  fontSize: 16.sp,
-                  color: widget.subtitleColor,
+                SizedBox(width: 6.w),
+                Text(
+                  timeText,
+                  style: TextStyle(
+                    fontSize: 16.sp,
+                    fontWeight: FontWeight.w600,
+                    color: widget.accentColor,
+                  ),
                 ),
-              ),
-            ],
-          ),
+                SizedBox(width: 8.w),
+                Text(
+                  '·',
+                  style: TextStyle(
+                    fontSize: 16.sp,
+                    color: widget.subtitleColor,
+                  ),
+                ),
+                SizedBox(width: 8.w),
+                Text(
+                  formattedTime,
+                  style: TextStyle(
+                    fontSize: 16.sp,
+                    color: widget.subtitleColor,
+                  ),
+                ),
+              ],
+            ),
 
-          SizedBox(height: 32.h),
+            SizedBox(height: 32.h),
 
-          // Notes section
-          _buildNotesSection(),
+            // Notes section
+            _buildNotesSection(),
 
-          SizedBox(height: 60.h),
+            SizedBox(height: 60.h),
 
-          // Action buttons (Done and Snooze)
-          _buildActionButtons(),
-        ],
+            // Action buttons (Done and Snooze)
+            _buildActionButtons(),
+          ],
+        ),
       ),
     );
   }
