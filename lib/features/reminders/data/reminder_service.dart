@@ -172,6 +172,15 @@ class ReminderService {
         
         await _firestore.collection(_collection).doc(reminderId).update(updates);
         print('Reminder marked as completed locally: $reminderId');
+        
+        // Delete the pending notification to prevent it from being sent
+        try {
+          await _firestore.collection('pending_notifications').doc(reminderId).delete();
+          print('Deleted pending notification for completed reminder: $reminderId');
+        } catch (e) {
+          print('Error deleting pending notification: $e');
+          // Don't rethrow - the reminder completion was successful
+        }
       }
 
       // Call Firebase Functions to handle complex logic (recurrence scheduling, stats, etc.)
@@ -213,6 +222,50 @@ class ReminderService {
         'updatedAt': FieldValue.serverTimestamp(),
       });
       print('Reminder updated: $reminderId');
+      
+      // If the name is being updated, also update pending_notifications
+      if (updates.containsKey('name')) {
+        try {
+          final pendingNotifDoc = await _firestore
+              .collection('pending_notifications')
+              .doc(reminderId)
+              .get();
+          
+          if (pendingNotifDoc.exists) {
+            await _firestore.collection('pending_notifications').doc(reminderId).update({
+              'reminderName': updates['name'],
+              'reminderDescription': updates['name'],
+            });
+            print('Updated pending notification name for: $reminderId');
+          }
+        } catch (e) {
+          print('Error updating pending notification: $e');
+          // Don't rethrow - the reminder update was successful
+        }
+      }
+      
+      // If the scheduled time is being updated (time or nextDueAt), update pending_notifications
+      if (updates.containsKey('time') || updates.containsKey('nextDueAt')) {
+        try {
+          final pendingNotifDoc = await _firestore
+              .collection('pending_notifications')
+              .doc(reminderId)
+              .get();
+          
+          if (pendingNotifDoc.exists) {
+            final newScheduledTime = updates['nextDueAt'] ?? updates['time'];
+            if (newScheduledTime != null) {
+              await _firestore.collection('pending_notifications').doc(reminderId).update({
+                'scheduledTime': newScheduledTime,
+              });
+              print('Updated pending notification scheduledTime for: $reminderId');
+            }
+          }
+        } catch (e) {
+          print('Error updating pending notification time: $e');
+          // Don't rethrow - the reminder update was successful
+        }
+      }
     } catch (e) {
       print('Error updating reminder: $e');
       rethrow;
