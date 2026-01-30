@@ -12,6 +12,7 @@ import 'features/snooze/presentation/snooze_screen.dart';
 import 'services/local_storage_service.dart';
 import 'services/theme_service.dart';
 import 'services/theme_notifier.dart';
+import 'services/revenue_cat_service.dart';
 import 'shared/widgets/onboarding_gate.dart';
 
 // Global navigator key for navigation from notification handlers
@@ -77,6 +78,15 @@ void main() async {
 
   // Set background message handler (needs to be set early)
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  // Initialize RevenueCat (optional: pass userId if user is logged in)
+  // Get current user ID from Firebase Auth if logged in
+  final user = FirebaseAuth.instance.currentUser;
+  if (user != null) {
+    await RevenueCatService().initialize(userId: user.uid);
+  } else {
+    await RevenueCatService().initialize();
+  }
 
   runApp(const MyApp());
 }
