@@ -7,6 +7,7 @@ import '../../../services/theme_service.dart';
 import '../../../services/auth_service.dart';
 import '../../auth/presentation/welcome_screen.dart';
 import 'appearance_screen.dart';
+import 'devices_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -630,7 +631,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           // Sync & Devices
                           GestureDetector(
                             onTap: () {
-                              // TODO: Navigate to sync settings
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const DevicesScreen(),
+                                ),
+                              );
                             },
                             child: Padding(
                               padding: EdgeInsets.symmetric(
