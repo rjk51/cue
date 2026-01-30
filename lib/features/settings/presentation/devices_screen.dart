@@ -8,6 +8,7 @@ import '../../../services/theme_notifier.dart';
 import '../../notifications/notification_service.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
 import '../../../shared/widgets/confirmation_dialog.dart';
+// Screen to manage and view devices linked to the user's account
 
 class DevicesScreen extends StatefulWidget {
   const DevicesScreen({super.key});
