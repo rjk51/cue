@@ -9,7 +9,6 @@ import '../../reminders/presentation/reminder_list_screen.dart';
 import '../../reminders/presentation/reminder_details_screen.dart';
 import '../../../services/theme_service.dart';
 import '../../../services/theme_notifier.dart';
-import '../../../services/device_monitor_service.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
 import 'widgets/current_cue_card.dart';
 
@@ -23,7 +22,6 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   final ReminderService _reminderService = ReminderService();
   final ThemeService _themeService = ThemeService();
-  final DeviceMonitorService _deviceMonitor = DeviceMonitorService();
 
   Color _accentColor = const Color(0xFF2D7A78); // Default teal
   bool _isDarkMode = false;
@@ -34,21 +32,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _loadThemeSettings();
     // Listen for theme changes
     ThemeNotifier.instance.addListener(_onThemeChanged);
-    
-    // Start monitoring device status after a delay to ensure device is reactivated
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // Wait for device to be reactivated in main.dart
-      await Future.delayed(const Duration(seconds: 2));
-      if (mounted) {
-        _deviceMonitor.startMonitoring(context);
-      }
-    });
   }
 
   @override
   void dispose() {
     ThemeNotifier.instance.removeListener(_onThemeChanged);
-    _deviceMonitor.stopMonitoring();
     super.dispose();
   }
 

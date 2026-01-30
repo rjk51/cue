@@ -157,9 +157,6 @@ class MyApp extends StatelessWidget {
                 try {
                   final notificationService = NotificationService();
                   await notificationService.initialize();
-                  
-                  // Reactivate device (set active to true after login)
-                  await notificationService.reactivateDevice();
 
                   // Check for any pending reminders that might have been missed
                   await notificationService.checkPendingReminders(snapshot.data!.uid);
