@@ -3,6 +3,7 @@ import UIKit
 import FirebaseCore
 import FirebaseMessaging
 import UserNotifications
+import WidgetKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
@@ -21,6 +22,15 @@ import UserNotifications
         binaryMessenger: controller.binaryMessenger
       )
       eventChannel.setStreamHandler(NotificationActionStreamHandler())
+      
+      // Setup widget data method channel
+      let widgetChannel = FlutterMethodChannel(
+        name: "widget_channel",
+        binaryMessenger: controller.binaryMessenger
+      )
+      widgetChannel.setMethodCallHandler { (call, result) in
+        self.handleWidgetMethodCall(call: call, result: result)
+      }
     }
     
     registerNotificationCategories()
@@ -215,5 +225,51 @@ class NotificationActionStreamHandler: NSObject, FlutterStreamHandler {
     
     print("📱 Sending action with input to Flutter: \(event)")
     sink(event)
+  }
+}
+// MARK: - Widget Support
+extension AppDelegate {
+  func handleWidgetMethodCall(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    switch call.method {
+    case "updateWidgetData":
+      if let args = call.arguments as? [String: Any],
+         let jsonString = args["data"] as? String {
+        updateWidgetData(jsonString: jsonString)
+        result(true)
+      } else {
+        result(FlutterError(code: "INVALID_ARGUMENTS", message: "Invalid arguments", details: nil))
+      }
+    case "reloadWidget":
+      reloadWidget()
+      result(true)
+    default:
+      result(FlutterMethodNotImplemented)
+    }
+  }
+  
+  func updateWidgetData(jsonString: String) {
+    let userDefaults = UserDefaults(suiteName: "group.com.cue.app")
+    
+    // Convert JSON string to Data
+    if let jsonData = jsonString.data(using: .utf8) {
+      userDefaults?.set(jsonData, forKey: "todayReminders")
+      userDefaults?.synchronize()
+      print("✅ Widget data updated in App Group with \(jsonData.count) bytes")
+      
+      // Debug: Print what we're storing
+      if let storedData = userDefaults?.data(forKey: "todayReminders"),
+         let storedString = String(data: storedData, encoding: .utf8) {
+        print("📊 Stored data: \(storedString)")
+      }
+    } else {
+      print("❌ Failed to convert JSON string to data")
+    }
+  }
+  
+  func reloadWidget() {
+    if #available(iOS 14.0, *) {
+      WidgetCenter.shared.reloadAllTimelines()
+      print("📱 Widget timelines reloaded")
+    }
   }
 }

@@ -1,6 +1,11 @@
 # Uncomment this line to define a global platform for your project
 platform :ios, '13.0'
 
+# Use static frameworks to avoid dynamic framework embedding into app
+# extensions and to keep Firebase Swift pods working with CocoaPods.
+# Requires CocoaPods 1.11+.
+use_frameworks! :linkage => :static
+
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
 
@@ -28,7 +33,10 @@ require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelpe
 flutter_ios_podfile_setup
 
 target 'Runner' do
-  use_frameworks!
+  # Using static libraries (default) avoids embedding dynamic frameworks
+  # into the app bundle which can create dependency cycles with app
+  # extensions. Remove or enable `use_frameworks!` only for pods that
+  # explicitly require it.
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
   target 'RunnerTests' do
@@ -36,11 +44,34 @@ target 'Runner' do
   end
 end
 
+# Widget extension target: inherit search paths but do not install pods here
+target 'cueWidgetsExtension' do
+  # Extension should inherit search paths but not install pods to avoid
+  # copying app frameworks into the extension.
+  inherit! :search_paths
+  # Do NOT call flutter_install_all_ios_pods for extensions —
+  # this prevents duplicating framework embedding and avoids build cycles.
+end
+
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
     target.build_configurations.each do |config|
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
+    end
+  end
+
+  # Fix build cycle by reordering build phases
+  installer.pods_project.targets.each do |target|
+    if target.name == 'Runner'
+      copy_pods_phase = target.build_phases.find { |phase| phase.display_name == '[CP] Copy Pods Resources' }
+      embed_phase = target.build_phases.find { |phase| phase.display_name == 'Embed App Extensions' }
+      
+      if copy_pods_phase && embed_phase
+        target.build_phases.delete(embed_phase)
+        index = target.build_phases.index(copy_pods_phase)
+        target.build_phases.insert(index + 1, embed_phase)
+      end
     end
   end
 end
