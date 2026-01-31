@@ -10,6 +10,7 @@ import '../../reminders/presentation/reminder_details_screen.dart';
 import '../../../services/theme_service.dart';
 import '../../../services/theme_notifier.dart';
 import '../../../services/device_monitor_service.dart';
+import '../../../services/widget_service.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
 import 'widgets/current_cue_card.dart';
 
@@ -24,6 +25,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   final ReminderService _reminderService = ReminderService();
   final ThemeService _themeService = ThemeService();
   final DeviceMonitorService _deviceMonitor = DeviceMonitorService();
+  final WidgetService _widgetService = WidgetService();
 
   Color _accentColor = const Color(0xFF2D7A78); // Default teal
   bool _isDarkMode = false;
@@ -75,6 +77,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         }
       });
     }
+  }
+
+  Future<void> _updateWidgets(List<Reminder> reminders) async {
+    // Update iOS widgets with current reminder data
+    await _widgetService.updateWidget(reminders);
   }
 
   void _navigateToCreateReminder() async {
@@ -165,6 +172,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               stream: _reminderService.getRemindersStream(),
               builder: (context, snapshot) {
                 final reminders = snapshot.data ?? [];
+
+                // Update widgets whenever reminders change (including empty state)
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _updateWidgets(reminders);
+                });
 
                 // Sort reminders by time
                 final sortedReminders = List<Reminder>.from(reminders)
