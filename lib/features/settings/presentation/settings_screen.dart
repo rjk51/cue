@@ -3,6 +3,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../services/theme_service.dart';
 import '../../../services/auth_service.dart';
 import '../../auth/presentation/welcome_screen.dart';
@@ -744,8 +745,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                           // Privacy & Data
                           GestureDetector(
-                            onTap: () {
-                              // TODO: Navigate to privacy settings
+                            onTap: () async {
+                              const url = 'https://cue-landing-amber.vercel.app/#privacy'; // Replace with your actual privacy policy URL
+                              final uri = Uri.parse(url);
+                              if (await canLaunchUrl(uri)) {
+                                await launchUrl(uri, mode: LaunchMode.externalApplication);
+                              } else {
+                                // Handle error, maybe show a snackbar
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Could not open privacy policy'),
+                                    ),
+                                  );
+                                }
+                              }
                             },
                             child: Padding(
                               padding: EdgeInsets.symmetric(
