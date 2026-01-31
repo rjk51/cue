@@ -80,13 +80,14 @@ void main() async {
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
   // Initialize RevenueCat (optional: pass userId if user is logged in)
-  // Get current user ID from Firebase Auth if logged in
-  final user = FirebaseAuth.instance.currentUser;
-  if (user != null) {
-    await RevenueCatService().initialize(userId: user.uid);
-  } else {
-    await RevenueCatService().initialize();
-  }
+  // TEMPORARILY DISABLED: Test API key causes crash in release builds
+  // TODO: Re-enable with production API keys before final release
+  // final user = FirebaseAuth.instance.currentUser;
+  // if (user != null) {
+  //   await RevenueCatService().initialize(userId: user.uid);
+  // } else {
+  //   await RevenueCatService().initialize();
+  // }
 
   runApp(const MyApp());
 }

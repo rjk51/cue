@@ -418,6 +418,7 @@ class NotificationService {
       presentBadge: true,
       presentSound: true,
       sound: 'notification_ringtone.wav',
+      interruptionLevel: InterruptionLevel.timeSensitive,
     );
 
     final NotificationDetails notificationDetails = NotificationDetails(
@@ -570,6 +571,7 @@ class NotificationService {
       presentBadge: true,
       presentSound: true,
       sound: 'notification_ringtone.wav',
+      interruptionLevel: InterruptionLevel.timeSensitive,
     );
 
     final NotificationDetails notificationDetails = NotificationDetails(
