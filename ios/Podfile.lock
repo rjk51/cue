@@ -1467,6 +1467,9 @@ PODS:
   - RevenueCat (5.56.0)
   - RevenueCatUI (5.56.0):
     - RevenueCat (= 5.56.0)
+  - shared_preferences_foundation (0.0.1):
+    - Flutter
+    - FlutterMacOS
   - sign_in_with_apple (0.0.1):
     - Flutter
 
@@ -1483,6 +1486,7 @@ DEPENDENCIES:
   - permission_handler_apple (from `.symlinks/plugins/permission_handler_apple/ios`)
   - purchases_flutter (from `.symlinks/plugins/purchases_flutter/ios`)
   - purchases_ui_flutter (from `.symlinks/plugins/purchases_ui_flutter/ios`)
+  - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
   - sign_in_with_apple (from `.symlinks/plugins/sign_in_with_apple/ios`)
 
 SPEC REPOS:
@@ -1546,6 +1550,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/purchases_flutter/ios"
   purchases_ui_flutter:
     :path: ".symlinks/plugins/purchases_ui_flutter/ios"
+  shared_preferences_foundation:
+    :path: ".symlinks/plugins/shared_preferences_foundation/darwin"
   sign_in_with_apple:
     :path: ".symlinks/plugins/sign_in_with_apple/ios"
 
@@ -1588,15 +1594,16 @@ SPEC CHECKSUMS:
   package_info_plus: af8e2ca6888548050f16fa2f1938db7b5a5df499
   permission_handler_apple: 4ed2196e43d0651e8ff7ca3483a069d469701f2d
   PromisesObjC: f5707f49cb48b9636751c5b2e7d227e43fba9f47
-  purchases_flutter: 0a71872a86b871009c5c4533134b68dc56732d24
-  purchases_ui_flutter: b028bfc2c486085e88032d9f2f23b21b11043e55
+  purchases_flutter: 388ea2288fa901f38661d5b5149cacbca558008e
+  purchases_ui_flutter: 216d7c323bf10f5a0cdbcb325f4b8805ef8c3f98
   PurchasesHybridCommon: c00f6ce5933b9928e99766a45c9e53c0a5a03240
   PurchasesHybridCommonUI: 3aed98f646f9f7f6915a12908766d468412be064
   RecaptchaInterop: 11e0b637842dfb48308d242afc3f448062325aba
   RevenueCat: 9e2a13bead55198a72272ff105a7265e9510cd11
   RevenueCatUI: 2200b8ec1cadb1c69c6f05452144184f929eadef
-  sign_in_with_apple: f3bf75217ea4c2c8b91823f225d70230119b8440
+  shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
+  sign_in_with_apple: c5dcc141574c8c54d5ac99dd2163c0c72ad22418
 
-PODFILE CHECKSUM: f79e1872da79a29354b04cf03619f8f3d69fe58e
+PODFILE CHECKSUM: ed739e4a8e6cde4808f796c45468c64ea8051a51
 
 COCOAPODS: 1.16.2
