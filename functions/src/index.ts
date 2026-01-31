@@ -1142,9 +1142,10 @@ export const processAutoSnooze = functions.pubsub
 
           console.log(`🔄 Auto-snoozing reminder ${reminderId}: "${reminder.name}"`);
 
-          // Calculate new snooze time
-          const intervalMs = autoSnoozeInterval * 60 * 1000;
-          const newTime = new Date(currentTime.getTime() + intervalMs);
+          // Calculate new snooze time: add interval to current time but land on a round minute (ignore seconds)
+          const baseOnMinute = new Date(currentTime);
+          baseOnMinute.setSeconds(0, 0);
+          const newTime = new Date(baseOnMinute.getTime() + (autoSnoozeInterval * 60 * 1000));
 
           // Update reminder with new time and increment snooze count
           await reminderDoc.ref.update({

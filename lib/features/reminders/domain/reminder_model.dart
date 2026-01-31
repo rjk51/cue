@@ -68,6 +68,10 @@ class Reminder {
   final int autoSnoozeCount; // current auto-snooze count
   final ConsistencyData? consistency;
   final Map<String, Map<String, dynamic>>? overrides; // Per-date overrides: { "YYYY-MM-DD": { time, title, skipped, ... } }
+  /// When the user snoozes, we keep the original scheduled time here for display.
+  final DateTime? scheduledTimeAtSnooze;
+  /// When the reminder will next fire (snooze time). Set when user snoozes, cleared when completed.
+  final DateTime? snoozedUntil;
 
   Reminder({
     required this.id,
@@ -88,6 +92,8 @@ class Reminder {
     this.autoSnoozeCount = 0,
     this.consistency,
     this.overrides,
+    this.scheduledTimeAtSnooze,
+    this.snoozedUntil,
   });
 
   // Convert Reminder to Map for Firestore
@@ -113,6 +119,8 @@ class Reminder {
       'autoSnoozeCount': autoSnoozeCount,
       if (consistency != null) 'consistency': consistency!.toMap(),
       if (overrides != null && overrides!.isNotEmpty) 'overrides': overrides,
+      if (scheduledTimeAtSnooze != null) 'scheduledTimeAtSnooze': Timestamp.fromDate(scheduledTimeAtSnooze!),
+      if (snoozedUntil != null) 'snoozedUntil': Timestamp.fromDate(snoozedUntil!),
     };
   }
 
@@ -151,6 +159,12 @@ class Reminder {
                 ),
               ),
             )
+          : null,
+      scheduledTimeAtSnooze: map['scheduledTimeAtSnooze'] != null
+          ? (map['scheduledTimeAtSnooze'] as Timestamp).toDate()
+          : null,
+      snoozedUntil: map['snoozedUntil'] != null
+          ? (map['snoozedUntil'] as Timestamp).toDate()
           : null,
     );
   }
@@ -192,6 +206,8 @@ class Reminder {
     int? autoSnoozeCount,
     ConsistencyData? consistency,
     Map<String, Map<String, dynamic>>? overrides,
+    DateTime? scheduledTimeAtSnooze,
+    DateTime? snoozedUntil,
   }) {
     return Reminder(
       id: id ?? this.id,
@@ -212,6 +228,8 @@ class Reminder {
       autoSnoozeCount: autoSnoozeCount ?? this.autoSnoozeCount,
       consistency: consistency ?? this.consistency,
       overrides: overrides ?? this.overrides,
+      scheduledTimeAtSnooze: scheduledTimeAtSnooze ?? this.scheduledTimeAtSnooze,
+      snoozedUntil: snoozedUntil ?? this.snoozedUntil,
     );
   }
   
@@ -273,6 +291,13 @@ class Reminder {
     final override = getOverrideForDate(date);
     return override?['title'] as String?;
   }
+
+  /// The scheduled time to show on the card. When snoozed, this is the original time; otherwise effective display time.
+  DateTime get scheduledDisplayTime =>
+      scheduledTimeAtSnooze ?? getEffectiveDisplayTime();
+
+  /// True when the reminder has been snoozed (will ring at snoozedUntil).
+  bool get isSnoozed => snoozedUntil != null;
 
   /// Get effective display time for the current occurrence (considering overrides)
   /// Returns the time that should be displayed, which may be overridden

@@ -191,12 +191,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       !r.isCompletedToday; // Uses helper method that checks both isCompleted and consistency
                 }).toList();
 
-                // Get current/next reminder (first uncompleted)
-                // Use effectiveNextDueAt to handle outdated nextDueAt for recurring reminders
+                // Get current/next reminder (first uncompleted) — only today's reminders
                 final upcomingReminders = sortedReminders
                     .where(
                       (r) =>
-                          !r.isCompletedToday && // Uses helper method that checks both isCompleted and consistency
+                          !r.isCompletedToday &&
                           (() {
                             final effectiveDate = r.effectiveNextDueAt;
                             final dateKey =
@@ -208,12 +207,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                               return false;
                             }
 
-                            // Show reminders that are:
-                            // 1. In the future, OR
-                            // 2. In the past but within 24 hours (missed occurrences)
-                            // This allows users to see and complete missed reminders
-                            final hoursDiff = effectiveDate.difference(now).inHours;
-                            return hoursDiff > -24; // Show if within last 24 hours or future
+                            // Only show reminders scheduled for today (so snoozed-to-tomorrow/other-day don't show)
+                            final isScheduledForToday = effectiveDate.year == now.year &&
+                                effectiveDate.month == now.month &&
+                                effectiveDate.day == now.day;
+                            return isScheduledForToday;
                           })(),
                     )
                     .toList();
@@ -386,7 +384,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                         subtitleColor,
                                       ),
 
-                                    SizedBox(height: 24.h),
+                                    SizedBox(height: 32.h),
 
                                     // Upcoming Section - flexible to avoid overflow
                                     Flexible(

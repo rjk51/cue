@@ -11,6 +11,7 @@ import '../../notifications/notification_service.dart';
 import '../../../services/theme_service.dart';
 import '../../../services/theme_notifier.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
+import '../../../shared/widgets/cupertino_pickers.dart';
 import '../../../shared/widgets/edit_recurring_dialog.dart';
 import 'widgets/icon_picker_sheet.dart';
 import 'widgets/sticky_save_button.dart';
@@ -301,7 +302,7 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
   }
 
   Future<void> _selectDate() async {
-    final DateTime? picked = await showDatePicker(
+    final DateTime? picked = await showCupertinoDatePickerModal(
       context: context,
       initialDate: _selectedDate,
       firstDate: DateTime.now(),
@@ -315,7 +316,7 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
   }
 
   Future<void> _selectTime() async {
-    final TimeOfDay? picked = await showTimePicker(
+    final TimeOfDay? picked = await showCupertinoTimePickerModal(
       context: context,
       initialTime: _selectedTime,
     );
@@ -327,7 +328,7 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
   }
 
   Future<void> _selectEndDate() async {
-    final DateTime? picked = await showDatePicker(
+    final DateTime? picked = await showCupertinoDatePickerModal(
       context: context,
       initialDate: _endDate ?? _selectedDate.add(const Duration(days: 30)),
       firstDate: _selectedDate,
@@ -491,14 +492,6 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
         _selectedDate.month == now.month &&
         _selectedDate.day == now.day;
 
-    // "Remind me to"
-    spans.add(TextSpan(
-      text: 'Remind me to ',
-      style: TextStyle(
-        color: textColor,
-        fontWeight: FontWeight.w600,
-      ),
-    ));
 
     // [Reminder name]
     final reminderText = _reminderController.text.trim().isEmpty

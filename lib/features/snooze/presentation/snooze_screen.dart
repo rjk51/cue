@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import 'dart:math' as math;
 import '../../../services/theme_service.dart';
 import '../../../services/theme_notifier.dart';
+import '../../../shared/widgets/cupertino_pickers.dart';
+import '../../reminders/data/reminder_service.dart';
 
 class SnoozeScreen extends StatefulWidget {
   final String reminderId;
@@ -21,17 +23,19 @@ class SnoozeScreen extends StatefulWidget {
 
 class _SnoozeScreenState extends State<SnoozeScreen> {
   final ThemeService _themeService = ThemeService();
+  final ReminderService _reminderService = ReminderService();
   int _snoozeMinutes = 15;
   String? _selectedPreset;
   double _currentAngle =
       0.25 * 2 * 3.14159; // Start at 15 minutes (25% of circle)
   Color _accentColor = const Color(0xFFFFB4A3);
   bool _isDarkMode = false;
+  bool _isLoading = false;
 
   // State for custom times
   DateTime? _laterTodayTime;
   DateTime? _tomorrowTime;
-  DateTime? _nextWeekDateTime;
+  DateTime? _otherDayDateTime;
 
   @override
   void initState() {
@@ -112,24 +116,100 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
     return DateTime(now.year, now.month, now.day + 1, 9, 0); // 9:00 AM
   }
 
-  DateTime _calculateNextWeekMonday() {
+  DateTime _calculateOtherDayDefault() {
     final now = DateTime.now();
-    int daysUntilMonday = (DateTime.monday - now.weekday + 7) % 7;
-    if (daysUntilMonday == 0) daysUntilMonday = 7;
-    final nextMonday = now.add(Duration(days: daysUntilMonday));
-    return DateTime(nextMonday.year, nextMonday.month, nextMonday.day, 9, 0);
+    final tomorrow = now.add(const Duration(days: 1));
+    return DateTime(tomorrow.year, tomorrow.month, tomorrow.day, 9, 0);
   }
 
-  void _handleConfirmSnooze() {
-    // TODO: Implement snooze logic with backend
-    print('Snoozing for $_snoozeMinutes minutes');
-    Navigator.pop(context);
+  Future<void> _handleConfirmSnooze() async {
+    if (_isLoading) return;
+    final now = DateTime.now();
+
+    // Validate and get target time based on selected preset
+    DateTime? targetTime;
+    if (_selectedPreset == 'later') {
+      if (_laterTodayTime == null || !_laterTodayTime!.isAfter(now)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please choose a time later than now'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+      targetTime = _laterTodayTime;
+    } else if (_selectedPreset == 'morning') {
+      if (_tomorrowTime == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please choose a time for tomorrow'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+      targetTime = _tomorrowTime;
+    } else if (_selectedPreset == 'other_day') {
+      if (_otherDayDateTime == null || !_otherDayDateTime!.isAfter(now)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please choose a date and time in the future'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+      targetTime = _otherDayDateTime;
+    } else {
+      // Minutes-based snooze (default or when circle is used)
+      targetTime = now.add(Duration(minutes: _snoozeMinutes));
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      if (_selectedPreset == 'later' || _selectedPreset == 'morning' || _selectedPreset == 'other_day') {
+        await _reminderService.snoozeReminderTo(widget.reminderId, targetTime!);
+      } else {
+        await _reminderService.snoozeReminder(widget.reminderId, minutes: _snoozeMinutes);
+      }
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to snooze: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
-  void _handleMarkComplete() {
-    // TODO: Implement mark as complete logic
-    print('Marking reminder as complete');
-    Navigator.pop(context);
+  Future<void> _handleMarkComplete() async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+    try {
+      await _reminderService.markAsCompleted(widget.reminderId);
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to mark complete: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   IconData _getIconForTime(DateTime time) {
@@ -145,25 +225,22 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
     }
   }
 
+  String _getTimeOfDayLabel(DateTime time) {
+    final hour = time.hour;
+    if (hour >= 5 && hour < 12) return 'MORNING';
+    if (hour >= 12 && hour < 17) return 'AFTERNOON';
+    if (hour >= 17 && hour < 20) return 'EVENING';
+    return 'NIGHT';
+  }
+
   Future<void> _pickTodayTime() async {
     final now = DateTime.now();
     final initialTime =
         _laterTodayTime ?? DateTime(now.year, now.month, now.day, 18, 0);
 
-    final TimeOfDay? picked = await showTimePicker(
+    final TimeOfDay? picked = await showCupertinoTimePickerModal(
       context: context,
       initialTime: TimeOfDay.fromDateTime(initialTime),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.dark(
-              primary: _accentColor,
-              surface: const Color(0xFF2A2A2A),
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
 
     if (picked != null) {
@@ -201,20 +278,9 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
         _tomorrowTime ??
         DateTime(tomorrow.year, tomorrow.month, tomorrow.day, 9, 0);
 
-    final TimeOfDay? picked = await showTimePicker(
+    final TimeOfDay? picked = await showCupertinoTimePickerModal(
       context: context,
       initialTime: TimeOfDay.fromDateTime(initialTime),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.dark(
-              primary: _accentColor,
-              surface: const Color(0xFF2A2A2A),
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
 
     if (picked != null) {
@@ -233,48 +299,26 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
     }
   }
 
-  Future<void> _pickNextWeekDateTime() async {
+  Future<void> _pickOtherDayDateTime() async {
     final now = DateTime.now();
-    int daysUntilMonday = (DateTime.monday - now.weekday + 7) % 7;
-    if (daysUntilMonday == 0) daysUntilMonday = 7;
-    final nextMonday = now.add(Duration(days: daysUntilMonday));
+    final tomorrow = now.add(const Duration(days: 1));
     final initialDate =
-        _nextWeekDateTime ??
-        DateTime(nextMonday.year, nextMonday.month, nextMonday.day, 9, 0);
+        _otherDayDateTime ??
+        DateTime(tomorrow.year, tomorrow.month, tomorrow.day, 9, 0);
 
-    final DateTime? pickedDate = await showDatePicker(
+    final DateTime? pickedDate = await showCupertinoDatePickerModal(
       context: context,
-      initialDate: initialDate,
-      firstDate: now.add(const Duration(days: 1)),
+      initialDate: initialDate.isBefore(now) ? tomorrow : initialDate,
+      firstDate: now,
       lastDate: now.add(const Duration(days: 365)),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.dark(
-              primary: _accentColor,
-              surface: const Color(0xFF2A2A2A),
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
 
     if (pickedDate != null && mounted) {
-      final TimeOfDay? pickedTime = await showTimePicker(
+      final TimeOfDay? pickedTime = await showCupertinoTimePickerModal(
         context: context,
-        initialTime: TimeOfDay.fromDateTime(initialDate),
-        builder: (context, child) {
-          return Theme(
-            data: Theme.of(context).copyWith(
-              colorScheme: ColorScheme.dark(
-                primary: _accentColor,
-                surface: const Color(0xFF2A2A2A),
-              ),
-            ),
-            child: child!,
-          );
-        },
+        initialTime: TimeOfDay.fromDateTime(
+          _otherDayDateTime ?? initialDate,
+        ),
       );
 
       if (pickedTime != null) {
@@ -286,10 +330,19 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
           pickedTime.minute,
         );
 
-        setState(() {
-          _nextWeekDateTime = selectedDateTime;
-          _selectedPreset = 'next_week';
-        });
+        if (selectedDateTime.isAfter(now)) {
+          setState(() {
+            _otherDayDateTime = selectedDateTime;
+            _selectedPreset = 'other_day';
+          });
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please choose a date and time in the future'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }
@@ -505,10 +558,10 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
                           icon: _tomorrowTime != null
                               ? _getIconForTime(_tomorrowTime!)
                               : Icons.wb_twilight_outlined,
-                          label: 'MORNING',
-                          time: _tomorrowTime != null
-                              ? DateFormat('MMM d').format(_tomorrowTime!)
-                              : 'Tomorrow',
+                          label: _getTimeOfDayLabel(
+                            _tomorrowTime ?? _calculateTomorrowMorning(),
+                          ),
+                          time: 'Tomorrow',
                           subtitle: _tomorrowTime != null
                               ? DateFormat('h:mm a').format(_tomorrowTime!)
                               : DateFormat(
@@ -523,19 +576,15 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
                   SizedBox(height: 12.h),
                   _buildPresetCard(
                     icon: Icons.calendar_today_outlined,
-                    label: 'NEXT WEEK',
-                    time: _nextWeekDateTime != null
-                        ? DateFormat('EEEE, MMM d').format(_nextWeekDateTime!)
-                        : DateFormat(
-                            'EEEE, MMM d',
-                          ).format(_calculateNextWeekMonday()),
-                    subtitle: _nextWeekDateTime != null
-                        ? DateFormat('h:mm a').format(_nextWeekDateTime!)
-                        : DateFormat(
-                            'h:mm a',
-                          ).format(_calculateNextWeekMonday()),
-                    isSelected: _selectedPreset == 'next_week',
-                    onTap: _pickNextWeekDateTime,
+                    label: 'ANOTHER DAY',
+                    time: _otherDayDateTime != null
+                        ? DateFormat('EEEE, MMM d').format(_otherDayDateTime!)
+                        : 'Pick date',
+                    subtitle: _otherDayDateTime != null
+                        ? DateFormat('h:mm a').format(_otherDayDateTime!)
+                        : DateFormat('h:mm a').format(_calculateOtherDayDefault()),
+                    isSelected: _selectedPreset == 'other_day',
+                    onTap: _pickOtherDayDateTime,
                     isFullWidth: true,
                   ),
                 ],
@@ -554,7 +603,7 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
                     width: double.infinity,
                     height: 70.h,
                     child: ElevatedButton(
-                      onPressed: _handleConfirmSnooze,
+                      onPressed: _isLoading ? null : _handleConfirmSnooze,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _accentColor,
                         foregroundColor: _isDarkMode ? Colors.white : Colors.white,
@@ -563,27 +612,36 @@ class _SnoozeScreenState extends State<SnoozeScreen> {
                           borderRadius: BorderRadius.circular(28.r),
                         ),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.alarm, size: 22.sp),
-                          SizedBox(width: 8.w),
-                          Text(
-                            'Confirm Snooze',
-                            style: TextStyle(
-                              fontSize: 20.sp,
-                              fontWeight: FontWeight.w600,
+                      child: _isLoading
+                          ? SizedBox(
+                              height: 24.h,
+                              width: 24.w,
+                              child: const CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            )
+                          : Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.alarm, size: 22.sp),
+                                SizedBox(width: 8.w),
+                                Text(
+                                  'Confirm Snooze',
+                                  style: TextStyle(
+                                    fontSize: 20.sp,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                        ],
-                      ),
                     ),
                   ),
                   SizedBox(height: 16.h),
 
                   // Mark as Complete Button
                   TextButton(
-                    onPressed: _handleMarkComplete,
+                    onPressed: _isLoading ? null : _handleMarkComplete,
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [

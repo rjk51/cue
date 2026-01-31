@@ -133,8 +133,10 @@ class ReminderService {
         
         final updates = <String, dynamic>{
           'lastCompletedAt': FieldValue.serverTimestamp(),
+          'scheduledTimeAtSnooze': FieldValue.delete(),
+          'snoozedUntil': FieldValue.delete(),
         };
-        
+
         if (isRecurring) {
           // For recurring reminders, update consistency data locally first
           // This allows immediate UI update while Cloud Function processes in background
@@ -280,13 +282,17 @@ class ReminderService {
         final reminder = Reminder.fromMap(doc.data()!, doc.id);
         final newTime = DateTime.now().add(Duration(minutes: minutes));
         final isRecurring = reminder.recurrence != null;
-        
+        // Keep the original scheduled time for display — only set on first snooze, preserve on repeat snoozes
+        final scheduledDisplayTime = reminder.scheduledTimeAtSnooze ?? reminder.getEffectiveDisplayTime();
+
         final updates = <String, dynamic>{
           'scheduledTime': Timestamp.fromDate(newTime),
+          'scheduledTimeAtSnooze': Timestamp.fromDate(scheduledDisplayTime),
+          'snoozedUntil': Timestamp.fromDate(newTime),
           'notifiedAt': FieldValue.delete(),  // Clear notifiedAt so it can notify again
           'updatedAt': FieldValue.serverTimestamp(),
         };
-        
+
         // For recurring reminders, update nextDueAt (current occurrence)
         // For non-recurring reminders, update time (original scheduled time)
         if (isRecurring) {
@@ -312,6 +318,47 @@ class ReminderService {
       }
     } catch (e) {
       print('Error snoozing reminder: $e');
+      rethrow;
+    }
+  }
+
+  // Snooze a reminder to a specific date/time (for "later today", "tomorrow", or "another day")
+  Future<void> snoozeReminderTo(String reminderId, DateTime targetTime) async {
+    try {
+      final doc = await _firestore.collection(_collection).doc(reminderId).get();
+      if (doc.exists) {
+        final reminder = Reminder.fromMap(doc.data()!, doc.id);
+        final isRecurring = reminder.recurrence != null;
+        final scheduledDisplayTime = reminder.scheduledTimeAtSnooze ?? reminder.getEffectiveDisplayTime();
+
+        final updates = <String, dynamic>{
+          'scheduledTime': Timestamp.fromDate(targetTime),
+          'scheduledTimeAtSnooze': Timestamp.fromDate(scheduledDisplayTime),
+          'snoozedUntil': Timestamp.fromDate(targetTime),
+          'notifiedAt': FieldValue.delete(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        };
+
+        if (isRecurring) {
+          updates['nextDueAt'] = Timestamp.fromDate(targetTime);
+        } else {
+          updates['time'] = Timestamp.fromDate(targetTime);
+        }
+
+        await _firestore.collection(_collection).doc(reminderId).update(updates);
+
+        await _firestore.collection('pending_notifications').doc(reminderId).set({
+          'reminderId': reminderId,
+          'scheduledTime': Timestamp.fromDate(targetTime),
+          'reminderName': reminder.name,
+          'reminderDescription': reminder.name,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+
+        print('Reminder snoozed to $targetTime: $reminderId');
+      }
+    } catch (e) {
+      print('Error snoozing reminder to time: $e');
       rethrow;
     }
   }

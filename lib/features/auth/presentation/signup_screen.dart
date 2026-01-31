@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../../services/auth_service.dart';
+import '../../../services/local_storage_service.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
 import '../../home/presentation/home_screen.dart';
 import '../../onboarding/presentation/theme_preference_screen.dart';
@@ -23,6 +24,7 @@ class _SignupScreenState extends State<SignupScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _authService = AuthService();
+  final _storage = LocalStorageService.instance;
   bool _isLoading = false;
   bool _obscurePassword = true;
 
@@ -91,8 +93,9 @@ class _SignupScreenState extends State<SignupScreen> {
             barrierDismissible: false,
             builder: (context) => LinkAccountDialog(
               email: result.email!,
-              onSuccess: () {
-                // Navigate to home after successful linking
+              onSuccess: () async {
+                // Navigate to home after successful linking (treat as first device)
+                await _storage.set('device_sync_onboarding_shown', true);
                 Navigator.pushAndRemoveUntil(
                   context,
                   MaterialPageRoute(builder: (context) => const HomeScreen()),
@@ -147,8 +150,9 @@ class _SignupScreenState extends State<SignupScreen> {
             builder: (context) => LinkAccountDialog(
               email: result.email!,
               appleCredential: result.appleCredential,
-              onSuccess: () {
-                // Navigate to home after successful linking
+              onSuccess: () async {
+                // Navigate to home after successful linking (treat as first device)
+                await _storage.set('device_sync_onboarding_shown', true);
                 Navigator.pushAndRemoveUntil(
                   context,
                   MaterialPageRoute(builder: (context) => const HomeScreen()),

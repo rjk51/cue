@@ -374,6 +374,7 @@ class NotificationService {
     required String body,
     required String payload,
   }) async {
+    // Always use custom ringtone for reminder/snooze notifications
     final AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
       'reminder_channel',
@@ -381,6 +382,8 @@ class NotificationService {
       channelDescription: 'Notification channel for reminders',
       importance: Importance.high,
       priority: Priority.high,
+      sound: RawResourceAndroidNotificationSound('notification_ringtone'),
+      playSound: true,
       actions: <AndroidNotificationAction>[
         const AndroidNotificationAction(
           'mark_done',
@@ -414,6 +417,7 @@ class NotificationService {
       presentAlert: true,
       presentBadge: true,
       presentSound: true,
+      sound: 'notification_ringtone.wav',
     );
 
     final NotificationDetails notificationDetails = NotificationDetails(
@@ -533,8 +537,8 @@ class NotificationService {
   Future<void> showTestNotification() async {
     print('🧪 Showing test notification...');
     print('📱 Platform: ${Platform.isIOS ? "iOS" : "Android"}');
-    
-    const AndroidNotificationDetails androidDetails =
+
+    final AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
       'reminder_channel',
       'Reminders',
@@ -542,6 +546,8 @@ class NotificationService {
       importance: Importance.max,
       priority: Priority.high,
       icon: '@mipmap/ic_launcher',
+      sound: RawResourceAndroidNotificationSound('notification_ringtone'),
+      playSound: true,
       actions: <AndroidNotificationAction>[
         AndroidNotificationAction(
           'done',
@@ -563,9 +569,10 @@ class NotificationService {
       presentAlert: true,
       presentBadge: true,
       presentSound: true,
+      sound: 'notification_ringtone.wav',
     );
 
-    const NotificationDetails notificationDetails = NotificationDetails(
+    final NotificationDetails notificationDetails = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
     );

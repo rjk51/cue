@@ -6,6 +6,7 @@ import '../../reminders/domain/reminder_model.dart';
 import '../../reminders/data/reminder_service.dart';
 import '../../reminders/presentation/reminder_details_screen.dart';
 import '../../../services/theme_service.dart';
+import '../../../shared/widgets/cupertino_pickers.dart';
 
 class ReminderListScreen extends StatefulWidget {
   const ReminderListScreen({super.key});
@@ -267,30 +268,30 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
                       ),
                     ],
                   ),
-                  Row(
-                    children: [
-                      IconButton(
-                        onPressed: () {
-                          setState(() {
-                            _isSearching = !_isSearching;
-                            if (!_isSearching) {
-                              _searchController.clear();
-                              _searchFocusNode.unfocus();
-                            } else {
-                              _searchFocusNode.requestFocus();
-                            }
-                          });
-                        },
-                        icon: Icon(
-                          _isSearching ? Icons.close : Icons.search,
-                          color: subtitleColor,
-                          size: 24.sp,
-                        ),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
-                    ],
-                  ),
+                  // Row(
+                  //   children: [
+                  //     IconButton(
+                  //       onPressed: () {
+                  //         setState(() {
+                  //           _isSearching = !_isSearching;
+                  //           if (!_isSearching) {
+                  //             _searchController.clear();
+                  //             _searchFocusNode.unfocus();
+                  //           } else {
+                  //             _searchFocusNode.requestFocus();
+                  //           }
+                  //         });
+                  //       },
+                  //       icon: Icon(
+                  //         _isSearching ? Icons.close : Icons.search,
+                  //         color: subtitleColor,
+                  //         size: 24.sp,
+                  //       ),
+                  //       padding: EdgeInsets.zero,
+                  //       constraints: const BoxConstraints(),
+                  //     ),
+                  //   ],
+                  // ),
                 ],
               ),
             ),
@@ -397,21 +398,11 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
                   SizedBox(width: 8.w),
                   GestureDetector(
                     onTap: () async {
-                      final picked = await showDatePicker(
+                      final picked = await showCupertinoDatePickerModal(
                         context: context,
                         initialDate: _selectedDate,
                         firstDate: DateTime(2020),
                         lastDate: DateTime(2030),
-                        builder: (context, child) {
-                          return Theme(
-                            data: Theme.of(context).copyWith(
-                              colorScheme: ColorScheme.light(
-                                primary: _accentColor,
-                              ),
-                            ),
-                            child: child!,
-                          );
-                        },
                       );
                       if (picked != null) {
                         setState(() {
@@ -694,10 +685,8 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
     bool isCompleted, {
     bool isPaused = false,
   }) {
-    // Use override-aware display values for recurring reminders
-    final displayTime = reminder.recurrence != null
-        ? reminder.getEffectiveDisplayTime()
-        : reminder.time;
+    // Show scheduled time (original time when snoozed, same as current cue card)
+    final displayTime = reminder.scheduledDisplayTime;
 
     final dateKey = DateFormat('yyyy-MM-dd').format(displayTime);
     if (reminder.recurrence != null && reminder.isSkippedOnDate(dateKey)) {
@@ -706,10 +695,16 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
     final displayTitle = reminder.recurrence != null
         ? reminder.getEffectiveDisplayName()
         : reminder.name;
-    
+
     final timeOnly = DateFormat('hh:mm a').format(displayTime);
     final dateText = DateFormat('MMM d').format(displayTime);
     final hasRecurrence = reminder.recurrence != null;
+
+    final snoozedUntil = reminder.snoozedUntil;
+    final isSnoozed = snoozedUntil != null;
+    final snoozedUntilFormatted = snoozedUntil != null
+        ? DateFormat('hh:mm a').format(snoozedUntil)
+        : null;
 
     return GestureDetector(
       onTap: () {
@@ -790,16 +785,48 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
                   SizedBox(height: 6.h),
                   Row(
                     children: [
-                      Text(
-                        _isSameDay(_selectedDate, DateTime.now())
-                            ? timeOnly
-                            : '$dateText · $timeOnly',
-                        style: TextStyle(
-                          fontSize: 13.sp,
-                          color: subtitleColor,
-                          fontWeight: FontWeight.w500,
+                      Flexible(
+                        child: Text(
+                          _isSameDay(_selectedDate, DateTime.now())
+                              ? timeOnly
+                              : '$dateText · $timeOnly',
+                          style: TextStyle(
+                            fontSize: 13.sp,
+                            color: subtitleColor,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      // Snooze: "Rings at [time]" in the time row
+                      if (isSnoozed && snoozedUntilFormatted != null) ...[
+                        SizedBox(width: 8.w),
+                        Text(
+                          '·',
+                          style: TextStyle(
+                            fontSize: 13.sp,
+                            color: subtitleColor,
+                          ),
+                        ),
+                        SizedBox(width: 6.w),
+                        Icon(
+                          Icons.snooze_rounded,
+                          size: 12.sp,
+                          color: _accentColor,
+                        ),
+                        SizedBox(width: 4.w),
+                        Text(
+                          'Snoozed until $snoozedUntilFormatted',
+                          style: TextStyle(
+                            fontSize: 12.sp,
+                            fontWeight: FontWeight.w500,
+                            color: _accentColor,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                       // Show frequency for recurring reminders
                       if (hasRecurrence) ...[
                         SizedBox(width: 8.w),

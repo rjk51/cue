@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flex_color_picker/flex_color_picker.dart';
 import '../../../services/theme_service.dart';
+import '../../../services/local_storage_service.dart';
 import '../../home/presentation/home_screen.dart';
 
 class AccentColorScreen extends StatefulWidget {
@@ -15,6 +16,7 @@ class AccentColorScreen extends StatefulWidget {
 
 class _AccentColorScreenState extends State<AccentColorScreen> {
   final ThemeService _themeService = ThemeService();
+  final _storage = LocalStorageService.instance;
   Color _selectedColor = const Color(0xFFFFB4A3); // Default coral color
   bool _isLoading = false;
 
@@ -96,6 +98,9 @@ class _AccentColorScreenState extends State<AccentColorScreen> {
     try {
       // Save accent color preference
       await _themeService.setAccentColor(_selectedColor);
+
+      // Mark device sync onboarding as shown (first device doesn't need sync screen)
+      await _storage.set('device_sync_onboarding_shown', true);
 
       if (mounted) {
         // Navigate to home screen

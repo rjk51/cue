@@ -34,22 +34,14 @@ class CurrentCueCard extends StatefulWidget {
   State<CurrentCueCard> createState() => _CurrentCueCardState();
 }
 
-class _CurrentCueCardState extends State<CurrentCueCard>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _swipeController;
-  late Animation<double> _swipeAnimation;
+class _CurrentCueCardState extends State<CurrentCueCard> {
   late TextEditingController _notesController;
   final FocusNode _notesFocusNode = FocusNode();
   final ReminderService _reminderService = ReminderService();
 
-  double _dragOffset = 0;
-  bool _isSnoozeMode = false;
-  bool _isSnoozeExpanded = false;
-
   @override
   void initState() {
     super.initState();
-    _initAnimations();
     _notesController = TextEditingController(text: widget.reminder.notes ?? '');
 
     // Listen to focus changes to update UI and save notes on blur
@@ -67,32 +59,11 @@ class _CurrentCueCardState extends State<CurrentCueCard>
     // Update notes controller when reminder changes
     if (oldWidget.reminder.id != widget.reminder.id) {
       _notesController.text = widget.reminder.notes ?? '';
-      // Reset snooze slider state when reminder changes
-      _dragOffset = 0;
-      _isSnoozeMode = false;
-      _isSnoozeExpanded = false;
-      _swipeController.reset();
     }
-  }
-
-  void _initAnimations() {
-    _swipeController = AnimationController(
-      duration: const Duration(milliseconds: 300),
-      vsync: this,
-    );
-
-    _swipeAnimation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _swipeController, curve: Curves.easeOutCubic),
-    );
-
-    _swipeController.addListener(() {
-      setState(() {});
-    });
   }
 
   @override
   void dispose() {
-    _swipeController.dispose();
     _notesController.dispose();
     _notesFocusNode.dispose();
     super.dispose();
@@ -121,26 +92,21 @@ class _CurrentCueCardState extends State<CurrentCueCard>
           reminderTitle: widget.reminder.name,
         ),
       ),
-    ).then((_) {
-      // Reset snooze slider state when returning from snooze screen
-      if (mounted) {
-        setState(() {
-          _dragOffset = 0;
-          _isSnoozeMode = false;
-          _isSnoozeExpanded = false;
-        });
-        _swipeController.reset();
-      }
-    });
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    // Use effective display time to respect per-day overrides
-    final displayTime = widget.reminder.getEffectiveDisplayTime();
+    // Show scheduled time only (original time when snoozed, not the snooze time)
+    final displayTime = widget.reminder.scheduledDisplayTime;
     final timeText = widget.getTimeDisplayText(displayTime);
     final formattedTime = DateFormat('hh:mm a').format(displayTime);
     final displayTitle = widget.reminder.getEffectiveDisplayName();
+    final snoozedUntil = widget.reminder.snoozedUntil;
+    final isSnoozed = snoozedUntil != null;
+    final snoozedUntilFormatted = snoozedUntil != null
+        ? DateFormat('hh:mm a').format(snoozedUntil)
+        : null;
 
     return GestureDetector(
       onTap: () {
@@ -172,8 +138,18 @@ class _CurrentCueCardState extends State<CurrentCueCard>
           children: [
             // Header row with label and icon
             Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
+                // Reminder title
+                Text(
+                  displayTitle,
+                  style: TextStyle(
+                    fontSize: 46.sp,
+                    fontWeight: FontWeight.w700,
+                    color: widget.textColor,
+                    height: 1.2,
+                  ),
+                ),
                 // Dynamic icon from reminder
                 Container(
                   width: 50.w,
@@ -191,22 +167,10 @@ class _CurrentCueCardState extends State<CurrentCueCard>
               ],
             ),
 
-            SizedBox(height: 12.h),
-
-            // Reminder title
-            Text(
-              displayTitle,
-              style: TextStyle(
-                fontSize: 46.sp,
-                fontWeight: FontWeight.w700,
-                color: widget.textColor,
-                height: 1.2,
-              ),
-            ),
 
             SizedBox(height: 12.h),
 
-            // Time info (below title)
+            // Time info (below title) — scheduled time only
             Row(
               children: [
                 Icon(
@@ -241,6 +205,37 @@ class _CurrentCueCardState extends State<CurrentCueCard>
                 ),
               ],
             ),
+
+            // Snooze chip — only when snoozed: "Rings at [time]"
+            if (isSnoozed && snoozedUntilFormatted != null) ...[
+              SizedBox(height: 10.h),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
+                decoration: BoxDecoration(
+                  color: widget.accentColor.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(20.r),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.snooze_rounded,
+                      size: 14.sp,
+                      color: widget.accentColor,
+                    ),
+                    SizedBox(width: 6.w),
+                    Text(
+                      'Snoozed until $snoozedUntilFormatted',
+                      style: TextStyle(
+                        fontSize: 13.sp,
+                        fontWeight: FontWeight.w500,
+                        color: widget.accentColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
 
             SizedBox(height: 32.h),
 
@@ -332,29 +327,13 @@ class _CurrentCueCardState extends State<CurrentCueCard>
   Widget _buildActionButtons() {
     return Row(
       children: [
-        // Snooze button or slider
         Expanded(
-          flex: _isSnoozeExpanded ? 4 : 2,
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            transitionBuilder: (child, animation) {
-              return FadeTransition(
-                opacity: animation,
-                child: ScaleTransition(
-                  scale: animation,
-                  child: child,
-                ),
-              );
-            },
-            child: _isSnoozeExpanded
-                ? _buildSnoozeSlider()
-                : _buildSnoozeButton(),
-          ),
+          flex: 2,
+          child: _buildSnoozeButton(),
         ),
         SizedBox(width: 12.w),
-        // Done button (always visible)
         Expanded(
-          flex: _isSnoozeExpanded ? 2 : 3,
+          flex: 3,
           child: _buildDoneButton(),
         ),
       ],
@@ -363,13 +342,8 @@ class _CurrentCueCardState extends State<CurrentCueCard>
 
   Widget _buildSnoozeButton() {
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          _isSnoozeExpanded = true;
-        });
-      },
+      onTap: _navigateToSnooze,
       child: Container(
-        key: const ValueKey('snooze_button'),
         height: 64.h,
         decoration: BoxDecoration(
           color: widget.isDarkMode
@@ -420,144 +394,20 @@ class _CurrentCueCardState extends State<CurrentCueCard>
               color: Colors.white,
               size: 20.sp,
             ),
-            if (!_isSnoozeExpanded) ...[
-              SizedBox(width: 8.w),
-              Text(
-                'DONE',
-                style: TextStyle(
-                  fontSize: 14.sp,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                  letterSpacing: 0.5,
-                ),
+            SizedBox(width: 8.w),
+            Text(
+              'DONE',
+              style: TextStyle(
+                fontSize: 14.sp,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+                letterSpacing: 0.5,
               ),
-            ],
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSnoozeSlider() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final maxWidth = constraints.maxWidth;
-        final thumbSize = 48.h;
-        final trackHeight = 64.h;
-        final maxSlide = maxWidth - thumbSize - 8.w;
-
-        return GestureDetector(
-          onHorizontalDragStart: (_) {
-            setState(() {
-              _dragOffset = 0;
-            });
-          },
-          onHorizontalDragUpdate: (details) {
-            setState(() {
-              _dragOffset += details.delta.dx;
-              _dragOffset = _dragOffset.clamp(0, maxSlide);
-
-              final progress = _dragOffset / maxSlide;
-              if (progress > 0.2) {
-                if (!_isSnoozeMode) {
-                  _isSnoozeMode = true;
-                  _swipeController.forward();
-                }
-              } else {
-                if (_isSnoozeMode) {
-                  _isSnoozeMode = false;
-                  _swipeController.reverse();
-                }
-              }
-            });
-          },
-          onHorizontalDragEnd: (_) {
-            final progress = _dragOffset / maxSlide;
-            if (progress > 0.85) {
-              _navigateToSnooze();
-            } else {
-              // If not completed, collapse back to two buttons
-              setState(() {
-                _dragOffset = 0;
-                _isSnoozeMode = false;
-                _isSnoozeExpanded = false;
-              });
-              _swipeController.reverse();
-            }
-          },
-          child: Container(
-            key: const ValueKey('snooze_slider'),
-            width: double.infinity,
-            height: trackHeight,
-            decoration: BoxDecoration(
-              color: widget.accentColor,
-              borderRadius: BorderRadius.circular(36.r),
-            ),
-            child: Stack(
-              children: [
-                // Background text
-                Positioned.fill(
-                  child: Center(
-                    child: Text(
-                      'Snooze',
-                      style: TextStyle(
-                        fontSize: 16.sp,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-                // Thumb
-                AnimatedBuilder(
-                  animation: _swipeController,
-                  builder: (context, child) {
-                    final animProgress = _swipeAnimation.value;
-                    final baseThumbColor = Color.lerp(
-                      widget.accentColor,
-                      Colors.white,
-                      0.20,
-                    )!;
-
-                    return Positioned(
-                      left: 8.w + _dragOffset,
-                      top: 8.h,
-                      child: Container(
-                        width: thumbSize,
-                        height: thumbSize,
-                        decoration: BoxDecoration(
-                          color: Color.lerp(
-                            baseThumbColor,
-                            Colors.orange,
-                            animProgress,
-                          ),
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Color.lerp(
-                                baseThumbColor,
-                                Colors.orange,
-                                animProgress,
-                              )!.withOpacity(0.4),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Icon(
-                          Icons.snooze_rounded,
-                          color: Colors.white,
-                          size: 24.sp,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
 }

@@ -9,6 +9,7 @@ import '../../auth/presentation/welcome_screen.dart';
 import '../../subscription/presentation/cue_pro_paywall_screen.dart';
 import 'appearance_screen.dart';
 import 'devices_screen.dart';
+// import 'notification_settings_screen.dart'; // Used when Notifications card is enabled
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -373,80 +374,75 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         children: [
                           // Avatar placeholder
                           Container(
-                            width: 56.w,
-                            height: 56.h,
-                            decoration: BoxDecoration(
-                              color: _accentColor.withOpacity(0.2),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Center(
-                              child: Text(
-                                _userName.isNotEmpty
-                                    ? _userName[0].toUpperCase()
-                                    : 'U',
-                                style: TextStyle(
-                                  fontSize: 24.sp,
-                                  fontWeight: FontWeight.w600,
-                                  color: _accentColor,
-                                ),
+                          width: 56.w,
+                          height: 56.h,
+                          decoration: BoxDecoration(
+                            color: _accentColor.withOpacity(0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Text(
+                              _userName.isNotEmpty
+                                  ? _userName[0].toUpperCase()
+                                  : 'U',
+                              style: TextStyle(
+                                fontSize: 24.sp,
+                                fontWeight: FontWeight.w600,
+                                color: _accentColor,
                               ),
                             ),
                           ),
-                          SizedBox(width: 16.w),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Text(
-                                      _userName,
-                                      style: TextStyle(
-                                        fontSize: 18.sp,
-                                        fontWeight: FontWeight.w600,
-                                        color: textColor,
-                                      ),
+                        ),
+                        SizedBox(width: 16.w),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
+                                    _userName,
+                                    style: TextStyle(
+                                      fontSize: 18.sp,
+                                      fontWeight: FontWeight.w600,
+                                      color: textColor,
                                     ),
-                                    SizedBox(width: 8.w),
-                                    Container(
-                                      padding: EdgeInsets.symmetric(
-                                        horizontal: 8.w,
-                                        vertical: 2.h,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: _accentColor,
-                                        borderRadius: BorderRadius.circular(
-                                          4.r,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        'PRO',
-                                        style: TextStyle(
-                                          fontSize: 10.sp,
-                                          fontWeight: FontWeight.w700,
-                                          color: Colors.white,
-                                          letterSpacing: 0.5,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                SizedBox(height: 4.h),
-                                Text(
-                                  _userEmail,
-                                  style: TextStyle(
-                                    fontSize: 14.sp,
-                                    color: subtitleColor,
                                   ),
+                                  SizedBox(width: 8.w),
+                                  Container(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 8.w,
+                                      vertical: 2.h,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: _accentColor,
+                                      borderRadius: BorderRadius.circular(
+                                        4.r,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'PRO',
+                                      style: TextStyle(
+                                        fontSize: 10.sp,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 4.h),
+                              Text(
+                                _userEmail,
+                                style: TextStyle(
+                                  fontSize: 14.sp,
+                                  color: subtitleColor,
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
-                          Icon(
-                            Icons.chevron_right,
-                            color: subtitleColor,
-                            size: 24.sp,
-                          ),
+                        ),
                         ],
                       ),
                     ),
@@ -482,56 +478,62 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       child: Column(
                         children: [
-                          // Notifications row
-                          GestureDetector(
-                            onTap: () {
-                              // TODO: Navigate to notifications settings
-                            },
-                            child: Padding(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: 20.w,
-                                vertical: 16.h,
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 40.w,
-                                    height: 40.h,
-                                    decoration: BoxDecoration(
-                                      color: Colors.orange.withOpacity(0.15),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Icon(
-                                      Icons.notifications_outlined,
-                                      color: Colors.orange,
-                                      size: 22.sp,
-                                    ),
-                                  ),
-                                  SizedBox(width: 16.w),
-                                  Expanded(
-                                    child: Text(
-                                      'Notifications',
-                                      style: TextStyle(
-                                        fontSize: 16.sp,
-                                        fontWeight: FontWeight.w500,
-                                        color: textColor,
-                                      ),
-                                    ),
-                                  ),
-                                  Icon(
-                                    Icons.chevron_right,
-                                    color: subtitleColor,
-                                    size: 20.sp,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          Divider(
-                            height: 1,
-                            thickness: 1,
-                            color: subtitleColor.withOpacity(0.08),
-                          ),
+                          // Notifications row (commented out)
+                          // GestureDetector(
+                          //   onTap: () {
+                          //     Navigator.push(
+                          //       context,
+                          //       MaterialPageRoute(
+                          //         builder: (context) =>
+                          //             const NotificationSettingsScreen(),
+                          //       ),
+                          //     );
+                          //   },
+                          //   child: Padding(
+                          //     padding: EdgeInsets.symmetric(
+                          //       horizontal: 20.w,
+                          //       vertical: 16.h,
+                          //     ),
+                          //     child: Row(
+                          //       children: [
+                          //         Container(
+                          //           width: 40.w,
+                          //           height: 40.h,
+                          //           decoration: BoxDecoration(
+                          //             color: Colors.orange.withOpacity(0.15),
+                          //             shape: BoxShape.circle,
+                          //           ),
+                          //           child: Icon(
+                          //             Icons.notifications_outlined,
+                          //             color: Colors.orange,
+                          //             size: 22.sp,
+                          //           ),
+                          //         ),
+                          //         SizedBox(width: 16.w),
+                          //         Expanded(
+                          //           child: Text(
+                          //             'Notifications',
+                          //             style: TextStyle(
+                          //               fontSize: 16.sp,
+                          //               fontWeight: FontWeight.w500,
+                          //               color: textColor,
+                          //             ),
+                          //           ),
+                          //         ),
+                          //         Icon(
+                          //           Icons.chevron_right,
+                          //           color: subtitleColor,
+                          //           size: 20.sp,
+                          //         ),
+                          //       ],
+                          //     ),
+                          //   ),
+                          // ),
+                          // Divider(
+                          //   height: 1,
+                          //   thickness: 1,
+                          //   color: subtitleColor.withOpacity(0.08),
+                          // ),
 
                           // Appearance row
                           GestureDetector(
