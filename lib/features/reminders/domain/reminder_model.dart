@@ -216,9 +216,12 @@ class Reminder {
   }
   
   // Helper to get icon as IconData
-  IconData get icon => iconCodePoint != null 
-      ? IconData(iconCodePoint!, fontFamily: 'MaterialIcons')
-      : Icons.notification_important_outlined;
+  IconData get icon {
+    if (iconCodePoint == null) {
+      return Icons.notification_important_outlined;
+    }
+    return IconData(iconCodePoint!, fontFamily: 'MaterialIcons');
+  }
   
   // Helper to get color as Color
   Color get color => colorValue != null 

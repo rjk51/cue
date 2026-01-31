@@ -1,6 +1,6 @@
+import 'package:cue/features/subscription/presentation/cue_pro_paywall_screen_new.dart';
 import 'package:flutter/material.dart';
 import '../../../services/revenue_cat_service.dart';
-import 'cue_pro_paywall_screen.dart';
 
 /// Helper widget to check Cue Pro access and show paywall if needed
 class CueProGate extends StatelessWidget {

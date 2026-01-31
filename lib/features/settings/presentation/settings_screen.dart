@@ -829,10 +829,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         onPressed: _handleDeleteAccount,
                         child: Text(
                           'Delete Account',
-                          style: TextStyle(
-                            fontSize: 16.sp,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.red.withOpacity(0.7),
+                           style: TextStyle(
+                            fontSize: 18.sp,
+                            fontWeight: FontWeight.w600,
+                            color: const Color.fromARGB(255, 232, 96, 86),
                           ),
                         ),
                       ),
