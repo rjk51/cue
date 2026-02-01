@@ -9,17 +9,22 @@ class RevenueCatService {
   RevenueCatService._internal();
 
   // RevenueCat API Keys
-  // NOTE: This is a test key. Replace with production keys before release
-  static const String _appleApiKey = 'test_MpMYAkZJHyTvuynILFqEaRPUJgm';
-  static const String _googleApiKey = 'test_MpMYAkZJHyTvuynILFqEaRPUJgm';
+  // Production RevenueCat API Keys (provided by user)
+  static const String _appleApiKey = 'appl_AOYFLDbYUPKWalWIbTvYapqCJqv';
+  static const String _googleApiKey = 'goog_tNVCUEDZWrQLWhdOIDxjmFLsrIA';
+  
+  // Test/Development API Keys (optional - set these if you have test keys)
+  static const String _appleTestApiKey = ''; // Add your iOS test key here if needed
+  static const String _googleTestApiKey = ''; // Add your Android test key here if needed
 
   // Entitlement identifier - configured in RevenueCat dashboard
   static const String proEntitlementId = 'Cue Pro';
 
-  // Product identifiers
-  static const String monthlyProductId = 'monthly';
-  static const String yearlyProductId = 'yearly';
-  static const String lifetimeProductId = 'lifetime';
+  // Product identifiers (Play Store format: subscriptionId:basePlanId)
+  // Note: Use offerings/packages instead of hardcoded product IDs when possible
+  static const String monthlyProductId = 'monthly2:monthly';
+  static const String yearlyProductId = 'yearly2:yearly';
+  static const String lifetimeProductId = 'lifetime2:lifetime';
 
   bool _isConfigured = false;
 
@@ -34,10 +39,22 @@ class RevenueCatService {
     }
 
     try {
-      // Configure SDK based on platform
-      final configuration = PurchasesConfiguration(
-        Platform.isIOS ? _appleApiKey : _googleApiKey,
-      );
+      // Select the appropriate API key based on platform and build mode
+      final String apiKey;
+      if (Platform.isIOS) {
+        // iOS: use test key in debug mode if available, otherwise production
+        apiKey = kReleaseMode 
+            ? _appleApiKey 
+            : (_appleTestApiKey.isNotEmpty ? _appleTestApiKey : _appleApiKey);
+      } else {
+        // Android: use test key in debug mode if available, otherwise production
+        apiKey = kReleaseMode 
+            ? _googleApiKey 
+            : (_googleTestApiKey.isNotEmpty ? _googleTestApiKey : _googleApiKey);
+      }
+
+      // Configure SDK with selected API key
+      final configuration = PurchasesConfiguration(apiKey);
 
       if (userId != null) {
         configuration.appUserID = userId;
@@ -46,6 +63,7 @@ class RevenueCatService {
       // Enable debug logs in debug mode
       if (kDebugMode) {
         await Purchases.setLogLevel(LogLevel.debug);
+        print('RevenueCat initializing with ${kReleaseMode ? 'production' : 'debug'} key for ${Platform.isIOS ? 'iOS' : 'Android'}');
       }
 
       await Purchases.configure(configuration);

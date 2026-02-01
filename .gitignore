@@ -44,3 +44,6 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 test.js
+# Local keystore and key properties
+/android/key.jks
+/android/key.properties
