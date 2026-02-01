@@ -163,13 +163,17 @@ class _CurrentCueCardState extends State<CurrentCueCard>
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 // Reminder title
-                Text(
-                  displayTitle,
-                  style: TextStyle(
-                    fontSize: 46.sp,
-                    fontWeight: FontWeight.w700,
-                    color: widget.textColor,
-                    height: 1.2,
+                Expanded(
+                  child: Text(
+                    displayTitle,
+                    style: TextStyle(
+                      fontSize: 46.sp,
+                      fontWeight: FontWeight.w700,
+                      color: widget.textColor,
+                      height: 1.2,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 // Dynamic icon from reminder
