@@ -20,7 +20,7 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
   final ThemeService _themeService = ThemeService();
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
-  
+
   Color _accentColor = const Color(0xFF2D7A78);
   bool _isDarkMode = false;
   bool _isSearching = false;
@@ -38,7 +38,7 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
       });
     });
   }
-  
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -68,9 +68,7 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
     setState(() {
       _selectedDay = day;
       final now = DateTime.now();
-      if (day == 'Yesterday') {
-        _selectedDate = now.subtract(const Duration(days: 1));
-      } else if (day == 'Today') {
+      if (day == 'Today') {
         _selectedDate = now;
       } else if (day == 'Tomorrow') {
         _selectedDate = now.add(const Duration(days: 1));
@@ -83,136 +81,260 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
         date1.month == date2.month &&
         date1.day == date2.day;
   }
-  
+
   bool _matchesSearchQuery(Reminder reminder) {
     if (_searchQuery.isEmpty) return true;
-    
+
     // Search in reminder name/title
     if (reminder.name.toLowerCase().contains(_searchQuery)) {
       return true;
     }
-    
+
     // Search in notes
-    if (reminder.notes != null && 
+    if (reminder.notes != null &&
         reminder.notes!.toLowerCase().contains(_searchQuery)) {
       return true;
     }
-    
+
     return false;
   }
 
-  bool _shouldShowRecurringReminderOnDate(Reminder reminder, DateTime selectedDate) {
+  bool _shouldShowRecurringReminderOnDate(
+    Reminder reminder,
+    DateTime selectedDate,
+  ) {
     if (reminder.recurrence == null) return false;
-    
-    final selectedDateStr = '${selectedDate.year.toString().padLeft(4, '0')}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}';
-    
+
+    final selectedDateStr =
+        '${selectedDate.year.toString().padLeft(4, '0')}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}';
+
     // Check if the reminder was completed on this specific date
     // If so, it should be shown in the completed section
+    // Check override completion (for hourly reminders)
+    final override = reminder.getOverrideForDate(selectedDateStr);
+    if (override != null && override['completedTimes'] != null) {
+      final completedTimes = override['completedTimes'] as List<dynamic>?;
+      if (completedTimes != null && completedTimes.isNotEmpty) {
+        return true;
+      }
+    }
+
     if (reminder.consistency != null) {
       if (reminder.consistency!.wasCompletedOnDate(selectedDateStr)) {
         return true; // Always show if it was completed on this date
       }
     }
-    
+
     // Check if nextDueAt is for this date or a recent missed date
     // This handles missed occurrences - show them until they're completed or skipped
     if (reminder.nextDueAt != null) {
       final nextDueDate = reminder.nextDueAt!;
-      final nextDueDateStr = '${nextDueDate.year.toString().padLeft(4, '0')}-${nextDueDate.month.toString().padLeft(2, '0')}-${nextDueDate.day.toString().padLeft(2, '0')}';
-      
+      final nextDueDateStr =
+          '${nextDueDate.year.toString().padLeft(4, '0')}-${nextDueDate.month.toString().padLeft(2, '0')}-${nextDueDate.day.toString().padLeft(2, '0')}';
+
       // If nextDueAt matches selected date and hasn't been completed/skipped, show it
       if (nextDueDateStr == selectedDateStr) {
-        final isCompleted = reminder.consistency != null && 
+        final isCompleted =
+            reminder.consistency != null &&
             reminder.consistency!.wasCompletedOnDate(selectedDateStr);
         final isSkipped = reminder.isSkippedOnDate(selectedDateStr);
-        
+
         if (!isCompleted && !isSkipped) {
           return true; // Show missed occurrence
         }
       }
-      
+
       // Also show missed reminders: if nextDueAt is within last 24 hours and we're viewing today
       final now = DateTime.now();
-      final todayStr = '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-      
+      final todayStr =
+          '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
       if (selectedDateStr == todayStr) {
         final hoursDiff = now.difference(nextDueDate).inHours;
         // Show if nextDueAt was within last 24 hours and hasn't been completed/skipped
         if (hoursDiff >= 0 && hoursDiff < 24) {
-          final isCompleted = reminder.consistency != null && 
+          final isCompleted =
+              reminder.consistency != null &&
               reminder.consistency!.wasCompletedOnDate(nextDueDateStr);
           final isSkipped = reminder.isSkippedOnDate(nextDueDateStr);
-          
+
           if (!isCompleted && !isSkipped) {
             return true; // Show missed reminder on today's list
           }
         }
       }
     }
-    
+
     final recurrence = reminder.recurrence!;
     final type = recurrence['type'] as String?;
-    
+
     // Don't show completed reminders on future dates
     if (reminder.isCompleted && selectedDate.isAfter(DateTime.now())) {
       return false;
     }
-    
+
     // Get the start date (either nextDueAt or time)
     final startDate = reminder.nextDueAt ?? reminder.time;
-    
+
     // Don't show if selected date is before the start date
-    if (selectedDate.isBefore(DateTime(startDate.year, startDate.month, startDate.day))) {
+    if (selectedDate.isBefore(
+      DateTime(startDate.year, startDate.month, startDate.day),
+    )) {
       return false;
     }
-    
+
     // Check end date - don't show if selected date is after the end date
     if (recurrence['endDate'] != null) {
       final endDate = (recurrence['endDate'] as Timestamp).toDate();
-      if (selectedDate.isAfter(DateTime(endDate.year, endDate.month, endDate.day))) {
+      if (selectedDate.isAfter(
+        DateTime(endDate.year, endDate.month, endDate.day),
+      )) {
         return false;
       }
     }
-    
+
     switch (type) {
       case 'interval':
         final unit = recurrence['unit'] as String?;
         final every = recurrence['every'] as int? ?? 1;
-        
+
         if (unit == 'days') {
           // For daily reminders, check if the day difference is a multiple of 'every'
-          final daysDiff = selectedDate.difference(DateTime(startDate.year, startDate.month, startDate.day)).inDays;
+          final daysDiff = selectedDate
+              .difference(
+                DateTime(startDate.year, startDate.month, startDate.day),
+              )
+              .inDays;
           return daysDiff >= 0 && daysDiff % every == 0;
         } else if (unit == 'hours' || unit == 'minutes') {
-          // For hourly/minute reminders, only show on the current day
-          return _isSameDay(startDate, selectedDate);
+          // For hourly/minute reminders, show on any day within the recurrence range
+          return true;
         }
         return false;
-        
+
       case 'weekly':
         final days = recurrence['days'] as List<dynamic>?;
         if (days == null || days.isEmpty) return false;
-        
+
         // Map day names to weekday numbers (1 = Monday, 7 = Sunday)
         final dayMap = {
-          'mon': 1, 'tue': 2, 'wed': 3, 'thu': 4,
-          'fri': 5, 'sat': 6, 'sun': 7,
+          'mon': 1,
+          'tue': 2,
+          'wed': 3,
+          'thu': 4,
+          'fri': 5,
+          'sat': 6,
+          'sun': 7,
         };
-        
+
         final selectedWeekday = selectedDate.weekday;
-        return days.any((day) => dayMap[day.toString().toLowerCase()] == selectedWeekday);
-        
+        return days.any(
+          (day) => dayMap[day.toString().toLowerCase()] == selectedWeekday,
+        );
+
       case 'monthly':
         // Show on the same day of each month
         return selectedDate.day == startDate.day;
-        
+
       case 'yearly':
         // Show on the same day and month each year
-        return selectedDate.day == startDate.day && selectedDate.month == startDate.month;
-        
+        return selectedDate.day == startDate.day &&
+            selectedDate.month == startDate.month;
+
       default:
         return false;
     }
+  }
+
+  List<DateTime> _getHourlyOccurrencesForDay(Reminder reminder, DateTime date) {
+    final recurrence = reminder.recurrence;
+    if (recurrence == null) return [];
+
+    final type = recurrence['type'] as String?;
+    final unit = recurrence['unit'] as String?;
+    final every = recurrence['every'] as int? ?? 1;
+
+    if (type != 'interval' || (unit != 'hours' && unit != 'minutes')) {
+      return [];
+    }
+
+    final occurrences = <DateTime>[];
+    final totalMinutes = unit == 'hours' ? every * 60 : every;
+
+    if (totalMinutes == 0) return occurrences;
+
+    // Start of the requested day
+    final dayStart = DateTime(date.year, date.month, date.day);
+    final dayEnd = DateTime(date.year, date.month, date.day, 23, 59, 59);
+
+    // Get the start time from recurrence
+    final startDateValue = recurrence['startDate'];
+    if (startDateValue == null) return occurrences;
+
+    final startDate = (startDateValue as Timestamp).toDate();
+    final timeStr = recurrence['time'] as String?;
+
+    DateTime startTime;
+    if (timeStr != null) {
+      final timeParts = timeStr.split(':');
+      final hour = int.parse(timeParts[0]);
+      final minute = int.parse(timeParts[1]);
+      startTime = DateTime(
+        startDate.year,
+        startDate.month,
+        startDate.day,
+        hour,
+        minute,
+      );
+    } else {
+      startTime = startDate;
+    }
+
+    // If end date exists and the requested day is after it, return empty
+    final endDateValue = recurrence['endDate'];
+    if (endDateValue != null) {
+      final endDate = (endDateValue as Timestamp).toDate();
+      if (date.isAfter(endDate)) {
+        return occurrences;
+      }
+    }
+
+    // If requested day is before start date, return empty
+    if (date.isBefore(
+      DateTime(startTime.year, startTime.month, startTime.day),
+    )) {
+      return occurrences;
+    }
+
+    // Calculate first occurrence of the day
+    DateTime current;
+
+    if (date.year == startTime.year &&
+        date.month == startTime.month &&
+        date.day == startTime.day) {
+      // On the start day, first occurrence is at start time
+      current = startTime;
+    } else {
+      // On subsequent days, calculate how many intervals have passed since start
+      final minutesSinceStart = dayStart.difference(startTime).inMinutes;
+      final intervalsPassed = (minutesSinceStart / totalMinutes).floor();
+      current = startTime.add(
+        Duration(minutes: totalMinutes * intervalsPassed),
+      );
+
+      // Move to first occurrence on this day
+      while (current.isBefore(dayStart)) {
+        current = current.add(Duration(minutes: totalMinutes));
+      }
+    }
+
+    // Collect all occurrences within the day
+    while (current.isBefore(dayEnd) || current.isAtSameMomentAs(dayEnd)) {
+      occurrences.add(current);
+      current = current.add(Duration(minutes: totalMinutes));
+    }
+
+    return occurrences;
   }
 
   @override
@@ -295,7 +417,7 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
                 ],
               ),
             ),
-            
+
             // Search bar
             if (_isSearching) ...[
               SizedBox(height: 16.h),
@@ -316,10 +438,7 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
                   child: TextField(
                     controller: _searchController,
                     focusNode: _searchFocusNode,
-                    style: TextStyle(
-                      fontSize: 16.sp,
-                      color: textColor,
-                    ),
+                    style: TextStyle(fontSize: 16.sp, color: textColor),
                     decoration: InputDecoration(
                       hintText: 'Search reminders...',
                       hintStyle: TextStyle(
@@ -353,7 +472,7 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
                 ),
               ),
             ],
-            
+
             // Search results count
             // if (_isSearching && _searchQuery.isNotEmpty) ...[
             //   SizedBox(height: 12.h),
@@ -370,7 +489,7 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
             //               ...(completedSnapshot.data ?? []),
             //             ];
             //             final matchingCount = allReminders.where(_matchesSearchQuery).length;
-                        
+
             //             return Text(
             //               '$matchingCount ${matchingCount == 1 ? 'reminder' : 'reminders'} found',
             //               style: TextStyle(
@@ -390,8 +509,6 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
               padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 12.h),
               child: Row(
                 children: [
-                  _buildDayTab('Yesterday', textColor, subtitleColor),
-                  SizedBox(width: 8.w),
                   _buildDayTab('Today', textColor, subtitleColor),
                   SizedBox(width: 8.w),
                   _buildDayTab('Tomorrow', textColor, subtitleColor),
@@ -412,13 +529,16 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
                       }
                     },
                     child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 12.w,
+                        vertical: 8.h,
+                      ),
                       decoration: BoxDecoration(
                         color: _selectedDay.isEmpty
                             ? _accentColor
                             : (_isDarkMode
-                                ? Colors.white.withOpacity(0.1)
-                                : Colors.black.withOpacity(0.05)),
+                                  ? Colors.white.withOpacity(0.1)
+                                  : Colors.black.withOpacity(0.05)),
                         borderRadius: BorderRadius.circular(20.r),
                       ),
                       child: Icon(
@@ -452,182 +572,353 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
 
                       final activeReminders = activeSnapshot.data ?? [];
                       final completedReminders = completedSnapshot.data ?? [];
-                      
+
                       // Combine and filter for selected date
-                      final allReminders = [...activeReminders, ...completedReminders];
-                      
-                      final dayReminders = allReminders.where((r) {
+                      final allReminders = [
+                        ...activeReminders,
+                        ...completedReminders,
+                      ];
+
+                      // Expand hourly reminders into multiple occurrences
+                      final expandedReminders = <Map<String, dynamic>>[];
+
+                      for (final reminder in allReminders) {
                         // For recurring reminders, check if they would occur on this date
-                        if (r.recurrence != null) {
-                          return _shouldShowRecurringReminderOnDate(r, _selectedDate);
+                        if (reminder.recurrence != null) {
+                          final shouldShow = _shouldShowRecurringReminderOnDate(
+                            reminder,
+                            _selectedDate,
+                          );
+                          if (!shouldShow) continue;
+
+                          // Check if it's an hourly reminder
+                          final recurrence = reminder.recurrence!;
+                          final type = recurrence['type'] as String?;
+                          final unit = recurrence['unit'] as String?;
+
+                          if (type == 'interval' &&
+                              (unit == 'hours' || unit == 'minutes')) {
+                            // Expand hourly reminder into multiple occurrences
+                            final occurrences = _getHourlyOccurrencesForDay(
+                              reminder,
+                              _selectedDate,
+                            );
+                            for (final occurrence in occurrences) {
+                              // Add all occurrences, filtering happens later
+                              expandedReminders.add({
+                                'reminder': reminder,
+                                'occurrenceTime': occurrence,
+                              });
+                            }
+                          } else {
+                            // Single occurrence for non-hourly recurring reminders
+                            expandedReminders.add({
+                              'reminder': reminder,
+                              'occurrenceTime': null,
+                            });
+                          }
+                        } else {
+                          // For non-recurring reminders, just check the time
+                          if (_isSameDay(reminder.time, _selectedDate)) {
+                            expandedReminders.add({
+                              'reminder': reminder,
+                              'occurrenceTime': null,
+                            });
+                          }
                         }
-                        // For non-recurring reminders, just check the time
-                        return _isSameDay(r.time, _selectedDate);
-                      }).toList();
-                      
+                      }
+
                       // For recurring reminders, check if they were completed on the selected date
-                      final selectedDateStr = '${_selectedDate.year.toString().padLeft(4, '0')}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}';
-                      
-                      final upcomingReminders = dayReminders
-                          .where((r) {
-                            if (r.isCompleted) return false; // Non-recurring completed reminders
-                            
-                            // For recurring reminders, check if this specific date was completed
-                            if (r.recurrence != null && r.consistency != null) {
-                              return !r.consistency!.wasCompletedOnDate(selectedDateStr);
-                            }
-                            
-                            return !r.isCompleted;
-                          })
-                          .where(_matchesSearchQuery) // Apply search filter
-                          .toList()
-                        ..sort((a, b) {
-                          // Sort by nextDueAt for recurring reminders, time otherwise
-                          final aTime = (a.recurrence != null && a.nextDueAt != null) 
-                              ? a.nextDueAt! 
-                              : a.time;
-                          final bTime = (b.recurrence != null && b.nextDueAt != null) 
-                              ? b.nextDueAt! 
-                              : b.time;
-                          return aTime.compareTo(bTime);
-                        });
-                      
-                      final completedDayReminders = dayReminders
-                          .where((r) {
-                            // Non-recurring completed reminders
-                            if (r.recurrence == null) {
-                              return r.isCompleted;
-                            }
-                            
-                            // For recurring reminders, check if this specific date was completed
-                            if (r.consistency != null) {
-                              return r.consistency!.wasCompletedOnDate(selectedDateStr);
-                            }
-                            
-                            return false;
-                          })
-                          .where(_matchesSearchQuery) // Apply search filter
-                          .toList()
-                        ..sort((a, b) {
-                          // Sort by nextDueAt for recurring reminders, time otherwise
-                          final aTime = (a.recurrence != null && a.nextDueAt != null) 
-                              ? a.nextDueAt! 
-                              : a.time;
-                          final bTime = (b.recurrence != null && b.nextDueAt != null) 
-                              ? b.nextDueAt! 
-                              : b.time;
-                          return bTime.compareTo(aTime);
-                        });
+                      final selectedDateStr =
+                          '${_selectedDate.year.toString().padLeft(4, '0')}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}';
+
+                      final upcomingReminders =
+                          expandedReminders
+                              .where((item) {
+                                final r = item['reminder'] as Reminder;
+                                if (r.isCompleted)
+                                  return false; // Non-recurring completed reminders
+
+                                // For hourly reminders, check specific occurrence
+                                final occurrenceTime =
+                                    item['occurrenceTime'] as DateTime?;
+                                if (occurrenceTime != null) {
+                                  return !r.isOccurrenceCompleted(
+                                    occurrenceTime,
+                                  );
+                                }
+
+                                // For recurring reminders, check if this specific date was completed
+                                if (r.recurrence != null &&
+                                    r.consistency != null) {
+                                  return !r.consistency!.wasCompletedOnDate(
+                                    selectedDateStr,
+                                  );
+                                }
+
+                                return !r.isCompleted;
+                              })
+                              .where(
+                                (item) => _matchesSearchQuery(
+                                  item['reminder'] as Reminder,
+                                ),
+                              ) // Apply search filter
+                              .toList()
+                            ..sort((a, b) {
+                              // Sort by occurrence time if available, otherwise by nextDueAt/time
+                              final aReminder = a['reminder'] as Reminder;
+                              final bReminder = b['reminder'] as Reminder;
+                              final aOccurrence =
+                                  a['occurrenceTime'] as DateTime?;
+                              final bOccurrence =
+                                  b['occurrenceTime'] as DateTime?;
+
+                              final aTime =
+                                  aOccurrence ??
+                                  ((aReminder.recurrence != null &&
+                                          aReminder.nextDueAt != null)
+                                      ? aReminder.nextDueAt!
+                                      : aReminder.time);
+                              final bTime =
+                                  bOccurrence ??
+                                  ((bReminder.recurrence != null &&
+                                          bReminder.nextDueAt != null)
+                                      ? bReminder.nextDueAt!
+                                      : bReminder.time);
+                              return aTime.compareTo(bTime);
+                            });
+
+                      final pastDueReminders = isToday
+                          ? upcomingReminders.where((item) {
+                              final r = item['reminder'] as Reminder;
+                              final occurrenceTime =
+                                  item['occurrenceTime'] as DateTime?;
+                              final itemTime =
+                                  occurrenceTime ??
+                                  ((r.recurrence != null && r.nextDueAt != null)
+                                      ? r.nextDueAt!
+                                      : r.time);
+                              return itemTime.isBefore(now);
+                            }).toList()
+                          : <Map<String, dynamic>>[];
+
+                      final upcomingFutureReminders = isToday
+                          ? upcomingReminders.where((item) {
+                              final r = item['reminder'] as Reminder;
+                              final occurrenceTime =
+                                  item['occurrenceTime'] as DateTime?;
+                              final itemTime =
+                                  occurrenceTime ??
+                                  ((r.recurrence != null && r.nextDueAt != null)
+                                      ? r.nextDueAt!
+                                      : r.time);
+                              return !itemTime.isBefore(now);
+                            }).toList()
+                          : upcomingReminders;
+
+                      final completedDayReminders =
+                          expandedReminders
+                              .where((item) {
+                                final r = item['reminder'] as Reminder;
+                                // Non-recurring completed reminders
+                                if (r.recurrence == null) {
+                                  return r.isCompleted;
+                                }
+
+                                // For hourly reminders, check specific occurrence
+                                final occurrenceTime =
+                                    item['occurrenceTime'] as DateTime?;
+                                if (occurrenceTime != null) {
+                                  return r.isOccurrenceCompleted(
+                                    occurrenceTime,
+                                  );
+                                }
+
+                                // For recurring reminders, check if this specific date was completed
+                                if (r.consistency != null) {
+                                  return r.consistency!.wasCompletedOnDate(
+                                    selectedDateStr,
+                                  );
+                                }
+
+                                return false;
+                              })
+                              .where(
+                                (item) => _matchesSearchQuery(
+                                  item['reminder'] as Reminder,
+                                ),
+                              ) // Apply search filter
+                              .toList()
+                            ..sort((a, b) {
+                              // Sort by occurrence time if available, otherwise by nextDueAt/time
+                              final aReminder = a['reminder'] as Reminder;
+                              final bReminder = b['reminder'] as Reminder;
+                              final aOccurrence =
+                                  a['occurrenceTime'] as DateTime?;
+                              final bOccurrence =
+                                  b['occurrenceTime'] as DateTime?;
+
+                              final aTime =
+                                  aOccurrence ??
+                                  ((aReminder.recurrence != null &&
+                                          aReminder.nextDueAt != null)
+                                      ? aReminder.nextDueAt!
+                                      : aReminder.time);
+                              final bTime =
+                                  bOccurrence ??
+                                  ((bReminder.recurrence != null &&
+                                          bReminder.nextDueAt != null)
+                                      ? bReminder.nextDueAt!
+                                      : bReminder.time);
+                              return bTime.compareTo(aTime);
+                            });
 
                       return SingleChildScrollView(
-                    padding: EdgeInsets.symmetric(horizontal: 24.w),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Upcoming Section (for today and future)
-                        if (upcomingReminders.isNotEmpty && !isPast) ...[
-                          _buildSectionHeader('UPCOMING', subtitleColor),
-                          SizedBox(height: 12.h),
-                          ...upcomingReminders.map((reminder) => Padding(
-                                padding: EdgeInsets.only(bottom: 12.h),
-                                child: _buildReminderCard(
-                                  reminder,
-                                  cardColor,
-                                  textColor,
-                                  subtitleColor,
-                                  false,
-                                ),
-                              )),
-                          SizedBox(height: 24.h),
-                        ],
-
-                        // Paused/Missed Section (for past days - uncompleted)
-                        if (isPast && upcomingReminders.isNotEmpty) ...[
-                          _buildSectionHeader('MISSED', subtitleColor),
-                          SizedBox(height: 12.h),
-                          ...upcomingReminders.map((reminder) => Padding(
-                                padding: EdgeInsets.only(bottom: 12.h),
-                                child: _buildReminderCard(
-                                  reminder,
-                                  cardColor,
-                                  textColor,
-                                  subtitleColor,
-                                  false,
-                                  isPaused: true,
-                                ),
-                              )),
-                          SizedBox(height: 24.h),
-                        ],
-
-                        // Completed Section (for today and past days)
-                        if ((isToday || isPast) && completedDayReminders.isNotEmpty) ...[
-                          _buildSectionHeader(
-                            isToday ? 'COMPLETED TODAY' : 'COMPLETED',
-                            subtitleColor,
-                          ),
-                          SizedBox(height: 12.h),
-                          ...completedDayReminders.map((reminder) => Padding(
-                                padding: EdgeInsets.only(bottom: 12.h),
-                                child: _buildReminderCard(
-                                  reminder,
-                                  cardColor,
-                                  textColor,
-                                  subtitleColor,
-                                  true,
-                                ),
-                              )),
-                          SizedBox(height: 24.h),
-                        ],
-
-                        // Empty state
-                        if (upcomingReminders.isEmpty && completedDayReminders.isEmpty)
-                          Center(
-                            child: Padding(
-                              padding: EdgeInsets.only(top: 100.h),
-                              child: Column(
-                                children: [
-                                  Icon(
-                                    _searchQuery.isNotEmpty 
-                                        ? Icons.search_off 
-                                        : Icons.event_available_outlined,
-                                    size: 64.sp,
-                                    color: subtitleColor.withOpacity(0.5),
+                        padding: EdgeInsets.symmetric(horizontal: 24.w),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Past Section (for today)
+                            if (isToday && pastDueReminders.isNotEmpty) ...[
+                              _buildSectionHeader('PAST', subtitleColor),
+                              SizedBox(height: 12.h),
+                              ...pastDueReminders.map(
+                                (item) => Padding(
+                                  padding: EdgeInsets.only(bottom: 12.h),
+                                  child: _buildReminderCard(
+                                    item['reminder'] as Reminder,
+                                    cardColor,
+                                    textColor,
+                                    subtitleColor,
+                                    false,
+                                    isPaused: true,
+                                    occurrenceTime:
+                                        item['occurrenceTime'] as DateTime?,
                                   ),
-                                  SizedBox(height: 16.h),
-                                  Text(
-                                    _searchQuery.isNotEmpty
-                                        ? 'No reminders match "$_searchQuery"'
-                                        : 'No reminders scheduled',
-                                    style: TextStyle(
-                                      fontSize: 16.sp,
-                                      color: subtitleColor,
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                  if (_searchQuery.isNotEmpty) ...[
-                                    SizedBox(height: 8.h),
-                                    TextButton(
-                                      onPressed: () {
-                                        _searchController.clear();
-                                      },
-                                      child: Text(
-                                        'Clear search',
-                                        style: TextStyle(
-                                          fontSize: 14.sp,
-                                          color: _accentColor,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ],
+                                ),
                               ),
-                            ),
-                          ),
+                              SizedBox(height: 24.h),
+                            ],
 
-                        SizedBox(height: 50.h),
-                      ],
-                    ),
-                  );
+                            // Upcoming Section (for today and future)
+                            if (upcomingFutureReminders.isNotEmpty &&
+                                !isPast) ...[
+                              _buildSectionHeader('UPCOMING', subtitleColor),
+                              SizedBox(height: 12.h),
+                              ...upcomingFutureReminders.map(
+                                (item) => Padding(
+                                  padding: EdgeInsets.only(bottom: 12.h),
+                                  child: _buildReminderCard(
+                                    item['reminder'] as Reminder,
+                                    cardColor,
+                                    textColor,
+                                    subtitleColor,
+                                    false,
+                                    occurrenceTime:
+                                        item['occurrenceTime'] as DateTime?,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(height: 24.h),
+                            ],
+
+                            // Paused/Missed Section (for past days - uncompleted)
+                            if (isPast && upcomingReminders.isNotEmpty) ...[
+                              _buildSectionHeader('MISSED', subtitleColor),
+                              SizedBox(height: 12.h),
+                              ...upcomingReminders.map(
+                                (item) => Padding(
+                                  padding: EdgeInsets.only(bottom: 12.h),
+                                  child: _buildReminderCard(
+                                    item['reminder'] as Reminder,
+                                    cardColor,
+                                    textColor,
+                                    subtitleColor,
+                                    false,
+                                    isPaused: true,
+                                    occurrenceTime:
+                                        item['occurrenceTime'] as DateTime?,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(height: 24.h),
+                            ],
+
+                            // Completed Section (for today and past days)
+                            if ((isToday || isPast) &&
+                                completedDayReminders.isNotEmpty) ...[
+                              _buildSectionHeader(
+                                isToday ? 'COMPLETED TODAY' : 'COMPLETED',
+                                subtitleColor,
+                              ),
+                              SizedBox(height: 12.h),
+                              ...completedDayReminders.map(
+                                (item) => Padding(
+                                  padding: EdgeInsets.only(bottom: 12.h),
+                                  child: _buildReminderCard(
+                                    item['reminder'] as Reminder,
+                                    cardColor,
+                                    textColor,
+                                    subtitleColor,
+                                    true,
+                                    occurrenceTime:
+                                        item['occurrenceTime'] as DateTime?,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(height: 24.h),
+                            ],
+
+                            // Empty state
+                            if (upcomingReminders.isEmpty &&
+                                completedDayReminders.isEmpty)
+                              Center(
+                                child: Padding(
+                                  padding: EdgeInsets.only(top: 100.h),
+                                  child: Column(
+                                    children: [
+                                      Icon(
+                                        _searchQuery.isNotEmpty
+                                            ? Icons.search_off
+                                            : Icons.event_available_outlined,
+                                        size: 64.sp,
+                                        color: subtitleColor.withOpacity(0.5),
+                                      ),
+                                      SizedBox(height: 16.h),
+                                      Text(
+                                        _searchQuery.isNotEmpty
+                                            ? 'No reminders match "$_searchQuery"'
+                                            : 'No reminders scheduled',
+                                        style: TextStyle(
+                                          fontSize: 16.sp,
+                                          color: subtitleColor,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                      if (_searchQuery.isNotEmpty) ...[
+                                        SizedBox(height: 8.h),
+                                        TextButton(
+                                          onPressed: () {
+                                            _searchController.clear();
+                                          },
+                                          child: Text(
+                                            'Clear search',
+                                            style: TextStyle(
+                                              fontSize: 14.sp,
+                                              color: _accentColor,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ),
+
+                            SizedBox(height: 50.h),
+                          ],
+                        ),
+                      );
                     },
                   );
                 },
@@ -649,8 +940,8 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
           color: isSelected
               ? _accentColor
               : (_isDarkMode
-                  ? Colors.white.withOpacity(0.1)
-                  : Colors.black.withOpacity(0.05)),
+                    ? Colors.white.withOpacity(0.1)
+                    : Colors.black.withOpacity(0.05)),
           borderRadius: BorderRadius.circular(20.r),
         ),
         child: Text(
@@ -684,9 +975,10 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
     Color subtitleColor,
     bool isCompleted, {
     bool isPaused = false,
+    DateTime? occurrenceTime,
   }) {
-    // Show scheduled time (original time when snoozed, same as current cue card)
-    final displayTime = reminder.scheduledDisplayTime;
+    // Use occurrence time if provided (for hourly reminders), otherwise use scheduled time
+    final displayTime = occurrenceTime ?? reminder.scheduledDisplayTime;
 
     final dateKey = DateFormat('yyyy-MM-dd').format(displayTime);
     if (reminder.recurrence != null && reminder.isSkippedOnDate(dateKey)) {
@@ -708,15 +1000,38 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
 
     return GestureDetector(
       onTap: () {
+        // For completed or paused, navigate to details
+        // For active reminders, optionally handle quick complete here
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => ReminderDetailsScreen(
-              reminder: reminder,
-            ),
+            builder: (context) => ReminderDetailsScreen(reminder: reminder),
           ),
         );
       },
+      onLongPress: !isCompleted && !isPaused
+          ? () async {
+              // Quick complete on long press for non-completed reminders
+              final service = ReminderService();
+              try {
+                await service.markAsCompleted(
+                  reminder.id,
+                  occurrenceTime: occurrenceTime,
+                );
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Marked as done!')),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                }
+              }
+            }
+          : null,
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 16.h),
         decoration: BoxDecoration(
@@ -724,10 +1039,7 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
           borderRadius: BorderRadius.circular(16.r),
           border: isCompleted
               ? null
-              : Border.all(
-                  color: reminder.color.withOpacity(0.15),
-                  width: 1,
-                ),
+              : Border.all(color: reminder.color.withOpacity(0.15), width: 1),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(_isDarkMode ? 0.3 : 0.05),
@@ -761,7 +1073,7 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
                 ),
               ),
             SizedBox(width: 16.w),
-            
+
             // Content
             Expanded(
               child: Column(
@@ -870,11 +1182,23 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
                   shape: BoxShape.circle,
                   color: reminder.color.withOpacity(0.15),
                 ),
-                child: Icon(
-                  reminder.icon,
-                  color: reminder.color,
-                  size: 20.sp,
-                ),
+                child: reminder.customIconUrl != null
+                    ? ClipOval(
+                        child: Image.network(
+                          reminder.customIconUrl!,
+                          width: 36.w,
+                          height: 36.h,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Icon(
+                              reminder.icon,
+                              color: reminder.color,
+                              size: 20.sp,
+                            );
+                          },
+                        ),
+                      )
+                    : Icon(reminder.icon, color: reminder.color, size: 20.sp),
               ),
           ],
         ),
@@ -884,10 +1208,10 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
 
   Widget _buildConsistencyMeter(Reminder reminder, Color textColor) {
     final consistency = reminder.consistencyPercentage.clamp(0.0, 100.0);
-    
+
     // Use orange color from image
     const meterColor = Color(0xFFFF8A3D);
-    
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -937,17 +1261,17 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
 
   String _getRecurrenceFrequencyText(Reminder reminder) {
     if (reminder.recurrence == null) return '';
-    
+
     final recurrence = reminder.recurrence!;
     final type = recurrence['type'] as String?;
-    
+
     if (type == null) return '';
-    
+
     switch (type) {
       case 'interval':
         final unit = recurrence['unit'] as String?;
         final every = recurrence['every'] as int? ?? 1;
-        
+
         if (unit == 'days' && every == 1) {
           return 'Daily';
         } else if (unit == 'days') {
@@ -960,11 +1284,11 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
           return 'Every $every min';
         }
         return 'Recurring';
-        
+
       case 'weekly':
         final days = recurrence['days'] as List<dynamic>?;
         if (days == null || days.isEmpty) return 'Weekly';
-        
+
         final dayNames = {
           'mon': 'Mon',
           'tue': 'Tue',
@@ -974,20 +1298,20 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
           'sat': 'Sat',
           'sun': 'Sun',
         };
-        
+
         final formattedDays = days
             .map((d) => dayNames[d.toString().toLowerCase()] ?? '')
             .where((d) => d.isNotEmpty)
             .join(', ');
-        
+
         return formattedDays.isNotEmpty ? formattedDays : 'Weekly';
-        
+
       case 'monthly':
         return 'Monthly';
-        
+
       case 'yearly':
         return 'Yearly';
-        
+
       default:
         return 'Recurring';
     }

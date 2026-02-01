@@ -8,6 +8,7 @@ import '../../../snooze/presentation/snooze_screen.dart';
 
 class CurrentCueCard extends StatefulWidget {
   final Reminder reminder;
+  final DateTime? occurrenceTime;
   final Color accentColor;
   final bool isDarkMode;
   final Color cardColor;
@@ -20,6 +21,7 @@ class CurrentCueCard extends StatefulWidget {
   const CurrentCueCard({
     super.key,
     required this.reminder,
+    this.occurrenceTime,
     required this.accentColor,
     required this.isDarkMode,
     required this.cardColor,
@@ -34,15 +36,25 @@ class CurrentCueCard extends StatefulWidget {
   State<CurrentCueCard> createState() => _CurrentCueCardState();
 }
 
-class _CurrentCueCardState extends State<CurrentCueCard> {
+class _CurrentCueCardState extends State<CurrentCueCard>
+    with SingleTickerProviderStateMixin {
   late TextEditingController _notesController;
   final FocusNode _notesFocusNode = FocusNode();
   final ReminderService _reminderService = ReminderService();
+
+  late AnimationController _swipeController;
+  double _dragOffset = 0;
 
   @override
   void initState() {
     super.initState();
     _notesController = TextEditingController(text: widget.reminder.notes ?? '');
+
+    // Initialize animation controller for swipe slider
+    _swipeController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
 
     // Listen to focus changes to update UI and save notes on blur
     _notesFocusNode.addListener(() {
@@ -59,11 +71,15 @@ class _CurrentCueCardState extends State<CurrentCueCard> {
     // Update notes controller when reminder changes
     if (oldWidget.reminder.id != widget.reminder.id) {
       _notesController.text = widget.reminder.notes ?? '';
+      // Reset slider state
+      _dragOffset = 0;
+      _swipeController.reset();
     }
   }
 
   @override
   void dispose() {
+    _swipeController.dispose();
     _notesController.dispose();
     _notesFocusNode.dispose();
     super.dispose();
@@ -73,10 +89,9 @@ class _CurrentCueCardState extends State<CurrentCueCard> {
     final newNotes = _notesController.text.trim();
     if (newNotes != (widget.reminder.notes ?? '')) {
       try {
-        await _reminderService.updateReminder(
-          widget.reminder.id,
-          {'notes': newNotes.isEmpty ? null : newNotes},
-        );
+        await _reminderService.updateReminder(widget.reminder.id, {
+          'notes': newNotes.isEmpty ? null : newNotes,
+        });
       } catch (e) {
         print('Error saving notes: $e');
       }
@@ -92,7 +107,15 @@ class _CurrentCueCardState extends State<CurrentCueCard> {
           reminderTitle: widget.reminder.name,
         ),
       ),
-    );
+    ).then((_) {
+      // Reset slider state when returning
+      if (mounted) {
+        setState(() {
+          _dragOffset = 0;
+        });
+        _swipeController.reset();
+      }
+    });
   }
 
   @override
@@ -113,9 +136,8 @@ class _CurrentCueCardState extends State<CurrentCueCard> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => ReminderDetailsScreen(
-              reminder: widget.reminder,
-            ),
+            builder: (context) =>
+                ReminderDetailsScreen(reminder: widget.reminder),
           ),
         );
       },
@@ -158,15 +180,30 @@ class _CurrentCueCardState extends State<CurrentCueCard> {
                     shape: BoxShape.circle,
                     color: widget.reminder.color.withOpacity(0.15),
                   ),
-                  child: Icon(
-                    widget.reminder.icon,
-                    color: widget.reminder.color,
-                    size: 30.sp,
-                  ),
+                  child: widget.reminder.customIconUrl != null
+                      ? ClipOval(
+                          child: Image.network(
+                            widget.reminder.customIconUrl!,
+                            width: 50.w,
+                            height: 50.h,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Icon(
+                                widget.reminder.icon,
+                                color: widget.reminder.color,
+                                size: 30.sp,
+                              );
+                            },
+                          ),
+                        )
+                      : Icon(
+                          widget.reminder.icon,
+                          color: widget.reminder.color,
+                          size: 30.sp,
+                        ),
                 ),
               ],
             ),
-
 
             SizedBox(height: 12.h),
 
@@ -256,7 +293,7 @@ class _CurrentCueCardState extends State<CurrentCueCard> {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
       decoration: BoxDecoration(
-        color: widget.isDarkMode 
+        color: widget.isDarkMode
             ? Colors.white.withOpacity(0.05)
             : Colors.black.withOpacity(0.03),
         borderRadius: BorderRadius.circular(16.r),
@@ -327,51 +364,128 @@ class _CurrentCueCardState extends State<CurrentCueCard> {
   Widget _buildActionButtons() {
     return Row(
       children: [
-        Expanded(
-          flex: 2,
-          child: _buildSnoozeButton(),
-        ),
+        Expanded(flex: 3, child: _buildSwipeToSnooze()),
         SizedBox(width: 12.w),
-        Expanded(
-          flex: 3,
-          child: _buildDoneButton(),
-        ),
+        Expanded(flex: 2, child: _buildDoneButton()),
       ],
     );
   }
 
-  Widget _buildSnoozeButton() {
-    return GestureDetector(
-      onTap: _navigateToSnooze,
-      child: Container(
-        height: 64.h,
-        decoration: BoxDecoration(
-          color: widget.isDarkMode
-              ? Colors.white.withOpacity(0.1)
-              : Colors.black.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(36.r),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.snooze_rounded,
-              color: widget.accentColor,
-              size: 20.sp,
+  Widget _buildSwipeToSnooze() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.maxWidth;
+        final thumbSize = 48.h;
+        final trackHeight = 64.h;
+        final maxSlide = maxWidth - thumbSize - 16.w; // Account for padding
+
+        return GestureDetector(
+          onHorizontalDragStart: (_) {
+            setState(() {
+              _dragOffset = 0;
+            });
+          },
+          onHorizontalDragUpdate: (details) {
+            setState(() {
+              _dragOffset += details.delta.dx;
+              _dragOffset = _dragOffset.clamp(0, maxSlide);
+
+              // Update animation based on progress
+              final progress = _dragOffset / maxSlide;
+              _swipeController.value = progress;
+            });
+          },
+          onHorizontalDragEnd: (_) {
+            final progress = _dragOffset / maxSlide;
+            if (progress > 0.85) {
+              // Swipe completed - navigate to snooze screen
+              _navigateToSnooze();
+            } else {
+              // Reset slider
+              setState(() {
+                _dragOffset = 0;
+              });
+              _swipeController.reverse();
+            }
+          },
+          child: Container(
+            height: trackHeight,
+            decoration: BoxDecoration(
+              color: widget.isDarkMode
+                  ? Colors.white.withOpacity(0.08)
+                  : Colors.black.withOpacity(0.04),
+              borderRadius: BorderRadius.circular(36.r),
             ),
-            SizedBox(width: 8.w),
-            Text(
-              'SNOOZE',
-              style: TextStyle(
-                fontSize: 14.sp,
-                fontWeight: FontWeight.w600,
-                color: widget.accentColor,
-                letterSpacing: 0.5,
-              ),
+            child: Stack(
+              children: [
+                // Background text "SWIPE TO SNOOZE"
+                Positioned.fill(
+                  child: Center(
+                    child: AnimatedBuilder(
+                      animation: _swipeController,
+                      builder: (context, child) {
+                        return Opacity(
+                          opacity: 1 - (_swipeController.value * 0.5),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.swipe_right_outlined,
+                                color: widget.accentColor,
+                                size: 18.sp,
+                              ),
+                              SizedBox(width: 8.w),
+                              Text(
+                                'SWIPE TO SNOOZE',
+                                style: TextStyle(
+                                  fontSize: 12.sp,
+                                  fontWeight: FontWeight.w600,
+                                  color: widget.subtitleColor,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                // Sliding thumb with icon
+                AnimatedBuilder(
+                  animation: _swipeController,
+                  builder: (context, child) {
+                    return Positioned(
+                      left: 8.w + _dragOffset,
+                      top: 8.h,
+                      child: Container(
+                        width: thumbSize,
+                        height: thumbSize,
+                        decoration: BoxDecoration(
+                          color: widget.accentColor,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: widget.accentColor,
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          Icons.snooze_rounded,
+                          color: Colors.white,
+                          size: 24.sp,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -389,11 +503,7 @@ class _CurrentCueCardState extends State<CurrentCueCard> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.check_rounded,
-              color: Colors.white,
-              size: 20.sp,
-            ),
+            Icon(Icons.check_rounded, color: Colors.white, size: 20.sp),
             SizedBox(width: 8.w),
             Text(
               'DONE',
@@ -409,5 +519,4 @@ class _CurrentCueCardState extends State<CurrentCueCard> {
       ),
     );
   }
-
 }

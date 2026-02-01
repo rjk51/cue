@@ -310,11 +310,28 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
                                 ? const Color(0xFF2A2A2A)
                                 : Colors.white,
                           ),
-                          child: Icon(
-                            reminderIcon,
-                            size: 48.sp,
-                            color: reminderColor,
-                          ),
+                          child: widget.reminder.customIconUrl != null
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(32.r),
+                                  child: Image.network(
+                                    widget.reminder.customIconUrl!,
+                                    width: 100.w,
+                                    height: 100.h,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Icon(
+                                        reminderIcon,
+                                        size: 48.sp,
+                                        color: reminderColor,
+                                      );
+                                    },
+                                  ),
+                                )
+                              : Icon(
+                                  reminderIcon,
+                                  size: 48.sp,
+                                  color: reminderColor,
+                                ),
                         ),
                       ],
                     ),
