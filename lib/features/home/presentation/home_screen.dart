@@ -2,6 +2,7 @@ import 'package:cue/features/settings/presentation/settings_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../reminders/domain/reminder_model.dart';
 import '../../reminders/data/reminder_service.dart';
 import '../../reminders/presentation/create_reminder_screen.dart';
@@ -36,7 +37,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _loadThemeSettings();
     // Listen for theme changes
     ThemeNotifier.instance.addListener(_onThemeChanged);
-    
+
     // Start monitoring device status after a delay to ensure device is reactivated
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       // Wait for device to be reactivated in main.dart
@@ -95,19 +96,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
-  Future<void> _markAsCompleted(String reminderId) async {
+  Future<void> _markAsCompleted(
+    String reminderId, {
+    DateTime? occurrenceTime,
+  }) async {
     // Show snackbar immediately (optimistic UI)
     if (mounted) {
       context.showSuccessSnackbar('Marked as done!');
     }
-    
+
     // Execute in background without blocking UI
-    _reminderService.markAsCompleted(reminderId).catchError((e) {
-      // Only show error if it fails
-      if (mounted) {
-        context.showErrorSnackbar('Error: $e');
-      }
-    });
+    _reminderService
+        .markAsCompleted(reminderId, occurrenceTime: occurrenceTime)
+        .catchError((e) {
+          // Only show error if it fails
+          if (mounted) {
+            context.showErrorSnackbar('Error: $e');
+          }
+        });
   }
 
   String _getTimeDisplayText(DateTime reminderTime) {
@@ -142,8 +148,105 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   bool _isCurrentCue(DateTime reminderTime) {
     final now = DateTime.now();
     final difference = reminderTime.difference(now);
-    // Consider it current if within 30 minutes before or after
-    return difference.inMinutes.abs() <= 30;
+
+    // For future reminders: consider current if within 30 minutes before
+    if (difference.inMinutes >= 0) {
+      return difference.inMinutes <= 30;
+    }
+
+    // For past reminders: only show if within 20 minutes past due
+    return difference.inMinutes.abs() <= 20;
+  }
+
+  List<DateTime> _getHourlyOccurrencesForDay(Reminder reminder, DateTime date) {
+    final recurrence = reminder.recurrence;
+    if (recurrence == null) return [];
+
+    final type = recurrence['type'] as String?;
+    final unit = recurrence['unit'] as String?;
+    final every = recurrence['every'] as int? ?? 1;
+
+    if (type != 'interval' || (unit != 'hours' && unit != 'minutes')) {
+      return [];
+    }
+
+    final occurrences = <DateTime>[];
+    final totalMinutes = unit == 'hours' ? every * 60 : every;
+
+    if (totalMinutes == 0) return occurrences;
+
+    // Start of the requested day
+    final dayStart = DateTime(date.year, date.month, date.day);
+    final dayEnd = DateTime(date.year, date.month, date.day, 23, 59, 59);
+
+    // Get the start time from recurrence
+    final startDateValue = recurrence['startDate'];
+    if (startDateValue == null) return occurrences;
+
+    final startDate = (startDateValue as Timestamp).toDate();
+    final timeStr = recurrence['time'] as String?;
+
+    DateTime startTime;
+    if (timeStr != null) {
+      final timeParts = timeStr.split(':');
+      final hour = int.parse(timeParts[0]);
+      final minute = int.parse(timeParts[1]);
+      startTime = DateTime(
+        startDate.year,
+        startDate.month,
+        startDate.day,
+        hour,
+        minute,
+      );
+    } else {
+      startTime = startDate;
+    }
+
+    // If end date exists and the requested day is after it, return empty
+    final endDateValue = recurrence['endDate'];
+    if (endDateValue != null) {
+      final endDate = (endDateValue as Timestamp).toDate();
+      if (date.isAfter(endDate)) {
+        return occurrences;
+      }
+    }
+
+    // If requested day is before start date, return empty
+    if (date.isBefore(
+      DateTime(startTime.year, startTime.month, startTime.day),
+    )) {
+      return occurrences;
+    }
+
+    // Calculate first occurrence of the day
+    DateTime current;
+
+    if (date.year == startTime.year &&
+        date.month == startTime.month &&
+        date.day == startTime.day) {
+      // On the start day, first occurrence is at start time
+      current = startTime;
+    } else {
+      // On subsequent days, calculate how many intervals have passed since start
+      final minutesSinceStart = dayStart.difference(startTime).inMinutes;
+      final intervalsPassed = (minutesSinceStart / totalMinutes).floor();
+      current = startTime.add(
+        Duration(minutes: totalMinutes * intervalsPassed),
+      );
+
+      // Move to first occurrence on this day
+      while (current.isBefore(dayStart)) {
+        current = current.add(Duration(minutes: totalMinutes));
+      }
+    }
+
+    // Collect all occurrences within the day
+    while (current.isBefore(dayEnd) || current.isAtSameMomentAs(dayEnd)) {
+      occurrences.add(current);
+      current = current.add(Duration(minutes: totalMinutes));
+    }
+
+    return occurrences;
   }
 
   @override
@@ -182,164 +285,229 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 final sortedReminders = List<Reminder>.from(reminders)
                   ..sort((a, b) => a.time.compareTo(b.time));
 
-                // Filter for today's reminders
+                // Expand hourly reminders into multiple occurrences
+                final expandedReminders = <Map<String, dynamic>>[];
                 final now = DateTime.now();
-                final todayReminders = sortedReminders.where((r) {
-                  // Use effectiveNextDueAt which calculates the actual next occurrence
-                  // if nextDueAt is outdated
-                  final effectiveDate = r.effectiveNextDueAt;
-                  final dateKey = DateFormat('yyyy-MM-dd').format(effectiveDate);
 
-                  // For recurring reminders, hide skipped occurrences
-                  if (r.recurrence != null && r.isSkippedOnDate(dateKey)) {
-                    return false;
+                for (final reminder in sortedReminders) {
+                  // Check if it's an hourly reminder
+                  if (reminder.recurrence != null) {
+                    final recurrence = reminder.recurrence!;
+                    final type = recurrence['type'] as String?;
+                    final unit = recurrence['unit'] as String?;
+
+                    if (type == 'interval' &&
+                        (unit == 'hours' || unit == 'minutes')) {
+                      // Expand hourly reminder into multiple occurrences for today
+                      final occurrences = _getHourlyOccurrencesForDay(
+                        reminder,
+                        now,
+                      );
+                      for (final occurrence in occurrences) {
+                        final dateKey = DateFormat(
+                          'yyyy-MM-dd',
+                        ).format(occurrence);
+                        // Skip if this occurrence is skipped or completed
+                        if (!reminder.isSkippedOnDate(dateKey) &&
+                            !reminder.isOccurrenceCompleted(occurrence)) {
+                          expandedReminders.add({
+                            'reminder': reminder,
+                            'occurrenceTime': occurrence,
+                          });
+                        }
+                      }
+                    } else {
+                      // Single occurrence for non-hourly recurring reminders
+                      final effectiveDate = reminder.effectiveNextDueAt;
+                      final dateKey = DateFormat(
+                        'yyyy-MM-dd',
+                      ).format(effectiveDate);
+
+                      if (!reminder.isSkippedOnDate(dateKey)) {
+                        final isScheduledForToday =
+                            effectiveDate.year == now.year &&
+                            effectiveDate.month == now.month &&
+                            effectiveDate.day == now.day;
+
+                        if (isScheduledForToday && !reminder.isCompletedToday) {
+                          expandedReminders.add({
+                            'reminder': reminder,
+                            'occurrenceTime': null,
+                          });
+                        }
+                      }
+                    }
+                  } else {
+                    // Non-recurring reminder
+                    final effectiveDate = reminder.effectiveNextDueAt;
+                    final isScheduledForToday =
+                        effectiveDate.year == now.year &&
+                        effectiveDate.month == now.month &&
+                        effectiveDate.day == now.day;
+
+                    if (isScheduledForToday && !reminder.isCompletedToday) {
+                      expandedReminders.add({
+                        'reminder': reminder,
+                        'occurrenceTime': null,
+                      });
+                    }
                   }
-                  
-                  final isScheduledForToday = effectiveDate.year == now.year &&
-                      effectiveDate.month == now.month &&
-                      effectiveDate.day == now.day;
+                }
 
-                  return isScheduledForToday &&
-                      !r.isCompletedToday; // Uses helper method that checks both isCompleted and consistency
-                }).toList();
+                // Filter for today's reminders
+                final todayReminders = expandedReminders
+                    .where(
+                      (item) =>
+                          item['occurrenceTime'] != null ||
+                          !(item['reminder'] as Reminder).isCompletedToday,
+                    )
+                    .map((item) => item['reminder'] as Reminder)
+                    .toList();
 
                 // Get current/next reminder (first uncompleted) — only today's reminders
-                final upcomingReminders = sortedReminders
+                final upcomingReminders = expandedReminders
                     .where(
-                      (r) =>
-                          !r.isCompletedToday &&
-                          (() {
-                            final effectiveDate = r.effectiveNextDueAt;
-                            final dateKey =
-                                DateFormat('yyyy-MM-dd').format(effectiveDate);
-
-                            // For recurring reminders, hide skipped occurrences
-                            if (r.recurrence != null &&
-                                r.isSkippedOnDate(dateKey)) {
-                              return false;
-                            }
-
-                            // Only show reminders scheduled for today (so snoozed-to-tomorrow/other-day don't show)
-                            final isScheduledForToday = effectiveDate.year == now.year &&
-                                effectiveDate.month == now.month &&
-                                effectiveDate.day == now.day;
-                            return isScheduledForToday;
-                          })(),
+                      (item) =>
+                          item['occurrenceTime'] != null ||
+                          !(item['reminder'] as Reminder).isCompletedToday,
                     )
                     .toList();
-                
-                // Sort by effectiveNextDueAt instead of time
-                upcomingReminders.sort(
-                  (a, b) => a
-                      .getEffectiveDisplayTime()
-                      .compareTo(b.getEffectiveDisplayTime()),
-                );
+
+                // Sort by occurrence time
+                upcomingReminders.sort((a, b) {
+                  final aReminder = a['reminder'] as Reminder;
+                  final bReminder = b['reminder'] as Reminder;
+                  final aOccurrence = a['occurrenceTime'] as DateTime?;
+                  final bOccurrence = b['occurrenceTime'] as DateTime?;
+
+                  final aTime =
+                      aOccurrence ?? aReminder.getEffectiveDisplayTime();
+                  final bTime =
+                      bOccurrence ?? bReminder.getEffectiveDisplayTime();
+                  return aTime.compareTo(bTime);
+                });
 
                 final currentReminder = upcomingReminders.isNotEmpty
-                    ? upcomingReminders.first
+                    ? upcomingReminders.first['reminder'] as Reminder
+                    : null;
+
+                final currentOccurrenceTime = upcomingReminders.isNotEmpty
+                    ? upcomingReminders.first['occurrenceTime'] as DateTime?
                     : null;
 
                 // Upcoming reminders (after current)
                 final upcomingAfterCurrent = upcomingReminders.length > 1
                     ? upcomingReminders.sublist(1)
-                    : <Reminder>[];
+                    : <Map<String, dynamic>>[];
 
-                final isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
-                final screenHeight = MediaQuery.of(context).size.height - 
+                final isKeyboardOpen =
+                    MediaQuery.of(context).viewInsets.bottom > 0;
+                final screenHeight =
+                    MediaQuery.of(context).size.height -
                     MediaQuery.of(context).padding.top;
-                
+
                 return SingleChildScrollView(
-                  physics: isKeyboardOpen 
-                      ? const ClampingScrollPhysics() 
+                  physics: isKeyboardOpen
+                      ? const ClampingScrollPhysics()
                       : const NeverScrollableScrollPhysics(),
                   child: SizedBox(
                     height: isKeyboardOpen ? null : screenHeight,
                     child: Column(
                       children: [
                         if (isKeyboardOpen) ...[
-                              // Date header - keyboard open
-                              Padding(
-                                padding: EdgeInsets.symmetric(vertical: 16.h),
-                                child: Text(
-                                  DateFormat('EEEE, MMM d').format(now).toUpperCase(),
-                                  style: TextStyle(
-                                    fontSize: 12.sp,
-                                    fontWeight: FontWeight.w600,
-                                    color: subtitleColor,
-                                    letterSpacing: 1.5,
-                                  ),
-                                ),
+                          // Date header - keyboard open
+                          Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16.h),
+                            child: Text(
+                              DateFormat(
+                                'EEEE, MMM d',
+                              ).format(now).toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 12.sp,
+                                fontWeight: FontWeight.w600,
+                                color: subtitleColor,
+                                letterSpacing: 1.5,
                               ),
+                            ),
+                          ),
 
-                              // Show full-screen empty state if no reminders at all
-                              if (sortedReminders.isEmpty)
-                                SizedBox(
-                                  height: screenHeight - 100.h,
-                                  child: _buildFullScreenEmptyState(
+                          // Show full-screen empty state if no reminders at all
+                          if (sortedReminders.isEmpty)
+                            SizedBox(
+                              height: screenHeight - 100.h,
+                              child: _buildFullScreenEmptyState(
+                                textColor,
+                                subtitleColor,
+                              ),
+                            )
+                          else ...[
+                            SizedBox(height: 32.h),
+
+                            // Today's Reminders Count Section
+                            _buildRemindersToday(
+                              todayReminders.length,
+                              textColor,
+                              subtitleColor,
+                              todayReminders,
+                            ),
+
+                            SizedBox(height: 40.h),
+
+                            Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 32.w),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Current/Next Cue Card
+                                  if (currentReminder != null)
+                                    CurrentCueCard(
+                                      reminder: currentReminder,
+                                      occurrenceTime: currentOccurrenceTime,
+                                      accentColor: _accentColor,
+                                      isDarkMode: _isDarkMode,
+                                      cardColor: cardColor,
+                                      textColor: textColor,
+                                      subtitleColor: subtitleColor,
+                                      onMarkCompleted: (reminderId) =>
+                                          _markAsCompleted(
+                                            reminderId,
+                                            occurrenceTime:
+                                                currentOccurrenceTime,
+                                          ),
+                                      getTimeDisplayText: _getTimeDisplayText,
+                                      isCurrentCue: _isCurrentCue,
+                                    )
+                                  else
+                                    _buildEmptyCueCard(
+                                      cardColor,
+                                      textColor,
+                                      subtitleColor,
+                                    ),
+
+                                  SizedBox(height: 24.h),
+
+                                  // Upcoming Section
+                                  _buildUpcomingSection(
+                                    upcomingAfterCurrent,
+                                    cardColor,
                                     textColor,
                                     subtitleColor,
                                   ),
-                                )
-                              else ...[
-                                SizedBox(height: 32.h),
 
-                                // Today's Reminders Count Section
-                                _buildRemindersToday(
-                                  todayReminders.length,
-                                  textColor,
-                                  subtitleColor,
-                                  todayReminders,
-                                ),
-
-                                SizedBox(height: 40.h),
-
-                                Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 32.w),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      // Current/Next Cue Card
-                                      if (currentReminder != null)
-                                        CurrentCueCard(
-                                          reminder: currentReminder,
-                                          accentColor: _accentColor,
-                                          isDarkMode: _isDarkMode,
-                                          cardColor: cardColor,
-                                          textColor: textColor,
-                                          subtitleColor: subtitleColor,
-                                          onMarkCompleted: _markAsCompleted,
-                                          getTimeDisplayText: _getTimeDisplayText,
-                                          isCurrentCue: _isCurrentCue,
-                                        )
-                                      else
-                                        _buildEmptyCueCard(
-                                          cardColor,
-                                          textColor,
-                                          subtitleColor,
-                                        ),
-
-                                      SizedBox(height: 24.h),
-
-                                      // Upcoming Section
-                                      _buildUpcomingSection(
-                                        upcomingAfterCurrent,
-                                        cardColor,
-                                        textColor,
-                                        subtitleColor,
-                                      ),
-
-                                      // Add bottom padding to account for keyboard and FAB
-                                      SizedBox(height: 150.h),
-                                    ],
-                                  ),
-                                ),
-                              ],
+                                  // Add bottom padding to account for keyboard and FAB
+                                  SizedBox(height: 150.h),
+                                ],
+                              ),
+                            ),
+                          ],
                         ] else ...[
                           // Date header - always shown
                           Padding(
                             padding: EdgeInsets.symmetric(vertical: 16.h),
                             child: Text(
-                              DateFormat('EEEE, MMM d').format(now).toUpperCase(),
+                              DateFormat(
+                                'EEEE, MMM d',
+                              ).format(now).toUpperCase(),
                               style: TextStyle(
                                 fontSize: 12.sp,
                                 fontWeight: FontWeight.w600,
@@ -413,9 +581,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             ),
                           ],
                         ],
-                        ],
-                      ),
+                      ],
                     ),
+                  ),
                 );
               },
             ),
@@ -431,7 +599,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 onTap: () async {
                   await Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                    MaterialPageRoute(
+                      builder: (context) => const SettingsScreen(),
+                    ),
                   );
                   // Reload theme settings when coming back
                   if (mounted) {
@@ -571,7 +741,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildUpcomingSection(
-    List<Reminder> upcomingReminders,
+    List<Map<String, dynamic>> upcomingReminders,
     Color cardColor,
     Color textColor,
     Color subtitleColor,
@@ -631,12 +801,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   itemCount: upcomingReminders.length,
                   separatorBuilder: (_, __) => SizedBox(width: 12.w),
                   itemBuilder: (context, index) {
-                    final reminder = upcomingReminders[index];
+                    final item = upcomingReminders[index];
+                    final reminder = item['reminder'] as Reminder;
+                    final occurrenceTime = item['occurrenceTime'] as DateTime?;
                     return _buildUpcomingCard(
                       reminder,
                       cardColor,
                       textColor,
                       subtitleColor,
+                      occurrenceTime,
                     );
                   },
                 ),
@@ -650,18 +823,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     Color cardColor,
     Color textColor,
     Color subtitleColor,
+    DateTime? occurrenceTime,
   ) {
-    final timeOnly = DateFormat('hh:mm').format(reminder.time);
-    final amPm = DateFormat('a').format(reminder.time);
+    // Use occurrence time if provided, otherwise use reminder time
+    final displayTime = occurrenceTime ?? reminder.time;
+    final timeOnly = DateFormat('hh:mm').format(displayTime);
+    final amPm = DateFormat('a').format(displayTime);
 
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => ReminderDetailsScreen(
-              reminder: reminder,
-            ),
+            builder: (context) => ReminderDetailsScreen(reminder: reminder),
           ),
         );
       },
@@ -684,73 +858,89 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ],
         ),
         child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Title and Icon row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Reminder name
-              Expanded(
-                child: Text(
-                  reminder.name,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            // Title and Icon row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Reminder name
+                Expanded(
+                  child: Text(
+                    reminder.name,
+                    style: TextStyle(
+                      fontSize: 17.sp,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                SizedBox(width: 8.w),
+                // Icon on the right
+                Container(
+                  width: 32.w,
+                  height: 32.h,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: reminder.color.withOpacity(0.15),
+                  ),
+                  child: reminder.customIconUrl != null
+                      ? ClipOval(
+                          child: Image.network(
+                            reminder.customIconUrl!,
+                            width: 32.w,
+                            height: 32.h,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Icon(
+                                reminder.icon,
+                                color: reminder.color,
+                                size: 20.sp,
+                              );
+                            },
+                          ),
+                        )
+                      : Icon(
+                          reminder.icon,
+                          color: reminder.color,
+                          size: 20.sp,
+                        ),
+                ),
+              ],
+            ),
+
+            // Time with AM/PM
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  timeOnly,
                   style: TextStyle(
-                    fontSize: 17.sp,
+                    fontSize: 18.sp,
                     fontWeight: FontWeight.w600,
                     color: textColor,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              SizedBox(width: 8.w),
-              // Icon on the right
-              Container(
-                width: 32.w,
-                height: 32.h,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: reminder.color.withOpacity(0.15),
-                ),
-                child: Icon(
-                  reminder.icon,
-                  color: reminder.color,
-                  size: 20.sp,
-                ),
-              ),
-            ],
-          ),
-          
-          // Time with AM/PM
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                timeOnly,
-                style: TextStyle(
-                  fontSize: 18.sp,
-                  fontWeight: FontWeight.w600,
-                  color: textColor,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              SizedBox(width: 4.w),
-              Padding(
-                padding: EdgeInsets.only(bottom: 2.h),
-                child: Text(
-                  amPm,
-                  style: TextStyle(
-                    fontSize: 11.sp,
-                    fontWeight: FontWeight.w500,
-                    color: subtitleColor,
+                    letterSpacing: -0.5,
                   ),
                 ),
-              ),
-            ],
-          ),
-        ],
+                SizedBox(width: 4.w),
+                Padding(
+                  padding: EdgeInsets.only(bottom: 2.h),
+                  child: Text(
+                    amPm,
+                    style: TextStyle(
+                      fontSize: 11.sp,
+                      fontWeight: FontWeight.w500,
+                      color: subtitleColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -806,18 +996,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         color: color.withOpacity(0.15),
         shape: BoxShape.circle,
       ),
-      child: Icon(
-        icon,
-        color: color,
-        size: 22.sp,
-      ),
+      child: Icon(icon, color: color, size: 22.sp),
     );
   }
 
-  Widget _buildFullScreenEmptyState(
-    Color textColor,
-    Color subtitleColor,
-  ) {
+  Widget _buildFullScreenEmptyState(Color textColor, Color subtitleColor) {
     return Center(
       child: Padding(
         padding: EdgeInsets.symmetric(horizontal: 48.w),

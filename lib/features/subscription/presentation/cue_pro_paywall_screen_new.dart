@@ -372,10 +372,10 @@ class _SubscriptionBottomSheetState extends State<_SubscriptionBottomSheet> {
       if (mounted) {
         setState(() {
           _offerings = offerings;
-          // Pre-select yearly if available
+          // Pre-select monthly if available, otherwise fallback to first package
           final packages = offerings?.current?.availablePackages ?? [];
           _selectedPackage = packages.firstWhere(
-            (pkg) => pkg.packageType == PackageType.annual,
+            (pkg) => pkg.packageType == PackageType.monthly,
             orElse: () => packages.isNotEmpty ? packages.first : throw Exception('No packages'),
           );
           _isLoading = false;
@@ -478,9 +478,11 @@ class _SubscriptionBottomSheetState extends State<_SubscriptionBottomSheet> {
                 ),
                 SizedBox(height: 16.h),
 
-                // Plans
+                // Plans - show only monthly package
                 if (_offerings?.current?.availablePackages != null)
-                  ...(_offerings!.current!.availablePackages.map((package) {
+                  ...(_offerings!.current!.availablePackages
+                      .where((pkg) => pkg.packageType == PackageType.monthly)
+                      .map((package) {
                     final isSelected = _selectedPackage == package;
                     final isYearly =
                         package.packageType == PackageType.annual;
@@ -574,8 +576,9 @@ class _SubscriptionBottomSheetState extends State<_SubscriptionBottomSheet> {
                                     ],
                                   ),
                                   SizedBox(height: 4.h),
+                                  // Force display price to $0.90 as requested
                                   Text(
-                                    package.storeProduct.priceString,
+                                    '\$0.90',
                                     style: TextStyle(
                                       fontSize: 20.sp,
                                       fontWeight: FontWeight.bold,

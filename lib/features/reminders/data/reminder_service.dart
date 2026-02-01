@@ -20,33 +20,33 @@ class ReminderService {
   Stream<List<Reminder>> getRemindersStream() {
     final userId = _userId;
     if (userId == null) {
-      return Stream.value([]);  // Return empty stream if no user logged in
+      return Stream.value([]); // Return empty stream if no user logged in
     }
-    
+
     return _firestore
         .collection(_collection)
         .where('userId', isEqualTo: userId)
         .where('isCompleted', isEqualTo: false)
         .snapshots()
         .map((snapshot) {
-      // Sort in memory instead of on server
-      final reminders = snapshot.docs
-          .map((doc) => Reminder.fromMap(doc.data(), doc.id))
-          .toList();
-      
-      // Update outdated nextDueAt values for recurring reminders in the background
-      _updateOutdatedNextDueAt(reminders);
-      
-      reminders.sort((a, b) => a.time.compareTo(b.time));
-      return reminders;
-    });
+          // Sort in memory instead of on server
+          final reminders = snapshot.docs
+              .map((doc) => Reminder.fromMap(doc.data(), doc.id))
+              .toList();
+
+          // Update outdated nextDueAt values for recurring reminders in the background
+          _updateOutdatedNextDueAt(reminders);
+
+          reminders.sort((a, b) => a.time.compareTo(b.time));
+          return reminders;
+        });
   }
-  
+
   // Update outdated nextDueAt values for recurring reminders
   Future<void> _updateOutdatedNextDueAt(List<Reminder> reminders) async {
     final now = DateTime.now();
     final updates = <String, DateTime>{};
-    
+
     for (final reminder in reminders) {
       if (reminder.recurrence != null && reminder.nextDueAt != null) {
         // Check if nextDueAt is outdated (in the past)
@@ -54,24 +54,26 @@ class ReminderService {
           try {
             final effectiveDate = reminder.effectiveNextDueAt;
             // Only update if the calculated date is different and in the future
-            if (effectiveDate != reminder.nextDueAt && effectiveDate.isAfter(now)) {
+            if (effectiveDate != reminder.nextDueAt &&
+                effectiveDate.isAfter(now)) {
               updates[reminder.id] = effectiveDate;
             }
           } catch (e) {
-            print('Error calculating effective date for reminder ${reminder.id}: $e');
+            print(
+              'Error calculating effective date for reminder ${reminder.id}: $e',
+            );
           }
         }
       }
     }
-    
+
     // Batch update outdated nextDueAt values
     if (updates.isNotEmpty) {
       final batch = _firestore.batch();
       for (final entry in updates.entries) {
-        batch.update(
-          _firestore.collection(_collection).doc(entry.key),
-          {'nextDueAt': Timestamp.fromDate(entry.value)},
-        );
+        batch.update(_firestore.collection(_collection).doc(entry.key), {
+          'nextDueAt': Timestamp.fromDate(entry.value),
+        });
       }
       try {
         await batch.commit();
@@ -89,12 +91,13 @@ class ReminderService {
       if (userId == null) {
         throw Exception('No user logged in');
       }
-      
+
       final reminderData = reminder.toMap();
       // Ensure scheduledTime is set for Cloud Functions
-      reminderData['scheduledTime'] = reminderData['nextDueAt'] ?? reminderData['time'];
+      reminderData['scheduledTime'] =
+          reminderData['nextDueAt'] ?? reminderData['time'];
       reminderData['status'] = reminderData['status'] ?? 'active';
-      
+
       // Initialize consistency tracking for recurring reminders
       if (reminder.recurrence != null) {
         reminderData['consistency'] = {
@@ -104,14 +107,14 @@ class ReminderService {
           'completedDates': [],
         };
       }
-      
+
       final docRef = await _firestore.collection(_collection).add({
         ...reminderData,
         'userId': userId,
         'deviceToken': fcmToken,
         'createdAt': FieldValue.serverTimestamp(),
       });
-      
+
       print('Reminder added with ID: ${docRef.id}');
       return docRef.id;
     } catch (e) {
@@ -122,15 +125,22 @@ class ReminderService {
 
   // Mark reminder as completed (this will trigger cross-device sync)
   // Consistency tracking is handled by Firebase Functions
-  Future<void> markAsCompleted(String reminderId) async {
+  // For hourly reminders, occurrenceTime should be provided to track specific occurrence completion
+  Future<void> markAsCompleted(
+    String reminderId, {
+    DateTime? occurrenceTime,
+  }) async {
     try {
       // First try to update Firestore directly for immediate feedback
       // This ensures the UI updates even if Cloud Functions are slow
-      final doc = await _firestore.collection(_collection).doc(reminderId).get();
+      final doc = await _firestore
+          .collection(_collection)
+          .doc(reminderId)
+          .get();
       if (doc.exists) {
         final reminderData = doc.data()!;
         final isRecurring = reminderData['recurrence'] != null;
-        
+
         final updates = <String, dynamic>{
           'lastCompletedAt': FieldValue.serverTimestamp(),
           'scheduledTimeAtSnooze': FieldValue.delete(),
@@ -138,47 +148,95 @@ class ReminderService {
         };
 
         if (isRecurring) {
-          // For recurring reminders, update consistency data locally first
-          // This allows immediate UI update while Cloud Function processes in background
-          final today = DateTime.now();
-          final todayStr = '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
-          
-          final consistency = reminderData['consistency'] as Map<String, dynamic>? ?? {
-            'completedCount': 0,
-            'missedCount': 0,
-            'lastEvaluatedDate': '',
-            'completedDates': [],
-          };
-          
-          final completedDates = List<String>.from(consistency['completedDates'] ?? []);
-          if (!completedDates.contains(todayStr)) {
-            completedDates.add(todayStr);
-            // Keep only last 90 days
-            if (completedDates.length > 90) {
-              completedDates.sort();
-              completedDates.removeRange(0, completedDates.length - 90);
+          final recurrence =
+              reminderData['recurrence'] as Map<String, dynamic>?;
+          final isHourly =
+              recurrence != null &&
+              recurrence['type'] == 'interval' &&
+              (recurrence['unit'].toString().toLowerCase().contains('hour') ||
+                  recurrence['unit'].toString().toLowerCase().contains(
+                    'minute',
+                  ));
+
+          if (isHourly && occurrenceTime != null) {
+            // For hourly reminders, track completion using overrides per occurrence time
+            final dateKey =
+                '${occurrenceTime.year.toString().padLeft(4, '0')}-${occurrenceTime.month.toString().padLeft(2, '0')}-${occurrenceTime.day.toString().padLeft(2, '0')}';
+            final timeKey =
+                '${occurrenceTime.hour.toString().padLeft(2, '0')}:${occurrenceTime.minute.toString().padLeft(2, '0')}';
+
+            final overrides = Map<String, dynamic>.from(
+              reminderData['overrides'] as Map<String, dynamic>? ?? {},
+            );
+            final dateOverride = Map<String, dynamic>.from(
+              overrides[dateKey] as Map<String, dynamic>? ?? {},
+            );
+
+            // Track completed times for this date
+            final completedTimes = List<String>.from(
+              dateOverride['completedTimes'] as List<dynamic>? ?? [],
+            );
+            if (!completedTimes.contains(timeKey)) {
+              completedTimes.add(timeKey);
+              dateOverride['completedTimes'] = completedTimes;
+              overrides[dateKey] = dateOverride;
+              updates['overrides'] = overrides;
             }
-            
-            updates['consistency'] = {
-              ...consistency,
-              'completedCount': (consistency['completedCount'] ?? 0) + 1,
-              'lastEvaluatedDate': todayStr,
-              'completedDates': completedDates,
-            };
+          } else {
+            // For non-hourly recurring reminders, update consistency data
+            final today = DateTime.now();
+            final todayStr =
+                '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+
+            final consistency =
+                reminderData['consistency'] as Map<String, dynamic>? ??
+                {
+                  'completedCount': 0,
+                  'missedCount': 0,
+                  'lastEvaluatedDate': '',
+                  'completedDates': [],
+                };
+
+            final completedDates = List<String>.from(
+              consistency['completedDates'] ?? [],
+            );
+            if (!completedDates.contains(todayStr)) {
+              completedDates.add(todayStr);
+              // Keep only last 90 days
+              if (completedDates.length > 90) {
+                completedDates.sort();
+                completedDates.removeRange(0, completedDates.length - 90);
+              }
+
+              updates['consistency'] = {
+                ...consistency,
+                'completedCount': (consistency['completedCount'] ?? 0) + 1,
+                'lastEvaluatedDate': todayStr,
+                'completedDates': completedDates,
+              };
+            }
           }
         } else {
           // For non-recurring, just mark as completed
           updates['isCompleted'] = true;
           updates['completedAt'] = FieldValue.serverTimestamp();
         }
-        
-        await _firestore.collection(_collection).doc(reminderId).update(updates);
+
+        await _firestore
+            .collection(_collection)
+            .doc(reminderId)
+            .update(updates);
         print('Reminder marked as completed locally: $reminderId');
-        
+
         // Delete the pending notification to prevent it from being sent
         try {
-          await _firestore.collection('pending_notifications').doc(reminderId).delete();
-          print('Deleted pending notification for completed reminder: $reminderId');
+          await _firestore
+              .collection('pending_notifications')
+              .doc(reminderId)
+              .delete();
+          print(
+            'Deleted pending notification for completed reminder: $reminderId',
+          );
         } catch (e) {
           print('Error deleting pending notification: $e');
           // Don't rethrow - the reminder completion was successful
@@ -196,7 +254,7 @@ class ReminderService {
       } catch (e) {
         print('Cloud Function call failed (but local update succeeded): $e');
       }
-      
+
       // Trigger a notification to other devices
       await _notifyOtherDevices(reminderId, 'completed');
     } catch (e) {
@@ -217,14 +275,17 @@ class ReminderService {
   }
 
   // Update a reminder
-  Future<void> updateReminder(String reminderId, Map<String, dynamic> updates) async {
+  Future<void> updateReminder(
+    String reminderId,
+    Map<String, dynamic> updates,
+  ) async {
     try {
       await _firestore.collection(_collection).doc(reminderId).update({
         ...updates,
         'updatedAt': FieldValue.serverTimestamp(),
       });
       print('Reminder updated: $reminderId');
-      
+
       // If the name is being updated, also update pending_notifications
       if (updates.containsKey('name')) {
         try {
@@ -232,12 +293,15 @@ class ReminderService {
               .collection('pending_notifications')
               .doc(reminderId)
               .get();
-          
+
           if (pendingNotifDoc.exists) {
-            await _firestore.collection('pending_notifications').doc(reminderId).update({
-              'reminderName': updates['name'],
-              'reminderDescription': updates['name'],
-            });
+            await _firestore
+                .collection('pending_notifications')
+                .doc(reminderId)
+                .update({
+                  'reminderName': updates['name'],
+                  'reminderDescription': updates['name'],
+                });
             print('Updated pending notification name for: $reminderId');
           }
         } catch (e) {
@@ -245,7 +309,7 @@ class ReminderService {
           // Don't rethrow - the reminder update was successful
         }
       }
-      
+
       // If the scheduled time is being updated (time or nextDueAt), update pending_notifications
       if (updates.containsKey('time') || updates.containsKey('nextDueAt')) {
         try {
@@ -253,14 +317,17 @@ class ReminderService {
               .collection('pending_notifications')
               .doc(reminderId)
               .get();
-          
+
           if (pendingNotifDoc.exists) {
             final newScheduledTime = updates['nextDueAt'] ?? updates['time'];
             if (newScheduledTime != null) {
-              await _firestore.collection('pending_notifications').doc(reminderId).update({
-                'scheduledTime': newScheduledTime,
-              });
-              print('Updated pending notification scheduledTime for: $reminderId');
+              await _firestore
+                  .collection('pending_notifications')
+                  .doc(reminderId)
+                  .update({'scheduledTime': newScheduledTime});
+              print(
+                'Updated pending notification scheduledTime for: $reminderId',
+              );
             }
           }
         } catch (e) {
@@ -277,19 +344,25 @@ class ReminderService {
   // Snooze a reminder with custom duration (in minutes)
   Future<void> snoozeReminder(String reminderId, {int minutes = 10}) async {
     try {
-      final doc = await _firestore.collection(_collection).doc(reminderId).get();
+      final doc = await _firestore
+          .collection(_collection)
+          .doc(reminderId)
+          .get();
       if (doc.exists) {
         final reminder = Reminder.fromMap(doc.data()!, doc.id);
         final newTime = DateTime.now().add(Duration(minutes: minutes));
         final isRecurring = reminder.recurrence != null;
         // Keep the original scheduled time for display — only set on first snooze, preserve on repeat snoozes
-        final scheduledDisplayTime = reminder.scheduledTimeAtSnooze ?? reminder.getEffectiveDisplayTime();
+        final scheduledDisplayTime =
+            reminder.scheduledTimeAtSnooze ??
+            reminder.getEffectiveDisplayTime();
 
         final updates = <String, dynamic>{
           'scheduledTime': Timestamp.fromDate(newTime),
           'scheduledTimeAtSnooze': Timestamp.fromDate(scheduledDisplayTime),
           'snoozedUntil': Timestamp.fromDate(newTime),
-          'notifiedAt': FieldValue.delete(),  // Clear notifiedAt so it can notify again
+          'notifiedAt':
+              FieldValue.delete(), // Clear notifiedAt so it can notify again
           'updatedAt': FieldValue.serverTimestamp(),
         };
 
@@ -302,18 +375,24 @@ class ReminderService {
           updates['time'] = Timestamp.fromDate(newTime);
           print('One-time reminder snoozed - updating time');
         }
-        
-        await _firestore.collection(_collection).doc(reminderId).update(updates);
-        
+
+        await _firestore
+            .collection(_collection)
+            .doc(reminderId)
+            .update(updates);
+
         // Create a new pending notification for the snoozed time
-        await _firestore.collection('pending_notifications').doc(reminderId).set({
-          'reminderId': reminderId,
-          'scheduledTime': Timestamp.fromDate(newTime),
-          'reminderName': reminder.name,
-          'reminderDescription': reminder.name,  // Use name as description
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-        
+        await _firestore
+            .collection('pending_notifications')
+            .doc(reminderId)
+            .set({
+              'reminderId': reminderId,
+              'scheduledTime': Timestamp.fromDate(newTime),
+              'reminderName': reminder.name,
+              'reminderDescription': reminder.name, // Use name as description
+              'createdAt': FieldValue.serverTimestamp(),
+            });
+
         print('Reminder snoozed by $minutes minutes: $reminderId to $newTime');
       }
     } catch (e) {
@@ -325,11 +404,16 @@ class ReminderService {
   // Snooze a reminder to a specific date/time (for "later today", "tomorrow", or "another day")
   Future<void> snoozeReminderTo(String reminderId, DateTime targetTime) async {
     try {
-      final doc = await _firestore.collection(_collection).doc(reminderId).get();
+      final doc = await _firestore
+          .collection(_collection)
+          .doc(reminderId)
+          .get();
       if (doc.exists) {
         final reminder = Reminder.fromMap(doc.data()!, doc.id);
         final isRecurring = reminder.recurrence != null;
-        final scheduledDisplayTime = reminder.scheduledTimeAtSnooze ?? reminder.getEffectiveDisplayTime();
+        final scheduledDisplayTime =
+            reminder.scheduledTimeAtSnooze ??
+            reminder.getEffectiveDisplayTime();
 
         final updates = <String, dynamic>{
           'scheduledTime': Timestamp.fromDate(targetTime),
@@ -345,15 +429,21 @@ class ReminderService {
           updates['time'] = Timestamp.fromDate(targetTime);
         }
 
-        await _firestore.collection(_collection).doc(reminderId).update(updates);
+        await _firestore
+            .collection(_collection)
+            .doc(reminderId)
+            .update(updates);
 
-        await _firestore.collection('pending_notifications').doc(reminderId).set({
-          'reminderId': reminderId,
-          'scheduledTime': Timestamp.fromDate(targetTime),
-          'reminderName': reminder.name,
-          'reminderDescription': reminder.name,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
+        await _firestore
+            .collection('pending_notifications')
+            .doc(reminderId)
+            .set({
+              'reminderId': reminderId,
+              'scheduledTime': Timestamp.fromDate(targetTime),
+              'reminderName': reminder.name,
+              'reminderDescription': reminder.name,
+              'createdAt': FieldValue.serverTimestamp(),
+            });
 
         print('Reminder snoozed to $targetTime: $reminderId');
       }
@@ -383,7 +473,10 @@ class ReminderService {
   // Get a single reminder
   Future<Reminder?> getReminder(String reminderId) async {
     try {
-      final doc = await _firestore.collection(_collection).doc(reminderId).get();
+      final doc = await _firestore
+          .collection(_collection)
+          .doc(reminderId)
+          .get();
       if (doc.exists) {
         return Reminder.fromMap(doc.data()!, doc.id);
       }
@@ -396,11 +489,9 @@ class ReminderService {
 
   // Listen to a specific reminder for changes
   Stream<Reminder?> getReminderStream(String reminderId) {
-    return _firestore
-        .collection(_collection)
-        .doc(reminderId)
-        .snapshots()
-        .map((snapshot) {
+    return _firestore.collection(_collection).doc(reminderId).snapshots().map((
+      snapshot,
+    ) {
       if (snapshot.exists) {
         return Reminder.fromMap(snapshot.data()!, snapshot.id);
       }
@@ -420,9 +511,9 @@ class ReminderService {
   Stream<List<Reminder>> getCompletedRemindersStream() {
     final userId = _userId;
     if (userId == null) {
-      return Stream.value([]);  // Return empty stream if no user logged in
+      return Stream.value([]); // Return empty stream if no user logged in
     }
-    
+
     return _firestore
         .collection(_collection)
         .where('userId', isEqualTo: userId)
@@ -430,13 +521,15 @@ class ReminderService {
         .limit(50)
         .snapshots()
         .map((snapshot) {
-      // Sort in memory
-      final reminders = snapshot.docs
-          .map((doc) => Reminder.fromMap(doc.data(), doc.id))
-          .toList();
-      reminders.sort((a, b) => b.time.compareTo(a.time)); // Most recent first
-      return reminders;
-    });
+          // Sort in memory
+          final reminders = snapshot.docs
+              .map((doc) => Reminder.fromMap(doc.data(), doc.id))
+              .toList();
+          reminders.sort(
+            (a, b) => b.time.compareTo(a.time),
+          ); // Most recent first
+          return reminders;
+        });
   }
 
   // Clean up old completed reminders (optional)
@@ -446,7 +539,7 @@ class ReminderService {
       if (userId == null) {
         throw Exception('No user logged in');
       }
-      
+
       final cutoffDate = DateTime.now().subtract(Duration(days: daysOld));
       final querySnapshot = await _firestore
           .collection(_collection)
@@ -459,7 +552,7 @@ class ReminderService {
       for (var doc in querySnapshot.docs) {
         batch.delete(doc.reference);
       }
-      
+
       await batch.commit();
       print('Cleaned up ${querySnapshot.docs.length} old reminders');
     } catch (e) {
