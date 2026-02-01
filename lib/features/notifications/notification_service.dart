@@ -14,6 +14,8 @@ import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 
 // Top-level function for handling background notification responses
 @pragma('vm:entry-point')
@@ -490,6 +492,42 @@ class NotificationService {
       }
     }
 
+    // Generate or download icon for iOS attachment
+    String? iosAttachmentPath;
+    if (Platform.isIOS) {
+      try {
+        // Priority 1: Use custom image URL
+        if (customIconUrl != null && customIconUrl.isNotEmpty) {
+          print('📥 [iOS] Downloading custom icon for attachment');
+          final response = await http.get(Uri.parse(customIconUrl));
+          if (response.statusCode == 200) {
+            final tempDir = await getTemporaryDirectory();
+            final file = File('${tempDir.path}/notification_icon_$id.png');
+            await file.writeAsBytes(response.bodyBytes);
+            iosAttachmentPath = file.path;
+            print('✅ [iOS] Custom icon saved to: $iosAttachmentPath');
+          }
+        }
+        // Priority 2: Generate from iconCodePoint
+        else if (iconCodePoint != null) {
+          print('🎨 [iOS] Generating icon for attachment');
+          final iconBitmap = await _generateIconBitmap(
+            iconCodePoint,
+            notificationColor ?? const Color(0xFFFFB4A3),
+          );
+          if (iconBitmap != null) {
+            final tempDir = await getTemporaryDirectory();
+            final file = File('${tempDir.path}/notification_icon_$id.png');
+            await file.writeAsBytes(iconBitmap);
+            iosAttachmentPath = file.path;
+            print('✅ [iOS] Icon generated and saved to: $iosAttachmentPath');
+          }
+        }
+      } catch (e) {
+        print('❌ [iOS] Error preparing icon attachment: $e');
+      }
+    }
+
     // Always use custom ringtone for reminder/snooze notifications
     final AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
@@ -530,13 +568,17 @@ class NotificationService {
       ],
     );
 
-    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+    // iOS details with attachment
+    final DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
       categoryIdentifier: 'reminder_category',
       presentAlert: true,
       presentBadge: true,
       presentSound: true,
       sound: 'notification_ringtone.wav',
       interruptionLevel: InterruptionLevel.timeSensitive,
+      attachments: iosAttachmentPath != null
+          ? [DarwinNotificationAttachment(iosAttachmentPath)]
+          : null,
     );
 
     final NotificationDetails notificationDetails = NotificationDetails(
@@ -727,6 +769,27 @@ class NotificationService {
     print('Unsubscribed from topic: user_$userId');
   }
 
+  // Get device name/model
+  Future<String> _getDeviceName() async {
+    try {
+      final deviceInfo = DeviceInfoPlugin();
+      
+      if (Platform.isAndroid) {
+        final androidInfo = await deviceInfo.androidInfo;
+        // e.g., "Samsung Galaxy S21" or "Pixel 6"
+        return '${androidInfo.manufacturer} ${androidInfo.model}';
+      } else if (Platform.isIOS) {
+        final iosInfo = await deviceInfo.iosInfo;
+        // e.g., "iPhone 13 Pro"
+        return iosInfo.name;
+      }
+      return 'Unknown Device';
+    } catch (e) {
+      print('❌ Error getting device name: $e');
+      return 'Unknown Device';
+    }
+  }
+
   // Save FCM token to Firestore for Cloud Functions
   Future<void> _saveFCMTokenToFirestore(String? token) async {
     if (token != null) {
@@ -742,17 +805,44 @@ class NotificationService {
         print('Token: ${token.substring(0, 20)}...');
         print('User ID: $userId');
         
-        // Save to devices collection with userId for user-specific notifications
-        await FirebaseFirestore.instance
+        // Get device name
+        final deviceName = await _getDeviceName();
+        print('Device Name: $deviceName');
+        
+        // Check if a device with this FCM token already exists
+        final existingDevice = await FirebaseFirestore.instance
             .collection('devices')
             .doc(token)
-            .set({
-          'fcmToken': token,
-          'userId': userId,  // Link device to user account
-          'lastUpdated': FieldValue.serverTimestamp(),
-          'platform': Platform.isAndroid ? 'android' : 'ios',
-          'active': true,
-        }, SetOptions(merge: true));
+            .get();
+        
+        if (existingDevice.exists) {
+          // Device already exists, just update it
+          print('📱 Device already exists, updating...');
+          await FirebaseFirestore.instance
+              .collection('devices')
+              .doc(token)
+              .update({
+            'userId': userId,
+            'lastUpdated': FieldValue.serverTimestamp(),
+            'platform': Platform.isAndroid ? 'android' : 'ios',
+            'deviceName': deviceName,
+            'active': true,
+          });
+        } else {
+          // Create new device document
+          print('📱 Creating new device document...');
+          await FirebaseFirestore.instance
+              .collection('devices')
+              .doc(token)
+              .set({
+            'fcmToken': token,
+            'userId': userId,
+            'lastUpdated': FieldValue.serverTimestamp(),
+            'platform': Platform.isAndroid ? 'android' : 'ios',
+            'deviceName': deviceName,
+            'active': true,
+          });
+        }
         
         print('✅ FCM Token saved to devices collection for user: $userId');
         
@@ -764,6 +854,7 @@ class NotificationService {
         
         if (doc.exists) {
           print('✅ Verified: Device document exists');
+          print('   Device name: ${doc.data()?['deviceName']}');
         } else {
           print('❌ Warning: Device document not found after save');
         }
@@ -787,11 +878,16 @@ class NotificationService {
         print('   Token: ${token.substring(0, 20)}...');
         print('   User ID: $userId');
         
+        // Get device name
+        final deviceName = await _getDeviceName();
+        
         await FirebaseFirestore.instance
             .collection('devices')
             .doc(token)
             .update({
           'active': true,
+          'userId': userId,
+          'deviceName': deviceName,
           'lastUpdated': FieldValue.serverTimestamp(),
         });
         print('✅ Device reactivated successfully');
@@ -806,12 +902,14 @@ class NotificationService {
           final data = doc.data();
           final isActive = data?['active'] as bool? ?? false;
           print('   Verified active status: $isActive');
+          print('   Device name: ${data?['deviceName']}');
         }
       } catch (e) {
         print('❌ Error reactivating device: $e');
         // If document doesn't exist, create it
         try {
           print('   Attempting to create device document...');
+          final deviceName = await _getDeviceName();
           await FirebaseFirestore.instance
               .collection('devices')
               .doc(token)
@@ -820,8 +918,9 @@ class NotificationService {
             'userId': userId,
             'lastUpdated': FieldValue.serverTimestamp(),
             'platform': Platform.isAndroid ? 'android' : 'ios',
+            'deviceName': deviceName,
             'active': true,
-          }, SetOptions(merge: true));
+          });
           print('✅ Device document created and activated');
         } catch (createError) {
           print('❌ Error creating device document: $createError');
