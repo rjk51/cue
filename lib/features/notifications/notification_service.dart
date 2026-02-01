@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' as ui;
+import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -10,6 +12,8 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 // Top-level function for handling background notification responses
 @pragma('vm:entry-point')
@@ -335,7 +339,13 @@ class NotificationService {
       final title = message.notification?.title ?? message.data['title'] ?? 'Reminder';
       final body = message.notification?.body ?? message.data['body'] ?? 'Your reminder is due!';
       
+      // Extract icon and color data
+      final customIconUrl = message.data['customIconUrl'] ?? '';
+      final iconCodePoint = message.data['iconCodePoint'] ?? '';
+      final colorValue = message.data['colorValue'] ?? '';
+      
       print('🔔 Showing foreground notification: $title');
+      print('🎨 Icon data - customUrl: $customIconUrl, iconCode: $iconCodePoint, color: $colorValue');
       
       // CRITICAL: iOS doesn't show notifications when app is in foreground
       // We MUST manually show them using local notifications
@@ -344,6 +354,9 @@ class NotificationService {
         title: title,
         body: body,
         payload: reminderId,
+        customIconUrl: customIconUrl.isNotEmpty ? customIconUrl : null,
+        iconCodePoint: iconCodePoint.isNotEmpty ? int.tryParse(iconCodePoint) : null,
+        colorValue: colorValue.isNotEmpty ? int.tryParse(colorValue) : null,
       );
     }
   }
@@ -353,18 +366,75 @@ class NotificationService {
     // Navigate to specific screen if needed
   }
 
+  // Helper method to generate a bitmap from a Flutter icon
+  Future<List<int>?> _generateIconBitmap(int iconCodePoint, Color color) async {
+    try {
+      // Import dart:ui for image generation
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      const size = 192.0; // Notification large icon size
+      
+      // Draw circular background
+      final backgroundPaint = Paint()
+        ..color = color.withOpacity(0.2)
+        ..style = PaintingStyle.fill;
+      canvas.drawCircle(
+        Offset(size / 2, size / 2),
+        size / 2,
+        backgroundPaint,
+      );
+      
+      // Draw the icon
+      final textPainter = TextPainter(
+        textDirection: TextDirection.ltr,
+      );
+      textPainter.text = TextSpan(
+        text: String.fromCharCode(iconCodePoint),
+        style: TextStyle(
+          fontSize: size * 0.5, // Icon takes up 50% of the circle
+          fontFamily: 'MaterialIcons',
+          color: color,
+        ),
+      );
+      textPainter.layout();
+      textPainter.paint(
+        canvas,
+        Offset(
+          (size - textPainter.width) / 2,
+          (size - textPainter.height) / 2,
+        ),
+      );
+      
+      // Convert to image
+      final picture = recorder.endRecording();
+      final image = await picture.toImage(size.toInt(), size.toInt());
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      
+      return byteData?.buffer.asUint8List();
+    } catch (e) {
+      print('❌ Error generating icon bitmap: $e');
+      return null;
+    }
+  }
+
   // Public method to show notification with action buttons (used by background handler)
   Future<void> showNotificationWithActions({
     required int id,
     required String title,
     required String body,
     required String payload,
+    String? customIconUrl,
+    int? iconCodePoint,
+    int? colorValue,
   }) async {
     return _showLocalNotificationWithActions(
       id: id,
       title: title,
       body: body,
       payload: payload,
+      customIconUrl: customIconUrl,
+      iconCodePoint: iconCodePoint,
+      colorValue: colorValue,
     );
   }
 
@@ -373,7 +443,53 @@ class NotificationService {
     required String title,
     required String body,
     required String payload,
+    String? customIconUrl,
+    int? iconCodePoint,
+    int? colorValue,
   }) async {
+    // Determine color for notification (use reminder color if available)
+    Color? notificationColor;
+    if (colorValue != null) {
+      notificationColor = Color(colorValue);
+      print('🎨 Using reminder color: ${notificationColor.value.toRadixString(16)}');
+    }
+
+    // Generate or download large icon
+    ByteArrayAndroidBitmap? largeIcon;
+    if (Platform.isAndroid) {
+      // Priority 1: Use custom image URL if provided
+      if (customIconUrl != null && customIconUrl.isNotEmpty) {
+        try {
+          print('📥 Downloading custom icon from: $customIconUrl');
+          final response = await http.get(Uri.parse(customIconUrl));
+          if (response.statusCode == 200) {
+            largeIcon = ByteArrayAndroidBitmap(response.bodyBytes);
+            print('✅ Custom icon downloaded successfully');
+          } else {
+            print('❌ Failed to download icon: ${response.statusCode}');
+          }
+        } catch (e) {
+          print('❌ Error downloading custom icon: $e');
+        }
+      }
+      // Priority 2: Generate icon from iconCodePoint if no custom URL
+      else if (iconCodePoint != null) {
+        try {
+          print('🎨 Generating icon from codePoint: $iconCodePoint');
+          final iconBitmap = await _generateIconBitmap(
+            iconCodePoint, 
+            notificationColor ?? const Color(0xFFFFB4A3),
+          );
+          if (iconBitmap != null) {
+            largeIcon = ByteArrayAndroidBitmap(Uint8List.fromList(iconBitmap));
+            print('✅ Icon generated successfully');
+          }
+        } catch (e) {
+          print('❌ Error generating icon: $e');
+        }
+      }
+    }
+
     // Always use custom ringtone for reminder/snooze notifications
     final AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
@@ -384,6 +500,8 @@ class NotificationService {
       priority: Priority.high,
       sound: RawResourceAndroidNotificationSound('notification_ringtone'),
       playSound: true,
+      largeIcon: largeIcon, // Show custom icon as large icon
+      color: notificationColor, // Set notification accent color
       actions: <AndroidNotificationAction>[
         const AndroidNotificationAction(
           'mark_done',

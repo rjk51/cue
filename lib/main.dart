@@ -45,6 +45,11 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     final reminderId = message.data['reminderId'] ?? '';
     final title = message.data['title'] ?? 'Reminder';
     final body = message.data['body'] ?? 'Your reminder is due!';
+    
+    // Extract icon and color data
+    final customIconUrl = message.data['customIconUrl'] ?? '';
+    final iconCodePoint = message.data['iconCodePoint'] ?? '';
+    final colorValue = message.data['colorValue'] ?? '';
 
     // Import flutter_local_notifications to show notification
     await notificationService.showNotificationWithActions(
@@ -52,6 +57,9 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       title: title,
       body: body,
       payload: reminderId,
+      customIconUrl: customIconUrl.isNotEmpty ? customIconUrl : null,
+      iconCodePoint: iconCodePoint.isNotEmpty ? int.tryParse(iconCodePoint) : null,
+      colorValue: colorValue.isNotEmpty ? int.tryParse(colorValue) : null,
     );
   }
 }
