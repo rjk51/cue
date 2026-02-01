@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 /// Shows a Cupertino-style date picker in a modal bottom sheet.
 /// Returns the selected [DateTime] or null if cancelled.
@@ -41,8 +42,11 @@ Future<DateTime?> showCupertinoDatePickerModal({
                   : (initialDate.isAfter(max) ? max : initialDate),
               minimumDate: min,
               maximumDate: max,
-              onDateTimeChanged: (v) => selected = v,
-            ),
+              onDateTimeChanged: (v) {
+                HapticFeedback.lightImpact();
+                SystemSound.play(SystemSoundType.click);
+                selected = v;
+              }),
           ),
         ],
       ),
@@ -90,7 +94,11 @@ Future<TimeOfDay?> showCupertinoTimePickerModal({
             child: CupertinoDatePicker(
               mode: CupertinoDatePickerMode.time,
               initialDateTime: selected,
-              onDateTimeChanged: (v) => selected = v,
+               onDateTimeChanged: (v) {
+                SystemSound.play(SystemSoundType.click);
+                HapticFeedback.lightImpact();
+                selected = v;
+              },
             ),
           ),
         ],

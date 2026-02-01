@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
 import 'package:flex_color_picker/flex_color_picker.dart';
@@ -18,11 +20,8 @@ import 'widgets/sticky_save_button.dart';
 
 class NewReminderScreen extends StatefulWidget {
   final Reminder? reminderToEdit;
-  
-  const NewReminderScreen({
-    super.key,
-    this.reminderToEdit,
-  });
+
+  const NewReminderScreen({super.key, this.reminderToEdit});
 
   @override
   State<NewReminderScreen> createState() => _NewReminderScreenState();
@@ -49,8 +48,13 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
   DateTime? _endDate;
   bool _endDateEnabled = false;
 
+  // Hourly interval fields
+  int _hourlyIntervalHours = 1;
+  int _hourlyIntervalMinutes = 0;
+
   // Icon and color
   IconData _selectedIcon = Icons.notification_important_outlined;
+  String? _selectedCustomIconUrl;
   Color _selectedColor = const Color(0xFFFFB4A3);
 
   // Auto-snooze fields
@@ -60,7 +64,7 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
 
   // Map day indices to abbreviated names
   final List<String> _dayAbbreviations = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-  
+
   // Track initial values to detect changes
   String _initialName = '';
   DateTime? _initialDate;
@@ -75,6 +79,8 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
   bool _initialAutoSnoozeEnabled = false;
   int? _initialAutoSnoozeInterval;
   int? _initialAutoSnoozeMaxCount;
+  int _initialHourlyIntervalHours = 1;
+  int _initialHourlyIntervalMinutes = 0;
 
   @override
   void initState() {
@@ -84,7 +90,7 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
     _reminderController.addListener(() {
       if (mounted) setState(() {});
     });
-    
+
     // If editing, pre-fill fields
     if (widget.reminderToEdit != null) {
       _initializeEditMode();
@@ -92,16 +98,16 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
       _selectedDays = {_selectedDate.weekday};
     }
   }
-  
+
   void _initializeEditMode() {
     final reminder = widget.reminderToEdit!;
-    
+
     // For recurring reminders, use effectiveNextDueAt to get the current occurrence
     // For non-recurring, use the original time
-    final displayTime = reminder.recurrence != null 
-        ? reminder.effectiveNextDueAt 
+    final displayTime = reminder.recurrence != null
+        ? reminder.effectiveNextDueAt
         : reminder.time;
-    
+
     // Set initial values
     _initialName = reminder.name;
     _initialDate = displayTime;
@@ -111,26 +117,49 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
     _initialAutoSnoozeEnabled = reminder.autoSnoozeEnabled;
     _initialAutoSnoozeInterval = reminder.autoSnoozeInterval;
     _initialAutoSnoozeMaxCount = reminder.autoSnoozeMaxCount;
-    
+
     // Pre-fill fields
     _reminderController.text = reminder.name;
-    _selectedDate = DateTime(displayTime.year, displayTime.month, displayTime.day);
+    _selectedDate = DateTime(
+      displayTime.year,
+      displayTime.month,
+      displayTime.day,
+    );
     _selectedTime = TimeOfDay.fromDateTime(displayTime);
     _selectedIcon = reminder.icon;
+    _selectedCustomIconUrl = reminder.customIconUrl;
     _selectedColor = reminder.color;
     _autoSnoozeEnabled = reminder.autoSnoozeEnabled;
     _autoSnoozeInterval = reminder.autoSnoozeInterval;
     _autoSnoozeMaxCount = reminder.autoSnoozeMaxCount;
-    
+
     // Handle recurrence
     if (reminder.recurrence != null) {
       _initialRepeatEnabled = true;
       _repeatEnabled = true;
-      
+
       final recurrence = reminder.recurrence!;
       final frequency = recurrence['frequency'] as String?;
-      
-      if (frequency == 'daily') {
+
+      if (frequency == 'hourly') {
+        _selectedFrequency = RecurrenceFrequency.hourly;
+        _initialFrequency = RecurrenceFrequency.hourly;
+
+        // Parse interval
+        final unit = recurrence['unit'] as String?;
+        final every = recurrence['every'] as int? ?? 1;
+
+        if (unit == 'hours') {
+          _hourlyIntervalHours = every;
+          _hourlyIntervalMinutes = 0;
+        } else if (unit == 'minutes') {
+          _hourlyIntervalHours = every ~/ 60;
+          _hourlyIntervalMinutes = every % 60;
+        }
+
+        _initialHourlyIntervalHours = _hourlyIntervalHours;
+        _initialHourlyIntervalMinutes = _hourlyIntervalMinutes;
+      } else if (frequency == 'daily') {
         _selectedFrequency = RecurrenceFrequency.daily;
         _initialFrequency = RecurrenceFrequency.daily;
       } else if (frequency == 'weekly') {
@@ -148,7 +177,7 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
         _selectedFrequency = RecurrenceFrequency.yearly;
         _initialFrequency = RecurrenceFrequency.yearly;
       }
-      
+
       // Handle end date
       if (recurrence['endDate'] != null) {
         Timestamp? endDateTimestamp;
@@ -157,7 +186,10 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
         } else if (recurrence['endDate'] is Map) {
           // Handle case where it's stored as a map
           final endDateMap = recurrence['endDate'] as Map<String, dynamic>;
-          endDateTimestamp = Timestamp(endDateMap['_seconds'] as int, endDateMap['_nanoseconds'] as int);
+          endDateTimestamp = Timestamp(
+            endDateMap['_seconds'] as int,
+            endDateMap['_nanoseconds'] as int,
+          );
         }
         if (endDateTimestamp != null) {
           _endDate = endDateTimestamp.toDate();
@@ -170,61 +202,74 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
       _initialRepeatEnabled = false;
       _selectedDays = {_selectedDate.weekday};
     }
-    
+
     // Store initial values
     _initialName = reminder.name;
     _initialDate = _selectedDate;
     _initialTime = _selectedTime;
   }
-  
+
   bool _hasChanges() {
-    if (widget.reminderToEdit == null) return true; // Always show for new reminders
-    
+    if (widget.reminderToEdit == null)
+      return true; // Always show for new reminders
+
     // Check name
     if (_reminderController.text.trim() != _initialName) return true;
-    
+
     // Check date
     if (_selectedDate.year != _initialDate?.year ||
         _selectedDate.month != _initialDate?.month ||
-        _selectedDate.day != _initialDate?.day) return true;
-    
+        _selectedDate.day != _initialDate?.day)
+      return true;
+
     // Check time
     if (_selectedTime.hour != _initialTime?.hour ||
-        _selectedTime.minute != _initialTime?.minute) return true;
-    
+        _selectedTime.minute != _initialTime?.minute)
+      return true;
+
     // Check repeat enabled
     if (_repeatEnabled != _initialRepeatEnabled) return true;
-    
+
     // Check frequency
     if (_repeatEnabled && _selectedFrequency != _initialFrequency) return true;
-    
+
+    // Check hourly interval
+    if (_repeatEnabled && _selectedFrequency == RecurrenceFrequency.hourly) {
+      if (_hourlyIntervalHours != _initialHourlyIntervalHours ||
+          _hourlyIntervalMinutes != _initialHourlyIntervalMinutes)
+        return true;
+    }
+
     // Check days
     if (_repeatEnabled && _selectedFrequency == RecurrenceFrequency.weekly) {
       if (_selectedDays.length != _initialDays.length ||
-          !_selectedDays.every((d) => _initialDays.contains(d))) return true;
+          !_selectedDays.every((d) => _initialDays.contains(d)))
+        return true;
     }
-    
+
     // Check end date enabled
-    if (_repeatEnabled && _endDateEnabled != _initialEndDateEnabled) return true;
-    
+    if (_repeatEnabled && _endDateEnabled != _initialEndDateEnabled)
+      return true;
+
     // Check end date
     if (_repeatEnabled && _endDateEnabled) {
       if (_endDate?.year != _initialEndDate?.year ||
           _endDate?.month != _initialEndDate?.month ||
-          _endDate?.day != _initialEndDate?.day) return true;
+          _endDate?.day != _initialEndDate?.day)
+        return true;
     }
-    
+
     // Check icon
     if (_selectedIcon.codePoint != _initialIcon?.codePoint) return true;
-    
+
     // Check color
     if (_selectedColor.value != _initialColor?.value) return true;
-    
+
     // Check auto-snooze
     if (_autoSnoozeEnabled != _initialAutoSnoozeEnabled) return true;
     if (_autoSnoozeInterval != _initialAutoSnoozeInterval) return true;
     if (_autoSnoozeMaxCount != _initialAutoSnoozeMaxCount) return true;
-    
+
     return false;
   }
 
@@ -258,7 +303,7 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
         if (themePreference == 'system') {
           _isDarkMode =
               WidgetsBinding.instance.platformDispatcher.platformBrightness ==
-                  Brightness.dark;
+              Brightness.dark;
         } else {
           _isDarkMode = themePreference == 'dark';
         }
@@ -290,6 +335,9 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
       _autoSnoozeEnabled = _initialAutoSnoozeEnabled;
       _autoSnoozeInterval = _initialAutoSnoozeInterval ?? _autoSnoozeInterval;
       _autoSnoozeMaxCount = _initialAutoSnoozeMaxCount ?? _autoSnoozeMaxCount;
+
+      _hourlyIntervalHours = _initialHourlyIntervalHours;
+      _hourlyIntervalMinutes = _initialHourlyIntervalMinutes;
 
       // Ensure days are sane if repeat is off
       if (!_repeatEnabled) {
@@ -352,7 +400,7 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
   }
 
   Future<void> _openIconPicker() async {
-    final result = await showModalBottomSheet<IconData>(
+    final result = await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -360,19 +408,28 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
         accentColor: _accentColor,
         isDarkMode: _isDarkMode,
         initialIcon: _selectedIcon,
+        initialCustomIconUrl: _selectedCustomIconUrl,
       ),
     );
 
     if (result != null) {
       setState(() {
-        _selectedIcon = result;
+        if (result is Map) {
+          // Custom icon
+          _selectedCustomIconUrl = result['url'] as String?;
+          _selectedIcon = Icons.notification_important_outlined;
+        } else if (result is IconData) {
+          // Regular icon
+          _selectedIcon = result;
+          _selectedCustomIconUrl = null;
+        }
       });
     }
   }
 
   Future<void> _openColorPicker() async {
     Color pickedColor = _selectedColor;
-    
+
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -451,7 +508,7 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
 
   List<Map<String, String>> _generateNextOccurrences() {
     if (!_repeatEnabled) return [];
-    
+
     final rule = _buildRule();
     final occurrences = <Map<String, String>>[];
     DateTime? cursor = rule.nextOccurrence(from: DateTime.now());
@@ -464,7 +521,9 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
         'time': DateFormat('hh:mm a').format(cursor),
       });
 
-      cursor = rule.nextOccurrence(from: cursor.add(const Duration(minutes: 1)));
+      cursor = rule.nextOccurrence(
+        from: cursor.add(const Duration(minutes: 1)),
+      );
       safety++;
     }
 
@@ -488,75 +547,105 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
   List<TextSpan> _buildSummaryTextSpans(Color textColor) {
     final List<TextSpan> spans = [];
     final now = DateTime.now();
-    final isToday = _selectedDate.year == now.year &&
+    final isToday =
+        _selectedDate.year == now.year &&
         _selectedDate.month == now.month &&
         _selectedDate.day == now.day;
-
 
     // [Reminder name]
     final reminderText = _reminderController.text.trim().isEmpty
         ? '.....'
         : _reminderController.text.trim();
-    spans.add(TextSpan(
-      text: reminderText,
-      style:  TextStyle(
-        color: _accentColor,
-        fontWeight: FontWeight.w600,
-        decoration: reminderText == '.....' ? TextDecoration.none : TextDecoration.underline,
-        decorationColor: _accentColor,
+    spans.add(
+      TextSpan(
+        text: reminderText,
+        style: TextStyle(
+          color: _accentColor,
+          fontWeight: FontWeight.w600,
+          decoration: reminderText == '.....'
+              ? TextDecoration.none
+              : TextDecoration.underline,
+          decorationColor: _accentColor,
+        ),
       ),
-    ));
+    );
 
     // " at"
-    spans.add(TextSpan(
-      text: ' at ',
-      style: TextStyle(color: textColor, fontWeight: FontWeight.w600),
-    ));
+    spans.add(
+      TextSpan(
+        text: ' at ',
+        style: TextStyle(color: textColor, fontWeight: FontWeight.w600),
+      ),
+    );
 
     // Time
-    final hour = _selectedTime.hourOfPeriod == 0 ? 12 : _selectedTime.hourOfPeriod;
+    final hour = _selectedTime.hourOfPeriod == 0
+        ? 12
+        : _selectedTime.hourOfPeriod;
     final minute = _selectedTime.minute.toString().padLeft(2, '0');
     final period = _selectedTime.period == DayPeriod.am ? 'AM' : 'PM';
-    spans.add(TextSpan(
-      text: '$hour:$minute $period',
-      style:  TextStyle(
-        color: _accentColor,
-        fontWeight: FontWeight.w600,
-        decoration: TextDecoration.underline,
-        decorationColor: _accentColor,
-      ),
-    ));
-
-    // Date part
-    if (_repeatEnabled) {
-      spans.add(TextSpan(
-        text: ' starting from ',
-        style: TextStyle(color: textColor, fontWeight: FontWeight.w600),
-      ));
-    } else {
-      spans.add(TextSpan(
-        text: isToday ? ' today' : ' on ',
-        style: TextStyle(color: textColor, fontWeight: FontWeight.w600),
-      ));
-    }
-
-    if (!isToday || _repeatEnabled) {
-      final dateText = DateFormat('MMM dd, yyyy').format(_selectedDate);
-      spans.add(TextSpan(
-        text: dateText,
-        style:  TextStyle(
+    spans.add(
+      TextSpan(
+        text: '$hour:$minute $period',
+        style: TextStyle(
           color: _accentColor,
           fontWeight: FontWeight.w600,
           decoration: TextDecoration.underline,
           decorationColor: _accentColor,
         ),
-      ));
+      ),
+    );
+
+    // Date part
+    if (_repeatEnabled) {
+      spans.add(
+        TextSpan(
+          text: ' starting from ',
+          style: TextStyle(color: textColor, fontWeight: FontWeight.w600),
+        ),
+      );
+    } else {
+      spans.add(
+        TextSpan(
+          text: isToday ? ' today' : ' on ',
+          style: TextStyle(color: textColor, fontWeight: FontWeight.w600),
+        ),
+      );
+    }
+
+    if (!isToday || _repeatEnabled) {
+      final dateText = DateFormat('MMM dd, yyyy').format(_selectedDate);
+      spans.add(
+        TextSpan(
+          text: dateText,
+          style: TextStyle(
+            color: _accentColor,
+            fontWeight: FontWeight.w600,
+            decoration: TextDecoration.underline,
+            decorationColor: _accentColor,
+          ),
+        ),
+      );
     }
 
     // Repeat part
     if (_repeatEnabled) {
       String frequencyText = '';
       switch (_selectedFrequency) {
+        case RecurrenceFrequency.hourly:
+          final totalMinutes =
+              (_hourlyIntervalHours * 60) + _hourlyIntervalMinutes;
+          if (totalMinutes == 60) {
+            frequencyText = 'hourly';
+          } else if (totalMinutes < 60) {
+            frequencyText = 'every $_hourlyIntervalMinutes minutes';
+          } else if (totalMinutes % 60 == 0) {
+            frequencyText = 'every $_hourlyIntervalHours hours';
+          } else {
+            frequencyText =
+                'every ${_hourlyIntervalHours}h ${_hourlyIntervalMinutes}m';
+          }
+          break;
         case RecurrenceFrequency.daily:
           frequencyText = 'daily';
           break;
@@ -571,54 +660,80 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
           break;
       }
 
-      spans.add(TextSpan(
-        text: ', repeating ',
-        style: TextStyle(color: textColor, fontWeight: FontWeight.w600),
-      ));
-
-      spans.add(TextSpan(
-        text: frequencyText,
-        style:  TextStyle(
-          color: _accentColor,
-          fontWeight: FontWeight.w600,
-          decoration: TextDecoration.underline,
-          decorationColor: _accentColor,
-        ),
-      ));
-
-      if (_endDateEnabled && _endDate != null) {
-        spans.add(TextSpan(
-          text: ' until ',
+      spans.add(
+        TextSpan(
+          text: ', repeating ',
           style: TextStyle(color: textColor, fontWeight: FontWeight.w600),
-        ));
+        ),
+      );
 
-        spans.add(TextSpan(
-          text: DateFormat('MMM dd, yyyy').format(_endDate!),
-          style:  TextStyle(
+      spans.add(
+        TextSpan(
+          text: frequencyText,
+          style: TextStyle(
             color: _accentColor,
             fontWeight: FontWeight.w600,
             decoration: TextDecoration.underline,
             decorationColor: _accentColor,
           ),
-        ));
+        ),
+      );
+
+      if (_endDateEnabled && _endDate != null) {
+        spans.add(
+          TextSpan(
+            text: ' until ',
+            style: TextStyle(color: textColor, fontWeight: FontWeight.w600),
+          ),
+        );
+
+        spans.add(
+          TextSpan(
+            text: DateFormat('MMM dd, yyyy').format(_endDate!),
+            style: TextStyle(
+              color: _accentColor,
+              fontWeight: FontWeight.w600,
+              decoration: TextDecoration.underline,
+              decorationColor: _accentColor,
+            ),
+          ),
+        );
       }
     }
 
-    spans.add(TextSpan(
-      text: '.',
-      style: TextStyle(color: textColor, fontWeight: FontWeight.w600),
-    ));
+    spans.add(
+      TextSpan(
+        text: '.',
+        style: TextStyle(color: textColor, fontWeight: FontWeight.w600),
+      ),
+    );
 
     return spans;
   }
 
   RecurrenceRule _buildRule() {
+    // Auto-convert 24 hours to daily
+    RecurrenceFrequency effectiveFrequency = _selectedFrequency;
+    int effectiveIntervalHours = _hourlyIntervalHours;
+    int effectiveIntervalMinutes = _hourlyIntervalMinutes;
+
+    if (_selectedFrequency == RecurrenceFrequency.hourly) {
+      final totalHours = _hourlyIntervalHours + (_hourlyIntervalMinutes / 60);
+      if (totalHours >= 24) {
+        effectiveFrequency = RecurrenceFrequency.daily;
+        effectiveIntervalHours = 1;
+        effectiveIntervalMinutes = 0;
+      }
+    }
+
     return RecurrenceRule(
-      frequency: _selectedFrequency,
+      frequency: effectiveFrequency,
       selectedWeekDays: _selectedDays,
       timeOfDay: _selectedTime,
       startDate: _selectedDate,
       endDate: _endDateEnabled ? _endDate : null,
+      intervalHours: effectiveIntervalHours,
+      intervalMinutes: effectiveIntervalMinutes,
     );
   }
 
@@ -629,6 +744,14 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
     if (reminderText.isEmpty) {
       context.showWarningSnackbar('Please enter a reminder name');
       return;
+    }
+
+    // Validate hourly interval
+    if (_repeatEnabled && _selectedFrequency == RecurrenceFrequency.hourly) {
+      if (_hourlyIntervalHours == 0 && _hourlyIntervalMinutes == 0) {
+        context.showWarningSnackbar('Please set an interval greater than 0');
+        return;
+      }
     }
 
     final scheduledDateTime = DateTime(
@@ -644,13 +767,17 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
 
     if (_repeatEnabled) {
       recurrenceRule = _buildRule();
-      final nextOccurrence = recurrenceRule.nextOccurrence(from: DateTime.now());
-      
+      final nextOccurrence = recurrenceRule.nextOccurrence(
+        from: DateTime.now(),
+      );
+
       if (nextOccurrence == null) {
-        context.showWarningSnackbar('Recurrence ends before today. Please adjust dates.');
+        context.showWarningSnackbar(
+          'Recurrence ends before today. Please adjust dates.',
+        );
         return;
       }
-      
+
       finalScheduledTime = nextOccurrence;
     }
 
@@ -667,7 +794,7 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
       if (widget.reminderToEdit != null) {
         // Edit mode - check if it's a recurring reminder
         final isRecurring = widget.reminderToEdit!.recurrence != null;
-        
+
         EditRecurringOption? editOption;
         if (isRecurring) {
           // Show dialog to ask user how to apply changes
@@ -677,7 +804,7 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
             accentColor: _accentColor,
             isDarkMode: _isDarkMode,
           );
-          
+
           // User cancelled the dialog
           if (editOption == null) {
             setState(() {
@@ -686,39 +813,49 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
             return;
           }
         }
-        
+
         // Prepare updates
         final updates = <String, dynamic>{
-          'iconCodePoint': _selectedIcon.codePoint,
+          if (_selectedCustomIconUrl != null)
+            'customIconUrl': _selectedCustomIconUrl
+          else
+            'iconCodePoint': _selectedIcon.codePoint,
           'colorValue': _selectedColor.value,
           'autoSnoozeEnabled': _autoSnoozeEnabled,
           'autoSnoozeInterval': _autoSnoozeInterval,
           'autoSnoozeMaxCount': _autoSnoozeMaxCount,
         };
-        
-        if (isRecurring && editOption == EditRecurringOption.thisOccurrenceOnly) {
+
+        if (isRecurring &&
+            editOption == EditRecurringOption.thisOccurrenceOnly) {
           // Create override for this occurrence only
-          final occurrenceDate = DateFormat('yyyy-MM-dd').format(scheduledDateTime);
-          final timeStr = '${_selectedTime.hour.toString().padLeft(2, '0')}:${_selectedTime.minute.toString().padLeft(2, '0')}';
-          
+          final occurrenceDate = DateFormat(
+            'yyyy-MM-dd',
+          ).format(scheduledDateTime);
+          final timeStr =
+              '${_selectedTime.hour.toString().padLeft(2, '0')}:${_selectedTime.minute.toString().padLeft(2, '0')}';
+
           // Get existing overrides or create new map
           final existingOverrides = widget.reminderToEdit!.overrides ?? {};
-          final newOverrides = Map<String, Map<String, dynamic>>.from(existingOverrides);
-          
+          final newOverrides = Map<String, Map<String, dynamic>>.from(
+            existingOverrides,
+          );
+
           // Create or update override for this date
           newOverrides[occurrenceDate] = {
             'time': timeStr,
-            if (reminderText != widget.reminderToEdit!.name) 'title': reminderText,
+            if (reminderText != widget.reminderToEdit!.name)
+              'title': reminderText,
           };
-          
+
           updates['overrides'] = newOverrides;
-          
+
           // Don't update base fields (name, recurrence, etc.) for single occurrence
         } else {
           // Update the entire series (or non-recurring reminder)
           updates['name'] = reminderText;
           updates['time'] = Timestamp.fromDate(finalScheduledTime);
-          
+
           if (recurrenceRule != null) {
             updates['recurrence'] = recurrenceRule.toBackendConfig();
             updates['nextDueAt'] = Timestamp.fromDate(finalScheduledTime);
@@ -727,15 +864,18 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
             updates['nextDueAt'] = null;
           }
         }
-        
-        await _reminderService.updateReminder(widget.reminderToEdit!.id, updates);
-        
+
+        await _reminderService.updateReminder(
+          widget.reminderToEdit!.id,
+          updates,
+        );
+
         if (mounted) {
           Navigator.pop(context, true); // Return true to indicate update
           context.showSuccessSnackbar(
             isRecurring && editOption == EditRecurringOption.thisOccurrenceOnly
-              ? 'Reminder occurrence updated!'
-              : 'Reminder updated successfully!'
+                ? 'Reminder occurrence updated!'
+                : 'Reminder updated successfully!',
           );
         }
       } else {
@@ -749,7 +889,10 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
           isCompleted: false,
           deviceToken: _notificationService.fcmToken,
           userId: 'demo_user',
-          iconCodePoint: _selectedIcon.codePoint,
+          iconCodePoint: _selectedCustomIconUrl == null
+              ? _selectedIcon.codePoint
+              : null,
+          customIconUrl: _selectedCustomIconUrl,
           colorValue: _selectedColor.value,
           autoSnoozeEnabled: _autoSnoozeEnabled,
           autoSnoozeInterval: _autoSnoozeInterval,
@@ -773,9 +916,9 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
     } catch (e) {
       if (mounted) {
         context.showErrorSnackbar(
-          widget.reminderToEdit != null 
-            ? 'Error updating reminder: $e'
-            : 'Error creating reminder: $e'
+          widget.reminderToEdit != null
+              ? 'Error updating reminder: $e'
+              : 'Error creating reminder: $e',
         );
       }
     } finally {
@@ -802,11 +945,11 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
     final subtitleColor = _isDarkMode
         ? Colors.white.withOpacity(0.6)
         : const Color(0xFF8A8A8A);
-    
+
     final dividerColor = _isDarkMode
         ? const Color.fromARGB(255, 44, 48, 53)
         : Colors.grey.withOpacity(0.2);
-    
+
     final inputBgColor = _isDarkMode
         ? const Color(0xFF1A1F2E)
         : const Color(0xFFF5F5F5);
@@ -839,634 +982,805 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-              // Dynamic Summary Text
-              RichText(
-                text: TextSpan(
-                  style: TextStyle(
-                    fontSize: 22.sp,
-                    height: 1.4,
-                    color: textColor,
-                  ),
-                  children: _buildSummaryTextSpans(textColor),
-                ),
-              ),
-
-              SizedBox(height: 32.h),
-
-              // Main container for all controls
-              Container(
-                decoration: BoxDecoration(
-                  color: cardColor,
-                  borderRadius: BorderRadius.circular(24.r),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Reminder Name
-                    Padding(
-                      padding: EdgeInsets.all(16.r),
-                      child: TextField(
-                        cursorColor: _accentColor,
-                        controller: _reminderController,
+                    // Dynamic Summary Text
+                    RichText(
+                      text: TextSpan(
                         style: TextStyle(
+                          fontSize: 22.sp,
+                          height: 1.4,
                           color: textColor,
-                          fontSize: 24.sp,
                         ),
-                        decoration: InputDecoration(
-                          hintText: 'What needs your attention?',
-                          hintStyle: TextStyle(
-                            color: subtitleColor.withOpacity(0.5),
-                            fontSize: 24.sp,
-                          ),
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                        onChanged: (_) {
-                          setState(() {}); // Trigger rebuild to check for changes
-                        },
+                        children: _buildSummaryTextSpans(textColor),
                       ),
                     ),
 
-                    Divider(color: dividerColor, height: 1.h),
+                    SizedBox(height: 32.h),
 
-                    // Date Selector
-                    Padding(
-                      padding: EdgeInsets.all(16.r),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    // Main container for all controls
+                    Container(
+                      decoration: BoxDecoration(
+                        color: cardColor,
+                        borderRadius: BorderRadius.circular(24.r),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Date',
-                            style: TextStyle(
-                              color: textColor,
-                              fontSize: 16.sp,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          InkWell(
-                            onTap: _selectDate,
-                            borderRadius: BorderRadius.circular(20.r),
-                            child: Container(
-                              padding: EdgeInsets.symmetric(
-                                  vertical: 8.h, horizontal: 16.w),
-                              decoration: BoxDecoration(
-                                color: inputBgColor,
-                                borderRadius: BorderRadius.circular(20.r),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    DateFormat('MMM dd, yyyy').format(_selectedDate),
-                                    style: TextStyle(
-                                      color: textColor,
-                                      fontSize: 14.sp,
-                                    ),
-                                  ),
-                                  SizedBox(width: 8.w),
-                                  Icon(
-                                    Icons.calendar_today,
-                                    color: subtitleColor,
-                                    size: 16.sp,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    Divider(color: dividerColor, height: 1.h),
-
-                    // Time Selector
-                    Padding(
-                      padding: EdgeInsets.all(16.r),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Time',
-                            style: TextStyle(
-                              color: textColor,
-                              fontSize: 16.sp,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          InkWell(
-                            onTap: _selectTime,
-                            borderRadius: BorderRadius.circular(20.r),
-                            child: Container(
-                              padding: EdgeInsets.symmetric(
-                                  vertical: 8.h, horizontal: 16.w),
-                              decoration: BoxDecoration(
-                                color: inputBgColor,
-                                borderRadius: BorderRadius.circular(20.r),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    () {
-                                      final hour = _selectedTime.hourOfPeriod == 0
-                                          ? 12
-                                          : _selectedTime.hourOfPeriod;
-                                      final minute = _selectedTime.minute
-                                          .toString()
-                                          .padLeft(2, '0');
-                                      final period =
-                                          _selectedTime.period == DayPeriod.am
-                                              ? 'AM'
-                                              : 'PM';
-                                      return '$hour:$minute $period';
-                                    }(),
-                                    style: TextStyle(
-                                      color: textColor,
-                                      fontSize: 14.sp,
-                                    ),
-                                  ),
-                                  SizedBox(width: 8.w),
-                                  Icon(
-                                    Icons.access_time,
-                                    color: subtitleColor,
-                                    size: 18.sp,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    Divider(color: dividerColor, height: 1.h),
-
-                    // Icon & Color - Combined in one row
-                    Padding(
-                      padding: EdgeInsets.all(16.r),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Icon & Color',
-                            style: TextStyle(
-                              color: textColor,
-                              fontSize: 16.sp,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          Row(
-                            children: [
-                              // Icon Button
-                              InkWell(
-                                onTap: _openIconPicker,
-                                borderRadius: BorderRadius.circular(20.r),
-                                child: Container(
-                                  padding: EdgeInsets.all(12.r),
-                                  decoration: BoxDecoration(
-                                    color: inputBgColor,
-                                    borderRadius: BorderRadius.circular(20.r),
-                                  ),
-                                  child: Icon(
-                                    _selectedIcon,
-                                    color: _selectedColor,
-                                    size: 24.sp,
-                                  ),
-                                ),
-                              ),
-                              SizedBox(width: 12.w),
-                              // Color Button
-                              InkWell(
-                                onTap: _openColorPicker,
-                                borderRadius: BorderRadius.circular(20.r),
-                                child: Container(
-                                  width: 48.w,
-                                  height: 48.h,
-                                  decoration: BoxDecoration(
-                                    color: _selectedColor,
-                                    borderRadius: BorderRadius.circular(20.r),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    Divider(color: dividerColor, height: 1.h),
-
-                    // Repeat Switch
-                    Padding(
-                      padding: EdgeInsets.all(16.r),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Repeat',
-                            style: TextStyle(
-                              color: textColor,
-                              fontSize: 16.sp,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          Switch(
-                            value: _repeatEnabled,
-                            onChanged: (value) {
-                              setState(() {
-                                _repeatEnabled = value;
-                              });
-                            },
-                            activeColor: _accentColor,
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    Divider(color: dividerColor, height: 1.h),
-
-                    // Auto-snooze Switch
-                    Padding(
-                      padding: EdgeInsets.all(16.r),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Auto-snooze',
-                                style: TextStyle(
-                                  color: textColor,
-                                  fontSize: 16.sp,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              SizedBox(height: 2.h),
-                              Text(
-                                'Snooze if no response',
-                                style: TextStyle(
-                                  color: subtitleColor,
-                                  fontSize: 12.sp,
-                                ),
-                              ),
-                            ],
-                          ),
-                          Switch(
-                            value: _autoSnoozeEnabled,
-                            onChanged: (value) {
-                              setState(() {
-                                _autoSnoozeEnabled = value;
-                              });
-                            },
-                            activeColor: _accentColor,
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Auto-snooze Settings (only show when enabled)
-                    if (_autoSnoozeEnabled) ...[
-                      Divider(color: dividerColor, height: 1.h),
-                      Padding(
-                        padding: EdgeInsets.all(16.r),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Snooze Interval',
+                          // Reminder Name
+                          Padding(
+                            padding: EdgeInsets.all(16.r),
+                            child: TextField(
+                              cursorColor: _accentColor,
+                              controller: _reminderController,
                               style: TextStyle(
                                 color: textColor,
-                                fontSize: 14.sp,
-                                fontWeight: FontWeight.w500,
+                                fontSize: 24.sp,
                               ),
-                            ),
-                            SizedBox(height: 8.h),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Slider(
-                                    value: _autoSnoozeInterval.toDouble(),
-                                    min: 1,
-                                    max: 60,
-                                    divisions: 59,
-                                    label: '$_autoSnoozeInterval min',
-                                    activeColor: _accentColor,
-                                    onChanged: (value) {
-                                      setState(() {
-                                        _autoSnoozeInterval = value.toInt();
-                                      });
-                                    },
-                                  ),
+                              decoration: InputDecoration(
+                                hintText: 'What needs your attention?',
+                                hintStyle: TextStyle(
+                                  color: subtitleColor.withOpacity(0.5),
+                                  fontSize: 24.sp,
                                 ),
-                                SizedBox(width: 8.w),
+                                border: InputBorder.none,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                              onChanged: (_) {
+                                setState(
+                                  () {},
+                                ); // Trigger rebuild to check for changes
+                              },
+                            ),
+                          ),
+
+                          Divider(color: dividerColor, height: 1.h),
+
+                          // Date Selector
+                          Padding(
+                            padding: EdgeInsets.all(16.r),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
                                 Text(
-                                  '$_autoSnoozeInterval min',
+                                  'Date',
                                   style: TextStyle(
                                     color: textColor,
-                                    fontSize: 14.sp,
-                                    fontWeight: FontWeight.w600,
+                                    fontSize: 16.sp,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                InkWell(
+                                  onTap: _selectDate,
+                                  borderRadius: BorderRadius.circular(20.r),
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(
+                                      vertical: 8.h,
+                                      horizontal: 16.w,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: inputBgColor,
+                                      borderRadius: BorderRadius.circular(20.r),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          DateFormat(
+                                            'MMM dd, yyyy',
+                                          ).format(_selectedDate),
+                                          style: TextStyle(
+                                            color: textColor,
+                                            fontSize: 14.sp,
+                                          ),
+                                        ),
+                                        SizedBox(width: 8.w),
+                                        Icon(
+                                          Icons.calendar_today,
+                                          color: subtitleColor,
+                                          size: 16.sp,
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
-                            SizedBox(height: 16.h),
-                            Text(
-                              'Max Snoozes',
-                              style: TextStyle(
-                                color: textColor,
-                                fontSize: 14.sp,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            SizedBox(height: 8.h),
-                            Row(
+                          ),
+
+                          Divider(color: dividerColor, height: 1.h),
+
+                          // Time Selector
+                          Padding(
+                            padding: EdgeInsets.all(16.r),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Expanded(
-                                  child: Slider(
-                                    value: _autoSnoozeMaxCount.toDouble(),
-                                    min: 1,
-                                    max: 10,
-                                    divisions: 9,
-                                    label: '$_autoSnoozeMaxCount times',
-                                    activeColor: _accentColor,
-                                    onChanged: (value) {
-                                      setState(() {
-                                        _autoSnoozeMaxCount = value.toInt();
-                                      });
-                                    },
-                                  ),
-                                ),
-                                SizedBox(width: 8.w),
                                 Text(
-                                  '$_autoSnoozeMaxCount times',
+                                  'Time',
                                   style: TextStyle(
                                     color: textColor,
-                                    fontSize: 14.sp,
-                                    fontWeight: FontWeight.w600,
+                                    fontSize: 16.sp,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                InkWell(
+                                  onTap: _selectTime,
+                                  borderRadius: BorderRadius.circular(20.r),
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(
+                                      vertical: 8.h,
+                                      horizontal: 16.w,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: inputBgColor,
+                                      borderRadius: BorderRadius.circular(20.r),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          () {
+                                            final hour =
+                                                _selectedTime.hourOfPeriod == 0
+                                                ? 12
+                                                : _selectedTime.hourOfPeriod;
+                                            final minute = _selectedTime.minute
+                                                .toString()
+                                                .padLeft(2, '0');
+                                            final period =
+                                                _selectedTime.period ==
+                                                    DayPeriod.am
+                                                ? 'AM'
+                                                : 'PM';
+                                            return '$hour:$minute $period';
+                                          }(),
+                                          style: TextStyle(
+                                            color: textColor,
+                                            fontSize: 14.sp,
+                                          ),
+                                        ),
+                                        SizedBox(width: 8.w),
+                                        Icon(
+                                          Icons.access_time,
+                                          color: subtitleColor,
+                                          size: 18.sp,
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-
-              // Recurrence Options Container (separate container when repeat is enabled)
-              if (_repeatEnabled) ...[
-                SizedBox(height: 20.h),
-                Container(
-                  decoration: BoxDecoration(
-                    color: cardColor,
-                    borderRadius: BorderRadius.circular(24.r),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Frequency Selector
-                      Padding(
-                        padding: EdgeInsets.all(18.r),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'FREQUENCY',
-                              style: TextStyle(
-                                color: subtitleColor.withOpacity(0.7),
-                                fontSize: 12.sp,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 1.2,
-                              ),
-                            ),
-                            SizedBox(height: 12.h),
-                            Row(
-                              children: [
-                                _buildFrequencyChip('Daily', RecurrenceFrequency.daily, cardColor, textColor, subtitleColor, inputBgColor),
-                                SizedBox(width: 8.w),
-                                _buildFrequencyChip('Weekly', RecurrenceFrequency.weekly, cardColor, textColor, subtitleColor, inputBgColor),
-                                SizedBox(width: 8.w),
-                                _buildFrequencyChip('Monthly', RecurrenceFrequency.monthly, cardColor, textColor, subtitleColor, inputBgColor),
-                                SizedBox(width: 8.w),
-                                _buildFrequencyChip('Yearly', RecurrenceFrequency.yearly, cardColor, textColor, subtitleColor, inputBgColor),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      // Days Selector (only for weekly)
-                      if (_selectedFrequency == RecurrenceFrequency.weekly) ...[
-                        Divider(color: dividerColor, height: 1.h),
-                        Padding(
-                          padding: EdgeInsets.all(16.r),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'ON THESE DAYS',
-                                style: TextStyle(
-                                  color: subtitleColor.withOpacity(0.7),
-                                  fontSize: 12.sp,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 1.2,
-                                ),
-                              ),
-                              SizedBox(height: 12.h),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: List.generate(7, (index) {
-                                  final dayIndex = index + 1;
-                                  final isSelected = _selectedDays.contains(dayIndex);
-                                  return _buildDayButton(
-                                    _dayAbbreviations[index],
-                                    dayIndex,
-                                    isSelected,
-                                    inputBgColor,
-                                    textColor,
-                                    subtitleColor,
-                                  );
-                                }),
-                              ),
-                            ],
                           ),
-                        ),
-                      ],
 
-                      // End Date Section
-                      Divider(color: dividerColor, height: 1.h),
-                      Padding(
-                        padding: EdgeInsets.all(16.r),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'End Date',
-                              style: TextStyle(
-                                color: textColor,
-                                fontSize: 16.sp,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            Row(
+                          Divider(color: dividerColor, height: 1.h),
+
+                          // Icon & Color - Combined in one row
+                          Padding(
+                            padding: EdgeInsets.all(16.r),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                if (_endDateEnabled) ...[
-                                  InkWell(
-                                    onTap: _selectEndDate,
-                                    borderRadius: BorderRadius.circular(20.r),
-                                    child: Container(
-                                      padding: EdgeInsets.symmetric(
-                                          vertical: 8.h, horizontal: 16.w),
-                                      decoration: BoxDecoration(
-                                        color: inputBgColor,
+                                Text(
+                                  'Icon & Color',
+                                  style: TextStyle(
+                                    color: textColor,
+                                    fontSize: 16.sp,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                Row(
+                                  children: [
+                                    // Icon Button
+                                    InkWell(
+                                      onTap: _openIconPicker,
+                                      borderRadius: BorderRadius.circular(20.r),
+                                      child: Container(
+                                        padding: EdgeInsets.all(12.r),
+                                        decoration: BoxDecoration(
+                                          color: inputBgColor,
+                                          borderRadius: BorderRadius.circular(
+                                            20.r,
+                                          ),
+                                        ),
+                                        child: _selectedCustomIconUrl != null
+                                            ? ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(8.r),
+                                                child: Image.network(
+                                                  _selectedCustomIconUrl!,
+                                                  width: 24.w,
+                                                  height: 24.h,
+                                                  fit: BoxFit.cover,
+                                                  errorBuilder:
+                                                      (
+                                                        context,
+                                                        error,
+                                                        stackTrace,
+                                                      ) {
+                                                        return Icon(
+                                                          Icons
+                                                              .notification_important_outlined,
+                                                          color: _selectedColor,
+                                                          size: 24.sp,
+                                                        );
+                                                      },
+                                                ),
+                                              )
+                                            : Icon(
+                                                _selectedIcon,
+                                                color: _selectedColor,
+                                                size: 24.sp,
+                                              ),
+                                      ),
+                                    ),
+                                    SizedBox(width: 12.w),
+                                    // Color Button (hidden when a custom icon is selected)
+                                    if (_selectedCustomIconUrl == null)
+                                      InkWell(
+                                        onTap: _openColorPicker,
                                         borderRadius: BorderRadius.circular(20.r),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text(
-                                            _endDate != null
-                                                ? DateFormat('MMM dd, yyyy')
-                                                    .format(_endDate!)
-                                                : 'Select Date',
-                                            style: TextStyle(
-                                              color: textColor,
-                                              fontSize: 14.sp,
-                                            ),
+                                        child: Container(
+                                          width: 48.w,
+                                          height: 48.h,
+                                          decoration: BoxDecoration(
+                                            color: _selectedColor,
+                                            borderRadius:
+                                                BorderRadius.circular(20.r),
                                           ),
-                                          SizedBox(width: 8.w),
-                                          Icon(
-                                            Icons.calendar_today,
-                                            color: subtitleColor,
-                                            size: 16.sp,
-                                          ),
-                                        ],
+                                        ),
                                       ),
-                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          Divider(color: dividerColor, height: 1.h),
+
+                          // Repeat Switch
+                          Padding(
+                            padding: EdgeInsets.all(16.r),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Repeat',
+                                  style: TextStyle(
+                                    color: textColor,
+                                    fontSize: 16.sp,
+                                    fontWeight: FontWeight.w500,
                                   ),
-                                  SizedBox(width: 12.w),
-                                ],
+                                ),
                                 Switch(
-                                  value: _endDateEnabled,
+                                  value: _repeatEnabled,
                                   onChanged: (value) {
                                     setState(() {
-                                      _endDateEnabled = value;
-                                      if (value && _endDate == null) {
-                                        _endDate = _selectedDate
-                                            .add(const Duration(days: 30));
-                                      }
+                                      _repeatEnabled = value;
                                     });
                                   },
                                   activeColor: _accentColor,
                                 ),
                               ],
                             ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+                          ),
 
-              // Next 3 Occurrences (only shown when repeat is enabled)
-              if (_repeatEnabled) ...[
-                SizedBox(height: 32.h),
-                Text(
-                  'NEXT 3 OCCURRENCES',
-                  style: TextStyle(
-                    color: subtitleColor.withOpacity(0.7),
-                    fontSize: 12.sp,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-                SizedBox(height: 12.h),
-                Container(
-                  decoration: BoxDecoration(
-                    color: cardColor,
-                    borderRadius: BorderRadius.circular(24.r),
-                  ),
-                  child: Column(
-                    children: () {
-                      final occurrences = _generateNextOccurrences();
-                      if (occurrences.isEmpty) {
-                        return [
+                          Divider(color: dividerColor, height: 1.h),
+
+                          // Auto-snooze Switch
                           Padding(
                             padding: EdgeInsets.all(16.r),
-                            child: Text(
-                              'No occurrences found',
-                              style: TextStyle(
-                                color: subtitleColor,
-                                fontSize: 14.sp,
-                              ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Auto-snooze',
+                                      style: TextStyle(
+                                        color: textColor,
+                                        fontSize: 16.sp,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    SizedBox(height: 2.h),
+                                    Text(
+                                      'Snooze if no response',
+                                      style: TextStyle(
+                                        color: subtitleColor,
+                                        fontSize: 12.sp,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                Switch(
+                                  value: _autoSnoozeEnabled,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _autoSnoozeEnabled = value;
+                                    });
+                                  },
+                                  activeColor: _accentColor,
+                                ),
+                              ],
                             ),
                           ),
-                        ];
-                      }
-                      return occurrences.asMap().entries.map((entry) {
-                        final index = entry.key;
-                        final occurrence = entry.value;
-                        final isLast = index == occurrences.length - 1;
 
-                        return Column(
-                          children: [
+                          // Auto-snooze Settings (only show when enabled)
+                          if (_autoSnoozeEnabled) ...[
+                            Divider(color: dividerColor, height: 1.h),
                             Padding(
                               padding: EdgeInsets.all(16.r),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                  Text(
+                                    'Snooze Interval',
+                                    style: TextStyle(
+                                      color: textColor,
+                                      fontSize: 14.sp,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  SizedBox(height: 8.h),
+                                  Row(
                                     children: [
-                                      Text(
-                                        occurrence['title']!,
-                                        style: TextStyle(
-                                          color: textColor,
-                                          fontSize: 16.sp,
-                                          fontWeight: FontWeight.w500,
+                                      Expanded(
+                                        child: Slider(
+                                          value: _autoSnoozeInterval.toDouble(),
+                                          min: 1,
+                                          max: 60,
+                                          divisions: 59,
+                                          label: '$_autoSnoozeInterval min',
+                                          activeColor: _accentColor,
+                                          onChanged: (value) {
+                                            setState(() {
+                                              _autoSnoozeInterval = value
+                                                  .toInt();
+                                            });
+                                          },
                                         ),
                                       ),
-                                      SizedBox(height: 4.h),
+                                      SizedBox(width: 8.w),
                                       Text(
-                                        occurrence['subtitle']!,
+                                        '$_autoSnoozeInterval min',
                                         style: TextStyle(
-                                          color: subtitleColor,
-                                          fontSize: 13.sp,
+                                          color: textColor,
+                                          fontSize: 14.sp,
+                                          fontWeight: FontWeight.w600,
                                         ),
                                       ),
                                     ],
                                   ),
-                                  Container(
-                                    padding: EdgeInsets.symmetric(
-                                        vertical: 6.h, horizontal: 12.w),
-                                    decoration: BoxDecoration(
-                                      color: inputBgColor,
-                                      borderRadius: BorderRadius.circular(20.r),
+                                  SizedBox(height: 16.h),
+                                  Text(
+                                    'Max Snoozes',
+                                    style: TextStyle(
+                                      color: textColor,
+                                      fontSize: 14.sp,
+                                      fontWeight: FontWeight.w500,
                                     ),
-                                    child: Text(
-                                      occurrence['time']!,
-                                      style: TextStyle(
-                                        color: subtitleColor,
-                                        fontSize: 13.sp,
+                                  ),
+                                  SizedBox(height: 8.h),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Slider(
+                                          value: _autoSnoozeMaxCount.toDouble(),
+                                          min: 1,
+                                          max: 10,
+                                          divisions: 9,
+                                          label: '$_autoSnoozeMaxCount times',
+                                          activeColor: _accentColor,
+                                          onChanged: (value) {
+                                            setState(() {
+                                              _autoSnoozeMaxCount = value
+                                                  .toInt();
+                                            });
+                                          },
+                                        ),
                                       ),
-                                    ),
+                                      SizedBox(width: 8.w),
+                                      Text(
+                                        '$_autoSnoozeMaxCount times',
+                                        style: TextStyle(
+                                          color: textColor,
+                                          fontSize: 14.sp,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
                             ),
-                            if (!isLast)
-                              Divider(color: dividerColor, height: 1.h),
                           ],
-                        );
-                      }).toList();
-                    }(),
-                  ),
-                ),
-              ],
+                        ],
+                      ),
+                    ),
+
+                    // Recurrence Options Container (separate container when repeat is enabled)
+                    if (_repeatEnabled) ...[
+                      SizedBox(height: 20.h),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: cardColor,
+                          borderRadius: BorderRadius.circular(24.r),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Frequency Selector
+                            Padding(
+                              padding: EdgeInsets.all(18.r),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'FREQUENCY',
+                                    style: TextStyle(
+                                      color: subtitleColor.withOpacity(0.7),
+                                      fontSize: 12.sp,
+                                      fontWeight: FontWeight.w600,
+                                      letterSpacing: 1.2,
+                                    ),
+                                  ),
+                                  SizedBox(height: 12.h),
+                                  Row(
+                                    children: [
+                                      _buildFrequencyChip(
+                                        'Hourly',
+                                        RecurrenceFrequency.hourly,
+                                        cardColor,
+                                        textColor,
+                                        subtitleColor,
+                                        inputBgColor,
+                                      ),
+                                      SizedBox(width: 6.w),
+                                      _buildFrequencyChip(
+                                        'Daily',
+                                        RecurrenceFrequency.daily,
+                                        cardColor,
+                                        textColor,
+                                        subtitleColor,
+                                        inputBgColor,
+                                      ),
+                                      SizedBox(width: 6.w),
+                                      _buildFrequencyChip(
+                                        'Weekly',
+                                        RecurrenceFrequency.weekly,
+                                        cardColor,
+                                        textColor,
+                                        subtitleColor,
+                                        inputBgColor,
+                                      ),
+                                      SizedBox(width: 6.w),
+                                      _buildFrequencyChip(
+                                        'Monthly',
+                                        RecurrenceFrequency.monthly,
+                                        cardColor,
+                                        textColor,
+                                        subtitleColor,
+                                        inputBgColor,
+                                      ),
+                                      SizedBox(width: 6.w),
+                                      _buildFrequencyChip(
+                                        'Yearly',
+                                        RecurrenceFrequency.yearly,
+                                        cardColor,
+                                        textColor,
+                                        subtitleColor,
+                                        inputBgColor,
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Interval Selector (only for hourly)
+                            if (_selectedFrequency ==
+                                RecurrenceFrequency.hourly) ...[
+                              Divider(color: dividerColor, height: 1.h),
+                              Padding(
+                                padding: EdgeInsets.all(16.r),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'REPEAT EVERY',
+                                      style: TextStyle(
+                                        color: subtitleColor.withOpacity(0.7),
+                                        fontSize: 12.sp,
+                                        fontWeight: FontWeight.w600,
+                                        letterSpacing: 1.2,
+                                      ),
+                                    ),
+                                    SizedBox(height: 12.h),
+                                    GestureDetector(
+                                      onTap: () {
+                                        _showIntervalPicker(
+                                          context,
+                                          cardColor,
+                                          textColor,
+                                          subtitleColor,
+                                        );
+                                      },
+                                      child: Container(
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: 16.w,
+                                          vertical: 12.h,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: inputBgColor,
+                                          borderRadius: BorderRadius.circular(
+                                            12.r,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(
+                                              _getIntervalText(),
+                                              style: TextStyle(
+                                                color: textColor,
+                                                fontSize: 16.sp,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                            Icon(
+                                              Icons.arrow_drop_down,
+                                              color: subtitleColor,
+                                              size: 24.sp,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    // Validation message
+                                    if (_hourlyIntervalHours == 0 &&
+                                        _hourlyIntervalMinutes == 0) ...[
+                                      SizedBox(height: 8.h),
+                                      Text(
+                                        'Interval must be greater than 0',
+                                        style: TextStyle(
+                                          color: Colors.red,
+                                          fontSize: 12.sp,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ],
+
+                            // Days Selector (only for weekly)
+                            if (_selectedFrequency ==
+                                RecurrenceFrequency.weekly) ...[
+                              Divider(color: dividerColor, height: 1.h),
+                              Padding(
+                                padding: EdgeInsets.all(16.r),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'ON THESE DAYS',
+                                      style: TextStyle(
+                                        color: subtitleColor.withOpacity(0.7),
+                                        fontSize: 12.sp,
+                                        fontWeight: FontWeight.w600,
+                                        letterSpacing: 1.2,
+                                      ),
+                                    ),
+                                    SizedBox(height: 12.h),
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: List.generate(7, (index) {
+                                        final dayIndex = index + 1;
+                                        final isSelected = _selectedDays
+                                            .contains(dayIndex);
+                                        return _buildDayButton(
+                                          _dayAbbreviations[index],
+                                          dayIndex,
+                                          isSelected,
+                                          inputBgColor,
+                                          textColor,
+                                          subtitleColor,
+                                        );
+                                      }),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+
+                            // End Date Section
+                            Divider(color: dividerColor, height: 1.h),
+                            Padding(
+                              padding: EdgeInsets.all(16.r),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'End Date',
+                                    style: TextStyle(
+                                      color: textColor,
+                                      fontSize: 16.sp,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  Row(
+                                    children: [
+                                      if (_endDateEnabled) ...[
+                                        InkWell(
+                                          onTap: _selectEndDate,
+                                          borderRadius: BorderRadius.circular(
+                                            20.r,
+                                          ),
+                                          child: Container(
+                                            padding: EdgeInsets.symmetric(
+                                              vertical: 8.h,
+                                              horizontal: 16.w,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: inputBgColor,
+                                              borderRadius:
+                                                  BorderRadius.circular(20.r),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  _endDate != null
+                                                      ? DateFormat(
+                                                          'MMM dd, yyyy',
+                                                        ).format(_endDate!)
+                                                      : 'Select Date',
+                                                  style: TextStyle(
+                                                    color: textColor,
+                                                    fontSize: 14.sp,
+                                                  ),
+                                                ),
+                                                SizedBox(width: 8.w),
+                                                Icon(
+                                                  Icons.calendar_today,
+                                                  color: subtitleColor,
+                                                  size: 16.sp,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                        SizedBox(width: 12.w),
+                                      ],
+                                      Switch(
+                                        value: _endDateEnabled,
+                                        onChanged: (value) {
+                                          setState(() {
+                                            _endDateEnabled = value;
+                                            if (value && _endDate == null) {
+                                              _endDate = _selectedDate.add(
+                                                const Duration(days: 30),
+                                              );
+                                            }
+                                          });
+                                        },
+                                        activeColor: _accentColor,
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    // Next 3 Occurrences (only shown when repeat is enabled)
+                    if (_repeatEnabled) ...[
+                      SizedBox(height: 32.h),
+                      Text(
+                        'NEXT 3 OCCURRENCES',
+                        style: TextStyle(
+                          color: subtitleColor.withOpacity(0.7),
+                          fontSize: 12.sp,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      SizedBox(height: 12.h),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: cardColor,
+                          borderRadius: BorderRadius.circular(24.r),
+                        ),
+                        child: Column(
+                          children: () {
+                            final occurrences = _generateNextOccurrences();
+                            if (occurrences.isEmpty) {
+                              return [
+                                Padding(
+                                  padding: EdgeInsets.all(16.r),
+                                  child: Text(
+                                    'No occurrences found',
+                                    style: TextStyle(
+                                      color: subtitleColor,
+                                      fontSize: 14.sp,
+                                    ),
+                                  ),
+                                ),
+                              ];
+                            }
+                            return occurrences.asMap().entries.map((entry) {
+                              final index = entry.key;
+                              final occurrence = entry.value;
+                              final isLast = index == occurrences.length - 1;
+
+                              return Column(
+                                children: [
+                                  Padding(
+                                    padding: EdgeInsets.all(16.r),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              occurrence['title']!,
+                                              style: TextStyle(
+                                                color: textColor,
+                                                fontSize: 16.sp,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                            SizedBox(height: 4.h),
+                                            Text(
+                                              occurrence['subtitle']!,
+                                              style: TextStyle(
+                                                color: subtitleColor,
+                                                fontSize: 13.sp,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        Container(
+                                          padding: EdgeInsets.symmetric(
+                                            vertical: 6.h,
+                                            horizontal: 12.w,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: inputBgColor,
+                                            borderRadius: BorderRadius.circular(
+                                              20.r,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            occurrence['time']!,
+                                            style: TextStyle(
+                                              color: subtitleColor,
+                                              fontSize: 13.sp,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (!isLast)
+                                    Divider(color: dividerColor, height: 1.h),
+                                ],
+                              );
+                            }).toList();
+                          }(),
+                        ),
+                      ),
+                    ],
 
                     SizedBox(height: 32.h),
                   ],
@@ -1542,10 +1856,7 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
           color: isSelected ? _accentColor.withOpacity(0.3) : inputBgColor,
           shape: BoxShape.circle,
           border: isSelected
-              ? Border.all(
-                  color: _accentColor,
-                  width: 2.w,
-                )
+              ? Border.all(color: _accentColor, width: 2.w)
               : null,
         ),
         child: Center(
@@ -1559,6 +1870,171 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  String _getIntervalText() {
+    if (_hourlyIntervalHours == 0 && _hourlyIntervalMinutes == 0) {
+      return 'Select interval';
+    }
+
+    if (_hourlyIntervalHours == 0) {
+      return '$_hourlyIntervalMinutes minutes';
+    } else if (_hourlyIntervalMinutes == 0) {
+      return '$_hourlyIntervalHours ${_hourlyIntervalHours == 1 ? 'hour' : 'hours'}';
+    } else {
+      return '$_hourlyIntervalHours ${_hourlyIntervalHours == 1 ? 'hour' : 'hours'} $_hourlyIntervalMinutes min';
+    }
+  }
+
+  void _showIntervalPicker(
+    BuildContext context,
+    Color cardColor,
+    Color textColor,
+    Color subtitleColor,
+  ) {
+    int tempHours = _hourlyIntervalHours;
+    int tempMinutes = _hourlyIntervalMinutes;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return Container(
+          height: 280.h,
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(20.r),
+              topRight: Radius.circular(20.r),
+            ),
+          ),
+          child: Column(
+            children: [
+              // Header
+              Padding(
+                padding: EdgeInsets.all(16.r),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text(
+                        'Cancel',
+                        style: TextStyle(color: subtitleColor, fontSize: 16.sp),
+                      ),
+                    ),
+                    Text(
+                      'Select Interval',
+                      style: TextStyle(
+                        color: textColor,
+                        fontSize: 16.sp,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        // Validate that total doesn't exceed 24 hours
+                        final totalHours = tempHours + (tempMinutes / 60);
+                        if (totalHours <= 24) {
+                          setState(() {
+                            _hourlyIntervalHours = tempHours;
+                            _hourlyIntervalMinutes = tempMinutes;
+                          });
+                          Navigator.pop(context);
+                        }
+                      },
+                      child: Text(
+                        'Done',
+                        style: TextStyle(
+                          color: _accentColor,
+                          fontSize: 16.sp,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Divider(height: 1.h, color: subtitleColor.withOpacity(0.2)),
+              // Picker
+              Expanded(
+                child: Row(
+                  children: [
+                    // Hours picker
+                    Expanded(
+                      child: CupertinoPicker(
+                        scrollController: FixedExtentScrollController(
+                          initialItem: tempHours,
+                        ),
+                        itemExtent: 40.h,
+                        onSelectedItemChanged: (index) {
+                          SystemSound.play(SystemSoundType.click);
+                          HapticFeedback.lightImpact();
+                          tempHours = index;
+                        },
+                        children: List.generate(
+                          24,
+                          (index) => Center(
+                            child: Text(
+                              '$index',
+                              style: TextStyle(
+                                color: textColor,
+                                fontSize: 20.sp,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Text(
+                      'hours',
+                      style: TextStyle(color: textColor, fontSize: 16.sp),
+                    ),
+                    SizedBox(width: 20.w),
+                    // Minutes picker
+                    Expanded(
+                      child: CupertinoPicker(
+                        scrollController: FixedExtentScrollController(
+                          initialItem: [
+                            0,
+                            5,
+                            10,
+                            15,
+                            20,
+                            30,
+                            45,
+                          ].indexOf(tempMinutes),
+                        ),
+                        itemExtent: 40.h,
+                        onSelectedItemChanged: (index) {
+                          tempMinutes = [0, 5, 10, 15, 20, 30, 45][index];
+                        },
+                        children: [0, 5, 10, 15, 20, 30, 45].map((min) {
+                          return Center(
+                            child: Text(
+                              '$min',
+                              style: TextStyle(
+                                color: textColor,
+                                fontSize: 20.sp,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                    Text(
+                      'min',
+                      style: TextStyle(color: textColor, fontSize: 16.sp),
+                    ),
+                    SizedBox(width: 20.w),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

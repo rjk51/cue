@@ -8,7 +8,8 @@ class ConsistencyData {
   final int completedCount;
   final int missedCount;
   final String lastEvaluatedDate; // YYYY-MM-DD format
-  final List<String> completedDates; // List of completed dates (YYYY-MM-DD), limited to last 90 days
+  final List<String>
+  completedDates; // List of completed dates (YYYY-MM-DD), limited to last 90 days
 
   ConsistencyData({
     required this.completedCount,
@@ -31,7 +32,8 @@ class ConsistencyData {
       completedCount: map['completedCount'] as int? ?? 0,
       missedCount: map['missedCount'] as int? ?? 0,
       lastEvaluatedDate: map['lastEvaluatedDate'] as String? ?? '',
-      completedDates: (map['completedDates'] as List<dynamic>?)
+      completedDates:
+          (map['completedDates'] as List<dynamic>?)
               ?.map((e) => e.toString())
               .toList() ??
           [],
@@ -43,7 +45,7 @@ class ConsistencyData {
     if (total == 0) return 0.0;
     return (completedCount / total) * 100;
   }
-  
+
   bool wasCompletedOnDate(String date) {
     return completedDates.contains(date);
   }
@@ -60,6 +62,7 @@ class Reminder {
   final Map<String, dynamic>? recurrence;
   final DateTime? nextDueAt;
   final int? iconCodePoint;
+  final String? customIconUrl;
   final int? colorValue;
   final String? notes;
   final bool autoSnoozeEnabled;
@@ -67,9 +70,11 @@ class Reminder {
   final int autoSnoozeMaxCount; // maximum number of auto-snoozes
   final int autoSnoozeCount; // current auto-snooze count
   final ConsistencyData? consistency;
-  final Map<String, Map<String, dynamic>>? overrides; // Per-date overrides: { "YYYY-MM-DD": { time, title, skipped, ... } }
+  final Map<String, Map<String, dynamic>>?
+  overrides; // Per-date overrides: { "YYYY-MM-DD": { time, title, skipped, ... } }
   /// When the user snoozes, we keep the original scheduled time here for display.
   final DateTime? scheduledTimeAtSnooze;
+
   /// When the reminder will next fire (snooze time). Set when user snoozes, cleared when completed.
   final DateTime? snoozedUntil;
 
@@ -84,6 +89,7 @@ class Reminder {
     this.recurrence,
     this.nextDueAt,
     this.iconCodePoint,
+    this.customIconUrl,
     this.colorValue,
     this.notes,
     this.autoSnoozeEnabled = false,
@@ -111,6 +117,7 @@ class Reminder {
       if (recurrence != null) 'recurrence': recurrence,
       if (nextDueAt != null) 'nextDueAt': Timestamp.fromDate(nextDueAt!),
       if (iconCodePoint != null) 'iconCodePoint': iconCodePoint,
+      if (customIconUrl != null) 'customIconUrl': customIconUrl,
       if (colorValue != null) 'colorValue': colorValue,
       if (notes != null) 'notes': notes,
       'autoSnoozeEnabled': autoSnoozeEnabled,
@@ -119,8 +126,10 @@ class Reminder {
       'autoSnoozeCount': autoSnoozeCount,
       if (consistency != null) 'consistency': consistency!.toMap(),
       if (overrides != null && overrides!.isNotEmpty) 'overrides': overrides,
-      if (scheduledTimeAtSnooze != null) 'scheduledTimeAtSnooze': Timestamp.fromDate(scheduledTimeAtSnooze!),
-      if (snoozedUntil != null) 'snoozedUntil': Timestamp.fromDate(snoozedUntil!),
+      if (scheduledTimeAtSnooze != null)
+        'scheduledTimeAtSnooze': Timestamp.fromDate(scheduledTimeAtSnooze!),
+      if (snoozedUntil != null)
+        'snoozedUntil': Timestamp.fromDate(snoozedUntil!),
     };
   }
 
@@ -133,14 +142,15 @@ class Reminder {
       isCompleted: map['isCompleted'] ?? false,
       deviceToken: map['deviceToken'],
       userId: map['userId'] ?? 'demo_user',
-      notifiedAt: map['notifiedAt'] != null 
-          ? (map['notifiedAt'] as Timestamp).toDate() 
+      notifiedAt: map['notifiedAt'] != null
+          ? (map['notifiedAt'] as Timestamp).toDate()
           : null,
-        recurrence: map['recurrence'] as Map<String, dynamic>?,
-        nextDueAt: map['nextDueAt'] != null
+      recurrence: map['recurrence'] as Map<String, dynamic>?,
+      nextDueAt: map['nextDueAt'] != null
           ? (map['nextDueAt'] as Timestamp).toDate()
           : null,
       iconCodePoint: map['iconCodePoint'] as int?,
+      customIconUrl: map['customIconUrl'] as String?,
       colorValue: map['colorValue'] as int?,
       notes: map['notes'] as String?,
       autoSnoozeEnabled: map['autoSnoozeEnabled'] ?? false,
@@ -175,14 +185,15 @@ class Reminder {
     if (recurrence == null) {
       return isCompleted;
     }
-    
+
     // For recurring reminders, check if today is in completedDates
     if (consistency != null) {
       final today = DateTime.now();
-      final todayStr = '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+      final todayStr =
+          '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
       return consistency!.wasCompletedOnDate(todayStr);
     }
-    
+
     return false;
   }
 
@@ -198,6 +209,7 @@ class Reminder {
     Map<String, dynamic>? recurrence,
     DateTime? nextDueAt,
     int? iconCodePoint,
+    String? customIconUrl,
     int? colorValue,
     String? notes,
     bool? autoSnoozeEnabled,
@@ -220,6 +232,7 @@ class Reminder {
       recurrence: recurrence ?? this.recurrence,
       nextDueAt: nextDueAt ?? this.nextDueAt,
       iconCodePoint: iconCodePoint ?? this.iconCodePoint,
+      customIconUrl: customIconUrl ?? this.customIconUrl,
       colorValue: colorValue ?? this.colorValue,
       notes: notes ?? this.notes,
       autoSnoozeEnabled: autoSnoozeEnabled ?? this.autoSnoozeEnabled,
@@ -228,11 +241,12 @@ class Reminder {
       autoSnoozeCount: autoSnoozeCount ?? this.autoSnoozeCount,
       consistency: consistency ?? this.consistency,
       overrides: overrides ?? this.overrides,
-      scheduledTimeAtSnooze: scheduledTimeAtSnooze ?? this.scheduledTimeAtSnooze,
+      scheduledTimeAtSnooze:
+          scheduledTimeAtSnooze ?? this.scheduledTimeAtSnooze,
       snoozedUntil: snoozedUntil ?? this.snoozedUntil,
     );
   }
-  
+
   // Helper to get icon as IconData
   IconData get icon {
     if (iconCodePoint == null) {
@@ -240,12 +254,11 @@ class Reminder {
     }
     return IconData(iconCodePoint!, fontFamily: 'MaterialIcons');
   }
-  
+
   // Helper to get color as Color
-  Color get color => colorValue != null 
-      ? Color(colorValue!)
-      : const Color(0xFFFFB4A3);
-  
+  Color get color =>
+      colorValue != null ? Color(colorValue!) : const Color(0xFFFFB4A3);
+
   // Calculate consistency percentage
   double get consistencyPercentage {
     if (consistency == null) {
@@ -253,7 +266,7 @@ class Reminder {
     }
     return consistency!.percentage;
   }
-  
+
   /// Get override for a specific date (YYYY-MM-DD format)
   Map<String, dynamic>? getOverrideForDate(String date) {
     return overrides?[date];
@@ -263,6 +276,23 @@ class Reminder {
   bool isSkippedOnDate(String date) {
     final override = getOverrideForDate(date);
     return override?['skipped'] == true;
+  }
+
+  /// Check if a specific occurrence time is completed (for hourly reminders)
+  bool isOccurrenceCompleted(DateTime occurrenceTime) {
+    final dateKey =
+        '${occurrenceTime.year.toString().padLeft(4, '0')}-${occurrenceTime.month.toString().padLeft(2, '0')}-${occurrenceTime.day.toString().padLeft(2, '0')}';
+    final timeKey =
+        '${occurrenceTime.hour.toString().padLeft(2, '0')}:${occurrenceTime.minute.toString().padLeft(2, '0')}';
+
+    final override = getOverrideForDate(dateKey);
+    if (override != null && override['completedTimes'] != null) {
+      final completedTimes = List<String>.from(
+        override['completedTimes'] as List<dynamic>,
+      );
+      return completedTimes.contains(timeKey);
+    }
+    return false;
   }
 
   /// Get effective time for a specific date (considering overrides)
@@ -305,7 +335,7 @@ class Reminder {
     final nextDue = effectiveNextDueAt;
     final dateStr = DateFormat('yyyy-MM-dd').format(nextDue);
     final override = getOverrideForDate(dateStr);
-    
+
     // If there's a time override, use it
     if (override != null && override['time'] != null) {
       final timeStr = override['time'] as String;
@@ -314,7 +344,7 @@ class Reminder {
       final minute = int.tryParse(parts[1]) ?? nextDue.minute;
       return DateTime(nextDue.year, nextDue.month, nextDue.day, hour, minute);
     }
-    
+
     return nextDue;
   }
 
@@ -337,39 +367,41 @@ class Reminder {
       // Non-recurring reminder - just return the original time
       return time;
     }
-    
+
     final now = DateTime.now();
-    
+
     // If nextDueAt exists and hasn't been completed today, show it (even if in the past)
     // This ensures missed occurrences are displayed until they're handled
     if (nextDueAt != null) {
       final nextDueDate = nextDueAt!;
       final nextDueDateStr = DateFormat('yyyy-MM-dd').format(nextDueDate);
-      
+
       // Check if this occurrence has been completed today
-      final isCompletedToday = consistency != null && 
+      final isCompletedToday =
+          consistency != null &&
           consistency!.wasCompletedOnDate(nextDueDateStr);
-      
+
       // Check if this occurrence is skipped
       final isSkipped = isSkippedOnDate(nextDueDateStr);
-      
+
       // If not completed and not skipped, show it (even if in the past)
       // This allows users to see and complete missed occurrences
       if (!isCompletedToday && !isSkipped) {
         return nextDueDate;
       }
-      
+
       // If completed or skipped, and it's still in the future, return it
       if (nextDueDate.isAfter(now)) {
         return nextDueDate;
       }
     }
-    
+
     // nextDueAt is null, completed, or skipped and in the past - calculate the next occurrence
     try {
       final rule = RecurrenceRule.fromBackendConfig(recurrence!);
       final nextOccurrence = rule.nextOccurrence(from: now);
-      return nextOccurrence ?? time; // Fallback to original time if calculation fails
+      return nextOccurrence ??
+          time; // Fallback to original time if calculation fails
     } catch (e) {
       print('Error calculating next occurrence: $e');
       return nextDueAt ?? time; // Fallback to nextDueAt or original time
