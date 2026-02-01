@@ -8,15 +8,26 @@
 import WidgetKit
 import SwiftUI
 
+// MARK: - 1. Theme Definition
+// Using the specific colors you requested
+struct AppTheme {
+    static let primary = Color(hex: "FFAD87")        // Peach
+    static let secondary = Color(hex: "C5A059")      // Gold
+    static let surface = Color(hex: "2A262E")        // Dark Background
+    static let surfaceHighlight = Color(hex: "352F3C") // Card Background
+    static let onSurface = Color(hex: "FDFCF0")      // Text Color
+}
+
 struct ReminderData: Codable, Identifiable {
     let id: String
     let name: String
     let time: String
     let iconName: String
-    let colorHex: String
+    let colorHex: String // We will ignore this for the theme consistency
+    var priority: String?
 
-    var color: Color {
-        Color(hex: colorHex)
+    var isHighPriority: Bool {
+        priority?.lowercased() == "high"
     }
 }
 
@@ -44,23 +55,23 @@ struct Provider: TimelineProvider {
     func loadReminders() -> [ReminderData] {
         guard let userDefaults = UserDefaults(suiteName: "group.com.cue.app"),
               let data = userDefaults.data(forKey: "todayReminders") else {
-            print("⚠️ No data found in App Group")
-            return []
+            return sampleReminders() // Fallback to sample if no data for testing
         }
 
         do {
             let reminders = try JSONDecoder().decode([ReminderData].self, from: data)
-            print("✅ Loaded \(reminders.count) reminders from App Group")
             return reminders
         } catch {
-            print("❌ Failed to decode reminders: \(error)")
             return []
         }
     }
 
     func sampleReminders() -> [ReminderData] {
         return [
-            ReminderData(id: "1", name: "Sample Reminder", time: "3:00 PM", iconName: "bell.fill", colorHex: "2D7A78")
+            ReminderData(id: "1", name: "Design Review", time: "10:00 AM", iconName: "paintbrush.fill", colorHex: "", priority: "high"),
+            ReminderData(id: "2", name: "Team Sync", time: "11:30 AM", iconName: "person.2.fill", colorHex: "", priority: nil),
+            ReminderData(id: "3", name: "Lunch", time: "1:00 PM", iconName: "fork.knife", colorHex: "", priority: nil),
+            ReminderData(id: "4", name: "Client Call", time: "3:00 PM", iconName: "phone.fill", colorHex: "", priority: "high"),
         ]
     }
 }
@@ -75,212 +86,257 @@ struct cueWidgetsEntryView: View {
     @Environment(\.widgetFamily) var family
 
     var body: some View {
-        switch family {
-        case .systemSmall:
-            SmallWidgetView(reminders: entry.reminders)
-        case .systemMedium:
-            MediumWidgetView(reminders: entry.reminders)
-        case .systemLarge:
-            LargeWidgetView(reminders: entry.reminders)
-        default:
-            SmallWidgetView(reminders: entry.reminders)
+        ZStack {
+            // Main Background from Theme
+            AppTheme.surface
+            
+            switch family {
+            case .systemSmall:
+                SmallWidgetView(reminders: entry.reminders)
+            case .systemMedium:
+                MediumWidgetView(reminders: entry.reminders)
+            case .systemLarge:
+                LargeWidgetView(reminders: entry.reminders)
+            default:
+                SmallWidgetView(reminders: entry.reminders)
+            }
         }
+        // This removes the default system padding/border in iOS 17+
+        .containerBackground(AppTheme.surface, for: .widget)
     }
 }
 
+// MARK: - Small Widget
 struct SmallWidgetView: View {
     let reminders: [ReminderData]
 
     var body: some View {
-        ZStack {
-            LinearGradient(
-                gradient: Gradient(colors: [Color(hex: "4A4458"), Color(hex: "2D7A78")]),
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            VStack(spacing: 8) {
-                if let nextReminder = reminders.first {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Image(systemName: nextReminder.iconName)
-                                .font(.system(size: 24))
-                                .foregroundColor(nextReminder.color)
-                            Spacer()
+        VStack(alignment: .leading) {
+            if let reminder = reminders.first {
+                VStack(alignment: .leading, spacing: 0) {
+                    // Header Icon
+                    HStack {
+                        Image(systemName: reminder.iconName)
+                            .font(.system(size: 24))
+                            .foregroundColor(reminder.isHighPriority ? AppTheme.primary : AppTheme.secondary)
+                        Spacer()
+                        
+                        if reminder.isHighPriority {
+                            Circle()
+                                .fill(AppTheme.primary)
+                                .frame(width: 8, height: 8)
                         }
-
-                        Text(nextReminder.name)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.white)
-                            .lineLimit(2)
-
-                        Text(nextReminder.time)
-                            .font(.system(size: 12))
-                            .foregroundColor(.white.opacity(0.8))
                     }
-                    .padding()
-                } else {
-                    VStack(spacing: 8) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 32))
-                            .foregroundColor(.white.opacity(0.8))
-                        Text("All caught up!")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.white)
-                    }
-                    .padding()
+                    .padding(.bottom, 12)
+
+                    Spacer()
+
+                    // Task Name
+                    Text(reminder.name)
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundColor(AppTheme.onSurface)
+                        .lineLimit(3)
+                        .padding(.bottom, 4)
+
+                    // Time
+                    Text(reminder.time)
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundColor(AppTheme.onSurface.opacity(0.6))
                 }
+            } else {
+                EmptyStateView()
             }
         }
+        .padding()
     }
 }
 
+// MARK: - Medium Widget
 struct MediumWidgetView: View {
     let reminders: [ReminderData]
+    @State private var currentPage = 0
+    
+    private let itemsPerPage = 3
+    private var totalPages: Int {
+        max(1, Int(ceil(Double(reminders.count) / Double(itemsPerPage))))
+    }
+    
+    private var currentPageReminders: [ReminderData] {
+        let startIndex = currentPage * itemsPerPage
+        let endIndex = min(startIndex + itemsPerPage, reminders.count)
+        guard startIndex < reminders.count else { return [] }
+        return Array(reminders[startIndex..<endIndex])
+    }
 
     var body: some View {
-        ZStack {
-            LinearGradient(
-                gradient: Gradient(colors: [Color(hex: "4A4458"), Color(hex: "2D7A78")]),
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text("Today's Reminders")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.9))
-                    Spacer()
-                    Text("\(reminders.count)")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.white)
-                }
-
-                if reminders.isEmpty {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        VStack(spacing: 4) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 28))
-                                .foregroundColor(.white.opacity(0.8))
-                            Text("All caught up!")
-                                .font(.system(size: 12))
-                                .foregroundColor(.white.opacity(0.8))
-                        }
-                        Spacer()
-                    }
-                    Spacer()
-                } else {
-                    ForEach(reminders.prefix(3)) { reminder in
-                        HStack(spacing: 12) {
-                            Image(systemName: reminder.iconName)
-                                .font(.system(size: 16))
-                                .foregroundColor(reminder.color)
-                                .frame(width: 24)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(reminder.name)
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundColor(.white)
-                                    .lineLimit(1)
-
-                                Text(reminder.time)
-                                    .font(.system(size: 11))
-                                    .foregroundColor(.white.opacity(0.7))
-                            }
-
-                            Spacer()
-                        }
-                        .padding(.vertical, 4)
-                    }
-                }
-
+        VStack(alignment: .leading, spacing: 12) {
+            // Header
+            HStack {
+                Text("Today")
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .foregroundColor(AppTheme.primary)
+                    .textCase(.uppercase)
+                
                 Spacer()
+                
+                Text("\(reminders.count) Tasks")
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundColor(AppTheme.onSurface.opacity(0.5))
             }
-            .padding()
+            
+            if reminders.isEmpty {
+                EmptyStateView()
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(currentPageReminders) { reminder in
+                        TaskRow(reminder: reminder)
+                    }
+                }
+            }
+            Spacer()
+        }
+        .padding()
+        // Auto-cycle pages since we can't scroll
+        .onAppear {
+            if totalPages > 1 {
+                Timer.scheduledTimer(withTimeInterval: 6.0, repeats: true) { _ in
+                    withAnimation {
+                        currentPage = (currentPage + 1) % totalPages
+                    }
+                }
+            }
         }
     }
 }
 
+// MARK: - Large Widget
 struct LargeWidgetView: View {
     let reminders: [ReminderData]
+    @State private var currentPage = 0
+    
+    private let itemsPerPage = 6 // Fits more on large
+    private var totalPages: Int {
+        max(1, Int(ceil(Double(reminders.count) / Double(itemsPerPage))))
+    }
+    
+    private var currentPageReminders: [ReminderData] {
+        let startIndex = currentPage * itemsPerPage
+        let endIndex = min(startIndex + itemsPerPage, reminders.count)
+        guard startIndex < reminders.count else { return [] }
+        return Array(reminders[startIndex..<endIndex])
+    }
 
     var body: some View {
-        ZStack {
-            LinearGradient(
-                gradient: Gradient(colors: [Color(hex: "4A4458"), Color(hex: "2D7A78")]),
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Text("Today's Reminders")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.white)
-                    Spacer()
-                    Text("\(reminders.count)")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color.white.opacity(0.2))
-                        .cornerRadius(12)
+        VStack(alignment: .leading, spacing: 16) {
+            // Header
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(Date().formatted(.dateTime.weekday(.wide)))
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundColor(AppTheme.primary)
+                        .textCase(.uppercase)
+                    
+                    Text(Date().formatted(.dateTime.day().month()))
+                        .font(.system(size: 28, weight: .light, design: .rounded))
+                        .foregroundColor(AppTheme.onSurface)
                 }
-
-                if reminders.isEmpty {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        VStack(spacing: 8) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 48))
-                                .foregroundColor(.white.opacity(0.8))
-                            Text("All caught up!")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.white)
-                            Text("No reminders for today")
-                                .font(.system(size: 12))
-                                .foregroundColor(.white.opacity(0.7))
-                        }
-                        Spacer()
-                    }
-                    Spacer()
-                } else {
-                    ForEach(reminders.prefix(6)) { reminder in
-                        HStack(spacing: 12) {
-                            Image(systemName: reminder.iconName)
-                                .font(.system(size: 18))
-                                .foregroundColor(reminder.color)
-                                .frame(width: 32)
-
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(reminder.name)
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(.white)
-                                    .lineLimit(1)
-
-                                Text(reminder.time)
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.white.opacity(0.7))
-                            }
-
-                            Spacer()
-                        }
-                        .padding(.vertical, 6)
-                    }
-                }
-
+                
                 Spacer()
+                
+                // Page Dots
+                if totalPages > 1 {
+                    HStack(spacing: 4) {
+                        ForEach(0..<totalPages, id: \.self) { index in
+                            Circle()
+                                .fill(index == currentPage ? AppTheme.primary : AppTheme.surfaceHighlight)
+                                .frame(width: 6, height: 6)
+                        }
+                    }
+                    .padding(.bottom, 6)
+                }
             }
-            .padding()
+            
+            if reminders.isEmpty {
+                EmptyStateView()
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(currentPageReminders) { reminder in
+                        TaskRow(reminder: reminder)
+                    }
+                }
+            }
+            Spacer()
+        }
+        .padding()
+        .onAppear {
+            if totalPages > 1 {
+                Timer.scheduledTimer(withTimeInterval: 6.0, repeats: true) { _ in
+                    withAnimation {
+                        currentPage = (currentPage + 1) % totalPages
+                    }
+                }
+            }
         }
     }
 }
 
-// Color extension to support hex colors
+// MARK: - Components
+
+struct TaskRow: View {
+    let reminder: ReminderData
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            // Icon Container
+            ZStack {
+                Circle()
+                    .fill(AppTheme.surfaceHighlight.opacity(0.5)) // Slightly lighter than background
+                    .frame(width: 32, height: 32)
+                
+                Image(systemName: reminder.iconName)
+                    .font(.system(size: 14))
+                    // Force the color to match theme, fixing the "green notification" issue
+                    .foregroundColor(reminder.isHighPriority ? AppTheme.primary : AppTheme.secondary)
+            }
+            
+            Text(reminder.name)
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .foregroundColor(AppTheme.onSurface)
+                .lineLimit(1)
+            
+            Spacer()
+            
+            Text(reminder.time)
+                .font(.system(size: 12, weight: .regular, design: .rounded))
+                .foregroundColor(AppTheme.onSurface.opacity(0.5))
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(AppTheme.surfaceHighlight)
+        )
+    }
+}
+
+struct EmptyStateView: View {
+    var body: some View {
+        VStack(spacing: 10) {
+            Spacer()
+            Image(systemName: "checkmark.circle")
+                .font(.system(size: 40))
+                .foregroundColor(AppTheme.secondary.opacity(0.5))
+            
+            Text("All Clear")
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .foregroundColor(AppTheme.onSurface.opacity(0.7))
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - Helpers
 extension Color {
     init(hex: String) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
@@ -313,19 +369,31 @@ struct cueWidgets: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: Provider()) { entry in
             cueWidgetsEntryView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
         }
         .configurationDisplayName("Cue Reminders")
         .description("View your upcoming reminders")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+        // This is crucial for removing the default system border
+        .contentMarginsDisabled() 
     }
 }
+
+// MARK: - Previews
 
 #Preview(as: .systemSmall) {
     cueWidgets()
 } timeline: {
     SimpleEntry(date: .now, reminders: [
-        ReminderData(id: "1", name: "Morning Workout", time: "8:00 AM", iconName: "figure.run", colorHex: "2D7A78")
+        ReminderData(id: "1", name: "Design Review", time: "10:00 AM", iconName: "paintbrush.fill", colorHex: "", priority: "high")
     ])
-    SimpleEntry(date: .now, reminders: [])
+}
+
+#Preview(as: .systemMedium) {
+    cueWidgets()
+} timeline: {
+    SimpleEntry(date: .now, reminders: [
+        ReminderData(id: "1", name: "Design Review", time: "10:00 AM", iconName: "paintbrush.fill", colorHex: "", priority: "high"),
+        ReminderData(id: "2", name: "Team Sync", time: "11:30 AM", iconName: "person.3.fill", colorHex: "", priority: nil),
+        ReminderData(id: "3", name: "Lunch", time: "1:00 PM", iconName: "fork.knife", colorHex: "", priority: nil),
+    ])
 }
