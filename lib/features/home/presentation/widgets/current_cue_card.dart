@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
 import '../../../reminders/domain/reminder_model.dart';
@@ -143,7 +144,6 @@ class _CurrentCueCardState extends State<CurrentCueCard>
       },
       child: Container(
         width: double.infinity,
-        padding: EdgeInsets.all(42.r),
         decoration: BoxDecoration(
           color: widget.cardColor,
           borderRadius: BorderRadius.circular(28.r),
@@ -155,7 +155,12 @@ class _CurrentCueCardState extends State<CurrentCueCard>
             ),
           ],
         ),
-        child: Column(
+        child: Stack(
+          children: [
+            // Main content
+            Padding(
+              padding: EdgeInsets.all(42.r),
+              child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Header row with label and icon
@@ -215,9 +220,9 @@ class _CurrentCueCardState extends State<CurrentCueCard>
             Row(
               children: [
                 Icon(
-                  Icons.access_time_filled,
+                  timeText.contains('ago') ? Icons.schedule_rounded : Icons.access_time_filled,
                   size: 18.sp,
-                  color: widget.subtitleColor,
+                  color: timeText.contains('ago') ? const Color(0xFFFFC107) : widget.subtitleColor,
                 ),
                 SizedBox(width: 6.w),
                 Text(
@@ -225,7 +230,7 @@ class _CurrentCueCardState extends State<CurrentCueCard>
                   style: TextStyle(
                     fontSize: 16.sp,
                     fontWeight: FontWeight.w600,
-                    color: widget.accentColor,
+                    color: timeText.contains('ago') ? const Color(0xFFFFC107) : widget.accentColor,
                   ),
                 ),
                 SizedBox(width: 8.w),
@@ -287,6 +292,9 @@ class _CurrentCueCardState extends State<CurrentCueCard>
 
             // Action buttons (Done and Snooze)
             _buildActionButtons(),
+          ],
+              ),
+            ),
           ],
         ),
       ),
@@ -459,6 +467,11 @@ class _CurrentCueCardState extends State<CurrentCueCard>
                 AnimatedBuilder(
                   animation: _swipeController,
                   builder: (context, child) {
+                    // Calculate glow intensity based on drag progress
+                    final progress = _dragOffset / maxSlide;
+                    final glowIntensity = progress > 0 ? 0.4 + (progress * 0.3) : 0.2;
+                    final blurRadius = progress > 0 ? 12.0 + (progress * 8.0) : 8.0;
+                    
                     return Positioned(
                       left: 8.w + _dragOffset,
                       top: 8.h,
@@ -470,8 +483,9 @@ class _CurrentCueCardState extends State<CurrentCueCard>
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: widget.accentColor,
-                              blurRadius: 8,
+                              color: widget.accentColor.withOpacity(glowIntensity),
+                              blurRadius: blurRadius,
+                              spreadRadius: progress > 0 ? 2 : 0,
                               offset: const Offset(0, 2),
                             ),
                           ],
@@ -494,33 +508,61 @@ class _CurrentCueCardState extends State<CurrentCueCard>
   }
 
   Widget _buildDoneButton() {
-    return GestureDetector(
-      onTap: () {
-        widget.onMarkCompleted(widget.reminder.id);
-      },
-      child: Container(
-        height: 64.h,
-        decoration: BoxDecoration(
-          color: widget.accentColor,
-          borderRadius: BorderRadius.circular(36.r),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.check_rounded, color: Colors.white, size: 20.sp),
-            SizedBox(width: 8.w),
-            Text(
-              'DONE',
-              style: TextStyle(
-                fontSize: 14.sp,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
-                letterSpacing: 0.5,
+    return StatefulBuilder(
+      builder: (context, setState) {
+        return GestureDetector(
+          onTap: () async {
+            // Haptic feedback
+            try {
+              await HapticFeedback.mediumImpact();
+            } catch (e) {
+              // Haptic feedback not available on all platforms
+            }
+            widget.onMarkCompleted(widget.reminder.id);
+          },
+          child: AnimatedScale(
+            scale: 1.0,
+            duration: const Duration(milliseconds: 100),
+            child: Container(
+              height: 64.h,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    widget.accentColor,
+                    widget.accentColor.withOpacity(0.9),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(36.r),
+                boxShadow: [
+                  BoxShadow(
+                    color: widget.accentColor.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.check_rounded, color: Colors.white, size: 20.sp),
+                  SizedBox(width: 8.w),
+                  Text(
+                    'DONE',
+                    style: TextStyle(
+                      fontSize: 14.sp,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

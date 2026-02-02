@@ -526,7 +526,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                               ),
                             )
                           else ...[
-                            SizedBox(height: 32.h),
+                            SizedBox(height: 22.h),
 
                             // Today's Reminders Count Section
                             _buildRemindersToday(
@@ -792,7 +792,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           child: upcomingReminders.isEmpty
               ? Center(
                   child: Text(
-                    'No more reminders scheduled',
+                    'That\'s everything for today',
                     style: TextStyle(fontSize: 14.sp, color: subtitleColor),
                   ),
                 )
@@ -957,6 +957,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       ..sort((a, b) => a.time.compareTo(b.time));
     final displayReminders = sortedReminders.take(3).toList();
 
+    // Contextual message based on reminder count
+    String contextualMessage;
+    if (count <= 2) {
+      contextualMessage = 'Take it slow today.';
+    } else if (count <= 4) {
+      contextualMessage = 'Almost done for today.';
+    } else {
+      contextualMessage = 'You\'ve got this!';
+    }
+
     return Center(
       child: Column(
         children: [
@@ -966,6 +976,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               fontSize: 16.sp,
               fontWeight: FontWeight.w500,
               color: subtitleColor,
+            ),
+          ),
+          SizedBox(height: 6.h),
+          Text(
+            contextualMessage,
+            style: TextStyle(
+              fontSize: 13.sp,
+              fontWeight: FontWeight.w400,
+              color: subtitleColor.withOpacity(0.7),
+              fontStyle: FontStyle.italic,
             ),
           ),
           if (displayReminders.isNotEmpty) ...[
