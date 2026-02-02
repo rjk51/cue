@@ -254,6 +254,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
                           stream: FirebaseFirestore.instance
                               .collection('devices')
                               .where('userId', isEqualTo: userId)
+                              .where('active', isEqualTo: true)
                               .snapshots(),
                           builder: (context, snapshot) {
                             if (snapshot.hasError) {
@@ -339,8 +340,8 @@ class _DevicesScreenState extends State<DevicesScreen> {
                                 final data = device.data() as Map<String, dynamic>;
                                 final fcmToken = data['fcmToken'] as String?;
                                 final platform = data['platform'] as String? ?? 'unknown';
+                                final deviceName = data['deviceName'] as String?;
                                 final lastUpdated = data['lastUpdated'] as Timestamp?;
-                                final isActive = data['active'] as bool? ?? true;
                                 final isCurrentDevice = fcmToken == _currentDeviceToken;
 
                                 return Container(
@@ -394,12 +395,15 @@ class _DevicesScreenState extends State<DevicesScreen> {
                                           children: [
                                             Row(
                                               children: [
-                                                Text(
-                                                  _getPlatformName(platform),
-                                                  style: TextStyle(
-                                                    fontSize: 16.sp,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: textColor,
+                                                Flexible(
+                                                  child: Text(
+                                                    deviceName ?? _getPlatformName(platform),
+                                                    style: TextStyle(
+                                                      fontSize: 16.sp,
+                                                      fontWeight: FontWeight.w600,
+                                                      color: textColor,
+                                                    ),
+                                                    overflow: TextOverflow.ellipsis,
                                                   ),
                                                 ),
                                                 if (isCurrentDevice) ...[
@@ -426,37 +430,15 @@ class _DevicesScreenState extends State<DevicesScreen> {
                                                     ),
                                                   ),
                                                 ],
-                                                if (!isActive) ...[
-                                                  SizedBox(width: 8.w),
-                                                  Container(
-                                                    padding: EdgeInsets.symmetric(
-                                                      horizontal: 8.w,
-                                                      vertical: 2.h,
-                                                    ),
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.grey,
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              4.r),
-                                                    ),
-                                                    child: Text(
-                                                      'Inactive',
-                                                      style: TextStyle(
-                                                        fontSize: 10.sp,
-                                                        fontWeight: FontWeight.w700,
-                                                        color: Colors.white,
-                                                        letterSpacing: 0.5,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
                                               ],
                                             ),
                                             SizedBox(height: 4.h),
                                             Text(
-                                              lastUpdated != null
-                                                  ? 'Last active ${_formatLastUpdated(lastUpdated)}'
-                                                  : 'Last active: Unknown',
+                                              deviceName != null
+                                                  ? '${_getPlatformName(platform)} • ${lastUpdated != null ? 'Last active ${_formatLastUpdated(lastUpdated)}' : 'Last active: Unknown'}'
+                                                  : lastUpdated != null
+                                                      ? 'Last active ${_formatLastUpdated(lastUpdated)}'
+                                                      : 'Last active: Unknown',
                                               style: TextStyle(
                                                 fontSize: 13.sp,
                                                 color: subtitleColor,

@@ -131,6 +131,10 @@ export const triggerReminderNotification = functions.https.onCall(
             body: reminder.description || "Your reminder is due!",
             type: "reminder_notification",
             click_action: "FLUTTER_NOTIFICATION_CLICK",
+            // Icon and color data for custom notification display
+            iconCodePoint: reminder.iconCodePoint?.toString() || "",
+            customIconUrl: reminder.customIconUrl || "",
+            colorValue: reminder.colorValue?.toString() || "",
           };
           message.android = {
             priority: "high" as const,
@@ -152,6 +156,10 @@ export const triggerReminderNotification = functions.https.onCall(
               reminder_title: reminder.name || "Reminder",
               reminder_body: reminder.description || "Your reminder is due!",
               msg_type: "reminder_notification",
+              // Icon and color data for custom notification display
+              icon_code_point: reminder.iconCodePoint?.toString() || "",
+              custom_icon_url: reminder.customIconUrl || "",
+              color_value: reminder.colorValue?.toString() || "",
             },
           };
         }
@@ -385,6 +393,9 @@ export const scheduleReminderOnCreate = functions.firestore
       scheduledTime: scheduledTime,
       reminderName: reminderData.name || "Reminder",
       reminderDescription: reminderData.description || "Your reminder is due!",
+      iconCodePoint: reminderData.iconCodePoint || null,
+      customIconUrl: reminderData.customIconUrl || null,
+      colorValue: reminderData.colorValue || null,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
@@ -718,6 +729,9 @@ export const onReminderUpdated = functions.firestore
             scheduledTime: snoozedTime,
             reminderName: after.name || after.title || "Reminder",
             reminderDescription: after.description || "Your reminder is due!",
+            iconCodePoint: after.iconCodePoint || null,
+            customIconUrl: after.customIconUrl || null,
+            colorValue: after.colorValue || null,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
           });
 
@@ -790,6 +804,9 @@ export const onReminderUpdated = functions.firestore
                 reminderName: after.name || after.title || "Reminder",
                 reminderDescription:
                   after.description || "Your reminder is due!",
+                iconCodePoint: after.iconCodePoint || null,
+                customIconUrl: after.customIconUrl || null,
+                colorValue: after.colorValue || null,
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
               });
             console.log(
@@ -1001,6 +1018,10 @@ export const processPendingNotifications = functions.pubsub
                 body: notification.reminderDescription,
                 type: "reminder_notification",
                 click_action: "FLUTTER_NOTIFICATION_CLICK",
+                // Icon and color data from reminder
+                iconCodePoint: reminderData.iconCodePoint?.toString() || "",
+                customIconUrl: reminderData.customIconUrl || "",
+                colorValue: reminderData.colorValue?.toString() || "",
               },
               android: {
                 priority: "high" as const,
@@ -1029,6 +1050,10 @@ export const processPendingNotifications = functions.pubsub
                   // Include reminderId in payload for access in handlers
                   reminderId: reminderId,
                   type: "reminder_notification",
+                  // Icon and color data for iOS
+                  icon_code_point: reminderData.iconCodePoint?.toString() || "",
+                  custom_icon_url: reminderData.customIconUrl || "",
+                  color_value: reminderData.colorValue?.toString() || "",
                 },
               },
             };
@@ -1162,6 +1187,9 @@ export const processAutoSnooze = functions.pubsub
             reminderDescription: reminder.description || "",
             userId: reminder.userId,
             scheduledTime: admin.firestore.Timestamp.fromDate(newTime),
+            iconCodePoint: reminder.iconCodePoint || null,
+            customIconUrl: reminder.customIconUrl || null,
+            colorValue: reminder.colorValue || null,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
           });
 
