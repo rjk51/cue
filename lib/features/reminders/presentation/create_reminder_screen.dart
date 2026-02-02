@@ -23,14 +23,15 @@ import 'widgets/sticky_save_button.dart';
 
 class NewReminderScreen extends StatefulWidget {
   final Reminder? reminderToEdit;
+  final bool openedForVoice;
 
-  const NewReminderScreen({super.key, this.reminderToEdit});
+  const NewReminderScreen({super.key, this.reminderToEdit, this.openedForVoice = false});
 
   @override
   State<NewReminderScreen> createState() => _NewReminderScreenState();
 }
 
-class _NewReminderScreenState extends State<NewReminderScreen> {
+class _NewReminderScreenState extends State<NewReminderScreen> with SingleTickerProviderStateMixin {
   final ThemeService _themeService = ThemeService();
   final ReminderService _reminderService = ReminderService();
   final NotificationService _notificationService = NotificationService();
@@ -43,6 +44,9 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
   bool _isSaving = false;
   bool _isRecording = false;
   bool _isProcessingVoice = false;
+  bool _showVoiceHint = false;
+  late AnimationController _glowController;
+  late Animation<double> _glowAnimation;
 
   // Reminder fields
   DateTime _selectedDate = DateTime.now();
@@ -97,6 +101,28 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
     _reminderController.addListener(() {
       if (mounted) setState(() {});
     });
+
+    // Initialize glow animation
+    _glowController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+    _glowAnimation = Tween<double>(begin: 0.3, end: 1.0).animate(
+      CurvedAnimation(parent: _glowController, curve: Curves.easeInOut),
+    );
+    
+    // Show voice hint if opened for voice
+    if (widget.openedForVoice) {
+      _showVoiceHint = true;
+      _glowController.repeat(reverse: true);
+      // Auto-hide hint after 5 seconds
+      Future.delayed(const Duration(seconds: 5), () {
+        if (mounted) {
+          setState(() => _showVoiceHint = false);
+          _glowController.stop();
+        }
+      });
+    }
 
     // If editing, pre-fill fields
     if (widget.reminderToEdit != null) {
@@ -284,6 +310,7 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
   void dispose() {
     ThemeNotifier.instance.removeListener(_onThemeChanged);
     _reminderController.dispose();
+    _glowController.dispose();
     super.dispose();
   }
 
@@ -950,7 +977,9 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
       await _whisperService.startRecording();
       setState(() {
         _isRecording = true;
+        _showVoiceHint = false;
       });
+      _glowController.stop();
     } catch (e) {
       if (mounted) {
         context.showErrorSnackbar('Failed to start recording: $e');
@@ -1084,6 +1113,61 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
 
                     SizedBox(height: 32.h),
 
+                    // Voice hint banner
+                    if (_showVoiceHint)
+                      Container(
+                        margin: EdgeInsets.only(bottom: 16.h),
+                        padding: EdgeInsets.all(16.r),
+                        decoration: BoxDecoration(
+                          color: _accentColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(16.r),
+                          border: Border.all(
+                            color: _accentColor.withOpacity(0.3),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.mic,
+                              color: _accentColor,
+                              size: 20.sp,
+                            ),
+                            SizedBox(width: 12.w),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Try Voice Input!',
+                                    style: TextStyle(
+                                      color: _accentColor,
+                                      fontSize: 14.sp,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  SizedBox(height: 4.h),
+                                  Text(
+                                    'Tap the mic and say: "Remind me to call John at 3pm"',
+                                    style: TextStyle(
+                                      color: subtitleColor,
+                                      fontSize: 12.sp,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: Icon(Icons.close, color: subtitleColor, size: 18.sp),
+                              onPressed: () {
+                                setState(() => _showVoiceHint = false);
+                                _glowController.stop();
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+
                     // Main container for all controls
                     Container(
                       decoration: BoxDecoration(
@@ -1123,35 +1207,51 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
                                   ),
                                 ),
                                 SizedBox(width: 12.w),
-                                // Mic Button
-                                GestureDetector(
-                                  onTap: _isProcessingVoice ? null : _toggleVoiceRecording,
-                                  child: Container(
-                                    width: 44.w,
-                                    height: 44.h,
-                                    decoration: BoxDecoration(
-                                      color: _isRecording
-                                          ? _accentColor.withOpacity(0.2)
-                                          : inputBgColor,
-                                      shape: BoxShape.circle,
-                                      border: _isRecording
-                                          ? Border.all(color: _accentColor, width: 2)
-                                          : null,
-                                    ),
-                                    child: _isProcessingVoice
-                                        ? Padding(
-                                            padding: EdgeInsets.all(12.r),
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              valueColor: AlwaysStoppedAnimation(_accentColor),
-                                            ),
-                                          )
-                                        : Icon(
-                                            _isRecording ? Icons.stop : Icons.mic,
-                                            color: _isRecording ? _accentColor : textColor,
-                                            size: 22.sp,
-                                          ),
-                                  ),
+                                // Mic Button with glow
+                                AnimatedBuilder(
+                                  animation: _glowAnimation,
+                                  builder: (context, child) {
+                                    return GestureDetector(
+                                      onTap: _isProcessingVoice ? null : _toggleVoiceRecording,
+                                      child: Container(
+                                        width: 44.w,
+                                        height: 44.h,
+                                        decoration: BoxDecoration(
+                                          color: _isRecording
+                                              ? _accentColor.withOpacity(0.2)
+                                              : inputBgColor,
+                                          shape: BoxShape.circle,
+                                          border: _isRecording
+                                              ? Border.all(color: _accentColor, width: 2)
+                                              : null,
+                                          boxShadow: _showVoiceHint && !_isRecording
+                                              ? [
+                                                  BoxShadow(
+                                                    color: _accentColor.withOpacity(_glowAnimation.value * 0.5),
+                                                    blurRadius: 12 * _glowAnimation.value,
+                                                    spreadRadius: 2 * _glowAnimation.value,
+                                                  ),
+                                                ]
+                                              : null,
+                                        ),
+                                        child: _isProcessingVoice
+                                            ? Padding(
+                                                padding: EdgeInsets.all(12.r),
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  valueColor: AlwaysStoppedAnimation(_accentColor),
+                                                ),
+                                              )
+                                            : Icon(
+                                                _isRecording ? Icons.stop : Icons.mic,
+                                                color: _isRecording
+                                                    ? _accentColor
+                                                    : (_showVoiceHint ? _accentColor : textColor),
+                                                size: 22.sp,
+                                              ),
+                                      ),
+                                    );
+                                  },
                                 ),
                               ],
                             ),

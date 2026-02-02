@@ -100,7 +100,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void _navigateToVoiceReminder() async {
     final result = await Navigator.push<Reminder>(
       context,
-      MaterialPageRoute(builder: (context) => const NewReminderScreen()),
+      MaterialPageRoute(builder: (context) => const NewReminderScreen(openedForVoice: true)),
     );
 
     if (result != null && mounted) {
