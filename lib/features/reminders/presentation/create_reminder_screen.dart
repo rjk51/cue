@@ -5,6 +5,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
 import 'package:flex_color_picker/flex_color_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:io';
 
 import '../domain/recurrence_rule.dart';
 import '../domain/reminder_model.dart';
@@ -15,6 +16,8 @@ import '../../../services/theme_notifier.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
 import '../../../shared/widgets/cupertino_pickers.dart';
 import '../../../shared/widgets/edit_recurring_dialog.dart';
+import '../../../services/whisper_speech_service.dart';
+import '../../../services/chatgpt_service.dart';
 import 'widgets/icon_picker_sheet.dart';
 import 'widgets/sticky_save_button.dart';
 
@@ -32,10 +35,14 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
   final ReminderService _reminderService = ReminderService();
   final NotificationService _notificationService = NotificationService();
   final TextEditingController _reminderController = TextEditingController();
+  final WhisperSpeechService _whisperService = WhisperSpeechService.instance;
+  final ChatGPTService _chatGPTService = ChatGPTService.instance;
 
   Color _accentColor = const Color(0xFFFFB4A3);
   bool _isDarkMode = false;
   bool _isSaving = false;
+  bool _isRecording = false;
+  bool _isProcessingVoice = false;
 
   // Reminder fields
   DateTime _selectedDate = DateTime.now();
@@ -930,6 +937,87 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
     }
   }
 
+  Future<void> _toggleVoiceRecording() async {
+    if (_isRecording) {
+      await _stopVoiceRecording();
+    } else {
+      await _startVoiceRecording();
+    }
+  }
+
+  Future<void> _startVoiceRecording() async {
+    try {
+      await _whisperService.startRecording();
+      setState(() {
+        _isRecording = true;
+      });
+    } catch (e) {
+      if (mounted) {
+        context.showErrorSnackbar('Failed to start recording: $e');
+      }
+    }
+  }
+
+  Future<void> _stopVoiceRecording() async {
+    try {
+      setState(() {
+        _isRecording = false;
+        _isProcessingVoice = true;
+      });
+
+      final File? audioFile = await _whisperService.stopRecording();
+
+      if (audioFile == null) {
+        setState(() => _isProcessingVoice = false);
+        if (mounted) {
+          context.showWarningSnackbar('Recording too short');
+        }
+        return;
+      }
+
+      final transcription = await _whisperService.transcribeWithWhisper(audioFile);
+
+      if (transcription == null || transcription.isEmpty) {
+        setState(() => _isProcessingVoice = false);
+        if (mounted) {
+          context.showWarningSnackbar('Could not understand speech');
+        }
+        return;
+      }
+
+      final parseResult = await _chatGPTService.parseReminderFromVoice(transcription);
+
+      if (parseResult == null) {
+        setState(() => _isProcessingVoice = false);
+        if (mounted) {
+          context.showWarningSnackbar('Could not parse reminder');
+        }
+        return;
+      }
+
+      // Fill in the fields
+      setState(() {
+        _reminderController.text = parseResult.reminderText;
+        _selectedDate = DateTime(
+          parseResult.scheduledTime.year,
+          parseResult.scheduledTime.month,
+          parseResult.scheduledTime.day,
+        );
+        _selectedTime = TimeOfDay.fromDateTime(parseResult.scheduledTime);
+        _isProcessingVoice = false;
+      });
+
+      if (mounted) {
+        context.showSuccessSnackbar('Voice input processed!');
+      }
+    } catch (e) {
+      setState(() => _isProcessingVoice = false);
+      if (mounted) {
+        context.showErrorSnackbar('Error: $e');
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // Match home screen colors
@@ -1005,30 +1093,67 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Reminder Name
+                          // Reminder Name with Mic Button
                           Padding(
                             padding: EdgeInsets.all(16.r),
-                            child: TextField(
-                              cursorColor: _accentColor,
-                              controller: _reminderController,
-                              style: TextStyle(
-                                color: textColor,
-                                fontSize: 24.sp,
-                              ),
-                              decoration: InputDecoration(
-                                hintText: 'What needs your attention?',
-                                hintStyle: TextStyle(
-                                  color: subtitleColor.withOpacity(0.5),
-                                  fontSize: 24.sp,
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    cursorColor: _accentColor,
+                                    controller: _reminderController,
+                                    style: TextStyle(
+                                      color: textColor,
+                                      fontSize: 24.sp,
+                                    ),
+                                    decoration: InputDecoration(
+                                      hintText: 'What needs your attention?',
+                                      hintStyle: TextStyle(
+                                        color: subtitleColor.withOpacity(0.5),
+                                        fontSize: 24.sp,
+                                      ),
+                                      border: InputBorder.none,
+                                      contentPadding: EdgeInsets.zero,
+                                    ),
+                                    onChanged: (_) {
+                                      setState(
+                                        () {},
+                                      );
+                                    },
+                                  ),
                                 ),
-                                border: InputBorder.none,
-                                contentPadding: EdgeInsets.zero,
-                              ),
-                              onChanged: (_) {
-                                setState(
-                                  () {},
-                                ); // Trigger rebuild to check for changes
-                              },
+                                SizedBox(width: 12.w),
+                                // Mic Button
+                                GestureDetector(
+                                  onTap: _isProcessingVoice ? null : _toggleVoiceRecording,
+                                  child: Container(
+                                    width: 44.w,
+                                    height: 44.h,
+                                    decoration: BoxDecoration(
+                                      color: _isRecording
+                                          ? _accentColor.withOpacity(0.2)
+                                          : inputBgColor,
+                                      shape: BoxShape.circle,
+                                      border: _isRecording
+                                          ? Border.all(color: _accentColor, width: 2)
+                                          : null,
+                                    ),
+                                    child: _isProcessingVoice
+                                        ? Padding(
+                                            padding: EdgeInsets.all(12.r),
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor: AlwaysStoppedAnimation(_accentColor),
+                                            ),
+                                          )
+                                        : Icon(
+                                            _isRecording ? Icons.stop : Icons.mic,
+                                            color: _isRecording ? _accentColor : textColor,
+                                            size: 22.sp,
+                                          ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
 

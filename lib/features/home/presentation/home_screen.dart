@@ -8,7 +8,6 @@ import '../../reminders/data/reminder_service.dart';
 import '../../reminders/presentation/create_reminder_screen.dart';
 import '../../reminders/presentation/reminder_list_screen.dart';
 import '../../reminders/presentation/reminder_details_screen.dart';
-import '../../voice_reminder/presentation/voice_reminder_screen.dart';
 import '../../../services/theme_service.dart';
 import '../../../services/theme_notifier.dart';
 import '../../../services/device_monitor_service.dart';
@@ -101,11 +100,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void _navigateToVoiceReminder() async {
     final result = await Navigator.push<Reminder>(
       context,
-      MaterialPageRoute(builder: (context) => const VoiceReminderScreen()),
+      MaterialPageRoute(builder: (context) => const NewReminderScreen()),
     );
 
     if (result != null && mounted) {
-      context.showSuccessSnackbar('Voice reminder created successfully!');
+      context.showSuccessSnackbar('Reminder created successfully!');
     }
   }
 
