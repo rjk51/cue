@@ -8,11 +8,13 @@ import '../../reminders/data/reminder_service.dart';
 import '../../reminders/presentation/create_reminder_screen.dart';
 import '../../reminders/presentation/reminder_list_screen.dart';
 import '../../reminders/presentation/reminder_details_screen.dart';
+import '../../voice_reminder/presentation/voice_reminder_screen.dart';
 import '../../../services/theme_service.dart';
 import '../../../services/theme_notifier.dart';
 import '../../../services/device_monitor_service.dart';
 import '../../../services/widget_service.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
+import '../../../shared/widgets/expandable_fab.dart';
 import 'widgets/current_cue_card.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -93,6 +95,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     if (result != null && mounted) {
       context.showSuccessSnackbar('Reminder created successfully!');
+    }
+  }
+
+  void _navigateToVoiceReminder() async {
+    final result = await Navigator.push<Reminder>(
+      context,
+      MaterialPageRoute(builder: (context) => const VoiceReminderScreen()),
+    );
+
+    if (result != null && mounted) {
+      context.showSuccessSnackbar('Voice reminder created successfully!');
     }
   }
 
@@ -575,6 +588,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                         subtitleColor,
                                       ),
                                     ),
+                                    
+                                    // Bottom padding to prevent FAB overlap
+                                    SizedBox(height: 120.h),
                                   ],
                                 ),
                               ),
@@ -623,32 +639,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
           ),
 
-          // FAB positioned in Stack to avoid layout constraints
+          // Expandable FAB positioned in Stack
           Positioned(
-            right: 34.w,
-            bottom: MediaQuery.of(context).padding.bottom + 30.h,
-            child: Container(
-              width: 64.w,
-              height: 64.h,
-              decoration: BoxDecoration(
-                color: _accentColor,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: _accentColor.withOpacity(0.4),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: _navigateToCreateReminder,
-                  customBorder: const CircleBorder(),
-                  child: Icon(Icons.add, color: Colors.white, size: 28.sp),
-                ),
-              ),
+            right: 16.w,
+            bottom: MediaQuery.of(context).padding.bottom + 24.h,
+            child: ExpandableFab(
+              accentColor: _accentColor,
+              onTextReminderTap: _navigateToCreateReminder,
+              onVoiceReminderTap: _navigateToVoiceReminder,
             ),
           ),
         ],

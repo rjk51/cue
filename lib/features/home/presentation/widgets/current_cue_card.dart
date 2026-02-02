@@ -143,7 +143,7 @@ class _CurrentCueCardState extends State<CurrentCueCard>
       },
       child: Container(
         width: double.infinity,
-        padding: EdgeInsets.all(42.r),
+        padding: EdgeInsets.all(29.r),
         decoration: BoxDecoration(
           color: widget.cardColor,
           borderRadius: BorderRadius.circular(28.r),
