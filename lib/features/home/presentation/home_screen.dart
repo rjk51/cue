@@ -13,9 +13,11 @@ import '../../../services/theme_service.dart';
 import '../../../services/theme_notifier.dart';
 import '../../../services/device_monitor_service.dart';
 import '../../../services/widget_service.dart';
+import '../../../services/tutorial_service.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
 import '../../../shared/widgets/confirmation_dialog.dart';
 import '../../../shared/widgets/delete_recurring_dialog.dart';
+import '../../../shared/widgets/tutorial_overlay.dart';
 import 'widgets/current_cue_card.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -30,14 +32,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   final ThemeService _themeService = ThemeService();
   final DeviceMonitorService _deviceMonitor = DeviceMonitorService();
   final WidgetService _widgetService = WidgetService();
+  final TutorialService _tutorialService = TutorialService();
 
   Color _accentColor = const Color(0xFF2D7A78); // Default teal
   bool _isDarkMode = false;
+
+  // Tutorial state
+  bool _showFabTutorial = false;
+  bool _showCueCardTutorial = false;
+  bool _hasShownCueCardTutorial = false;
+  int _cueCardTutorialStep =
+      0; // 0: highlight card, 1: snooze, 2: done, 3: notes, 4: flip
+  final GlobalKey _fabKey = GlobalKey();
+  final GlobalKey _cueCardKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
     _loadThemeSettings();
+    _checkTutorialState();
     // Listen for theme changes
     ThemeNotifier.instance.addListener(_onThemeChanged);
 
@@ -80,6 +93,125 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           _isDarkMode = themePreference == 'dark';
         }
       });
+    }
+  }
+
+  Future<void> _checkTutorialState() async {
+    // Show FAB tutorial only once based on stored flag
+    final shouldShowFab = await _tutorialService.shouldShowFabTutorial();
+
+    if (mounted && shouldShowFab) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (mounted) {
+        setState(() {
+          _showFabTutorial = true;
+        });
+      }
+    }
+  }
+
+  void _onFabTutorialNext() {
+    setState(() {
+      _showFabTutorial = false;
+    });
+    _tutorialService.markTutorialShown(TutorialService.homeFabShownKey);
+  }
+
+  void _onFabTutorialSkip() {
+    setState(() {
+      _showFabTutorial = false;
+    });
+    _tutorialService.completeTutorial();
+  }
+
+  void _checkCueCardTutorial(bool isCueCardPresent) {
+    // Only show cue card tutorial once per user when a cue card is visible
+    if (!isCueCardPresent || _showCueCardTutorial || _hasShownCueCardTutorial) {
+      return;
+    }
+
+    // Avoid showing while FAB tutorial is on screen
+    if (_showFabTutorial) return;
+
+    _tutorialService.shouldShowCueCardTutorial().then((shouldShow) {
+      if (!mounted ||
+          !shouldShow ||
+          _showCueCardTutorial ||
+          _hasShownCueCardTutorial) {
+        return;
+      }
+
+      Future.delayed(const Duration(milliseconds: 800), () {
+        if (mounted && !_showFabTutorial && !_showCueCardTutorial) {
+          setState(() {
+            _showCueCardTutorial = true;
+            _cueCardTutorialStep = 0;
+            _hasShownCueCardTutorial = true;
+          });
+        }
+      });
+    });
+  }
+
+  void _onCueCardTutorialNext() {
+    if (_cueCardTutorialStep < 4) {
+      setState(() {
+        _cueCardTutorialStep++;
+      });
+    } else {
+      setState(() {
+        _showCueCardTutorial = false;
+        _cueCardTutorialStep = 0;
+      });
+      _tutorialService.markMultipleTutorialsShown([
+        TutorialService.homeCueCardShownKey,
+        TutorialService.homeSnoozeShownKey,
+        TutorialService.homeDoneShownKey,
+        TutorialService.homeNotesShownKey,
+        TutorialService.homeFlipShownKey,
+      ]);
+    }
+  }
+
+  void _onCueCardTutorialSkip() {
+    setState(() {
+      _showCueCardTutorial = false;
+      _cueCardTutorialStep = 0;
+    });
+    _tutorialService.completeTutorial();
+  }
+
+  String _getCueCardTutorialTitle() {
+    switch (_cueCardTutorialStep) {
+      case 0:
+        return 'Your Current Cue';
+      case 1:
+        return 'Snooze';
+      case 2:
+        return 'Mark as Done';
+      case 3:
+        return 'Add Notes';
+      case 4:
+        return 'Flip for More';
+      default:
+        return '';
+    }
+  }
+
+  String _getCueCardTutorialDescription() {
+    switch (_cueCardTutorialStep) {
+      case 0:
+        return 'This is your current or next reminder. It shows what you need to focus on right now.';
+      case 1:
+        return 'Swipe left to snooze this reminder for a few minutes when you need more time.';
+      case 2:
+        return 'Swipe right to mark this reminder as completed. Great job staying on track!';
+      case 3:
+        return 'Tap inside the card to add notes or additional details about this reminder.';
+      case 4:
+        return 'Flip the card to see more options like editing or deleting this reminder.';
+      default:
+        return '';
     }
   }
 
@@ -394,6 +526,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ? upcomingReminders.first['reminder'] as Reminder
                     : null;
 
+                // Check tutorial for cue card (new logic)
+                _checkCueCardTutorial(currentReminder != null);
+
                 final currentOccurrenceTime = upcomingReminders.isNotEmpty
                     ? upcomingReminders.first['occurrenceTime'] as DateTime?
                     : null;
@@ -463,22 +598,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                 children: [
                                   // Current/Next Cue Card
                                   if (currentReminder != null)
-                                    CurrentCueCard(
-                                      reminder: currentReminder,
-                                      occurrenceTime: currentOccurrenceTime,
-                                      accentColor: _accentColor,
-                                      isDarkMode: _isDarkMode,
-                                      cardColor: cardColor,
-                                      textColor: textColor,
-                                      subtitleColor: subtitleColor,
-                                      onMarkCompleted: (reminderId) =>
-                                          _markAsCompleted(
-                                            reminderId,
-                                            occurrenceTime:
-                                                currentOccurrenceTime,
-                                          ),
-                                      getTimeDisplayText: _getTimeDisplayText,
-                                      isCurrentCue: _isCurrentCue,
+                                    Container(
+                                      key: _cueCardKey,
+                                      child: CurrentCueCard(
+                                        reminder: currentReminder,
+                                        occurrenceTime: currentOccurrenceTime,
+                                        accentColor: _accentColor,
+                                        isDarkMode: _isDarkMode,
+                                        cardColor: cardColor,
+                                        textColor: textColor,
+                                        subtitleColor: subtitleColor,
+                                        onMarkCompleted: (reminderId) =>
+                                            _markAsCompleted(
+                                              reminderId,
+                                              occurrenceTime:
+                                                  currentOccurrenceTime,
+                                            ),
+                                        getTimeDisplayText: _getTimeDisplayText,
+                                        isCurrentCue: _isCurrentCue,
+                                      ),
                                     )
                                   else
                                     _buildEmptyCueCard(
@@ -549,16 +687,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                   children: [
                                     // Current/Next Cue Card
                                     if (currentReminder != null)
-                                      CurrentCueCard(
-                                        reminder: currentReminder,
-                                        accentColor: _accentColor,
-                                        isDarkMode: _isDarkMode,
-                                        cardColor: cardColor,
-                                        textColor: textColor,
-                                        subtitleColor: subtitleColor,
-                                        onMarkCompleted: _markAsCompleted,
-                                        getTimeDisplayText: _getTimeDisplayText,
-                                        isCurrentCue: _isCurrentCue,
+                                      Container(
+                                        key: _cueCardKey,
+                                        child: CurrentCueCard(
+                                          reminder: currentReminder,
+                                          accentColor: _accentColor,
+                                          isDarkMode: _isDarkMode,
+                                          cardColor: cardColor,
+                                          textColor: textColor,
+                                          subtitleColor: subtitleColor,
+                                          onMarkCompleted: _markAsCompleted,
+                                          getTimeDisplayText:
+                                              _getTimeDisplayText,
+                                          isCurrentCue: _isCurrentCue,
+                                        ),
                                       )
                                     else
                                       _buildEmptyCueCard(
@@ -614,12 +756,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 customBorder: const CircleBorder(),
                 child: Container(
                   padding: EdgeInsets.all(8.r),
-                  child: Icon(
-                    Icons.settings_outlined,
-                    color: _isDarkMode
-                        ? Colors.white.withOpacity(0.8)
-                        : const Color(0xFF8A8A8A),
-                    size: 24.sp,
+                  child: Image.asset(
+                    'assets/settings.png',
+                    width: 28.w,
+                    height: 28.h,
+                    fit: BoxFit.cover,
                   ),
                 ),
               ),
@@ -631,6 +772,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             right: 34.w,
             bottom: MediaQuery.of(context).padding.bottom + 30.h,
             child: Container(
+              key: _fabKey,
               width: 64.w,
               height: 64.h,
               decoration: BoxDecoration(
@@ -654,6 +796,36 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
             ),
           ),
+
+          // Tutorial overlays
+          if (_showFabTutorial)
+            TutorialOverlay(
+              targetKey: _fabKey,
+              title: 'Create Your First Reminder',
+              description:
+                  'Tap the + button to create your first reminder. You can set a time, add notes, and customize it however you like!',
+              onSkip: _onFabTutorialSkip,
+              onNext: _onFabTutorialNext,
+              isLastStep: true,
+              accentColor: _accentColor,
+              isDarkMode: _isDarkMode,
+              highlightPadding: EdgeInsets.all(12.w),
+            ),
+
+          if (_showCueCardTutorial &&
+              // removed check for _cueCardKey.currentContext != null since we check mounted in TutorialOverlay
+              _cueCardKey.currentContext != null)
+            TutorialOverlay(
+              targetKey: _cueCardKey,
+              title: _getCueCardTutorialTitle(),
+              description: _getCueCardTutorialDescription(),
+              onSkip: _onCueCardTutorialSkip,
+              onNext: _onCueCardTutorialNext,
+              isLastStep: _cueCardTutorialStep == 4,
+              accentColor: _accentColor,
+              isDarkMode: _isDarkMode,
+              highlightPadding: EdgeInsets.all(16.w),
+            ),
         ],
       ),
       // bottomNavigationBar: Padding(

@@ -270,14 +270,10 @@ class _CurrentCueCardState extends State<CurrentCueCard>
                         // Time info (below title) — scheduled time only
                         Row(
                           children: [
-                            Icon(
-                              timeText.contains('ago')
-                                  ? Icons.schedule_rounded
-                                  : Icons.access_time_filled,
-                              size: 18.sp,
-                              color: timeText.contains('ago')
-                                  ? const Color(0xFFFFC107)
-                                  : widget.subtitleColor,
+                            Image.asset(
+                              'assets/clock.png',
+                              width: 28.w,
+                              height: 28.h,
                             ),
                             SizedBox(width: 6.w),
                             Text(
