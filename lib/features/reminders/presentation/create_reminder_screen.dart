@@ -1007,19 +1007,20 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
                         children: [
                           // Reminder Name
                           Padding(
-                            padding: EdgeInsets.all(16.r),
+                            padding: EdgeInsets.all(10.r),
                             child: TextField(
                               cursorColor: _accentColor,
                               controller: _reminderController,
                               style: TextStyle(
                                 color: textColor,
-                                fontSize: 24.sp,
+                                fontSize: 20.sp,
                               ),
                               decoration: InputDecoration(
                                 hintText: 'What needs your attention?',
                                 hintStyle: TextStyle(
                                   color: subtitleColor.withOpacity(0.5),
-                                  fontSize: 24.sp,
+                                  fontStyle: FontStyle.italic,
+                                  fontSize: 20.sp,
                                 ),
                                 border: InputBorder.none,
                                 contentPadding: EdgeInsets.zero,

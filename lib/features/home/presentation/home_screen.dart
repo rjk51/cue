@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flip_card/flip_card.dart';
 import '../../reminders/domain/reminder_model.dart';
 import '../../reminders/data/reminder_service.dart';
 import '../../reminders/presentation/create_reminder_screen.dart';
@@ -13,6 +14,8 @@ import '../../../services/theme_notifier.dart';
 import '../../../services/device_monitor_service.dart';
 import '../../../services/widget_service.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
+import '../../../shared/widgets/confirmation_dialog.dart';
+import '../../../shared/widgets/delete_recurring_dialog.dart';
 import 'widgets/current_cue_card.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -526,7 +529,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                               ),
                             )
                           else ...[
-                            SizedBox(height: 32.h),
+                            SizedBox(height: 22.h),
 
                             // Today's Reminders Count Section
                             _buildRemindersToday(
@@ -792,7 +795,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           child: upcomingReminders.isEmpty
               ? Center(
                   child: Text(
-                    'No more reminders scheduled',
+                    'That\'s everything for today',
                     style: TextStyle(fontSize: 14.sp, color: subtitleColor),
                   ),
                 )
@@ -830,117 +833,175 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final timeOnly = DateFormat('hh:mm').format(displayTime);
     final amPm = DateFormat('a').format(displayTime);
 
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ReminderDetailsScreen(reminder: reminder),
-          ),
-        );
-      },
-      child: Container(
-        width: 180.w,
-        padding: EdgeInsets.all(20.r),
-        decoration: BoxDecoration(
-          color: cardColor,
-          borderRadius: BorderRadius.circular(20.r),
-          border: Border.all(
-            color: reminder.color.withOpacity(0.2),
-            width: 1.5,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(_isDarkMode ? 0.2 : 0.05),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            // Title and Icon row
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Reminder name
-                Expanded(
-                  child: Text(
-                    reminder.name,
-                    style: TextStyle(
-                      fontSize: 17.sp,
-                      fontWeight: FontWeight.w600,
-                      color: textColor,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                SizedBox(width: 8.w),
-                // Icon on the right
-                Container(
-                  width: 32.w,
-                  height: 32.h,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: reminder.color.withOpacity(0.15),
-                  ),
-                  child: reminder.customIconUrl != null
-                      ? ClipOval(
-                          child: Image.network(
-                            reminder.customIconUrl!,
-                            width: 32.w,
-                            height: 32.h,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Icon(
-                                reminder.icon,
-                                color: reminder.color,
-                                size: 20.sp,
-                              );
-                            },
-                          ),
-                        )
-                      : Icon(
-                          reminder.icon,
-                          color: reminder.color,
-                          size: 20.sp,
-                        ),
-                ),
-              ],
-            ),
+    final flipKey = GlobalKey<FlipCardState>();
 
-            // Time with AM/PM
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  timeOnly,
-                  style: TextStyle(
-                    fontSize: 18.sp,
-                    fontWeight: FontWeight.w600,
-                    color: textColor,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                SizedBox(width: 4.w),
-                Padding(
-                  padding: EdgeInsets.only(bottom: 2.h),
-                  child: Text(
-                    amPm,
-                    style: TextStyle(
-                      fontSize: 11.sp,
-                      fontWeight: FontWeight.w500,
-                      color: subtitleColor,
-                    ),
-                  ),
+    return GestureDetector(
+      onHorizontalDragEnd: (details) {
+        if (details.primaryVelocity != null) {
+          if (details.primaryVelocity!.abs() > 300) {
+            flipKey.currentState?.toggleCard();
+          }
+        }
+      },
+      child: FlipCard(
+        key: flipKey,
+        fill: Fill.fillBack,
+        direction: FlipDirection.HORIZONTAL,
+        flipOnTouch: false,
+        front: GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ReminderDetailsScreen(reminder: reminder),
+              ),
+            );
+          },
+          child: Container(
+            width: 180.w,
+            padding: EdgeInsets.all(20.r),
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(20.r),
+              border: Border.all(
+                color: reminder.color.withOpacity(0.2),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(_isDarkMode ? 0.2 : 0.05),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
-          ],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Title and Icon row
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Reminder name
+                    Expanded(
+                      child: Text(
+                        reminder.name,
+                        style: TextStyle(
+                          fontSize: 17.sp,
+                          fontWeight: FontWeight.w600,
+                          color: textColor,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    SizedBox(width: 8.w),
+                    // Icon on the right
+                    Container(
+                      width: 32.w,
+                      height: 32.h,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: reminder.color.withOpacity(0.15),
+                      ),
+                      child: reminder.customIconUrl != null
+                          ? ClipOval(
+                              child: Image.network(
+                                reminder.customIconUrl!,
+                                width: 32.w,
+                                height: 32.h,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Icon(
+                                    reminder.icon,
+                                    color: reminder.color,
+                                    size: 20.sp,
+                                  );
+                                },
+                              ),
+                            )
+                          : Icon(
+                              reminder.icon,
+                              color: reminder.color,
+                              size: 20.sp,
+                            ),
+                    ),
+                  ],
+                ),
+
+                // Time with AM/PM
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      timeOnly,
+                      style: TextStyle(
+                        fontSize: 18.sp,
+                        fontWeight: FontWeight.w600,
+                        color: textColor,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    SizedBox(width: 4.w),
+                    Padding(
+                      padding: EdgeInsets.only(bottom: 2.h),
+                      child: Text(
+                        amPm,
+                        style: TextStyle(
+                          fontSize: 11.sp,
+                          fontWeight: FontWeight.w500,
+                          color: subtitleColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        back: Container(
+          width: 180.w,
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(32.r),
+            border: Border.all(
+              color: reminder.color.withOpacity(0.2),
+              width: 1.5,
+            ),
+          ),
+          padding: EdgeInsets.all(8.w),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Edit button
+              _buildSmallActionButton(
+                icon: Icons.edit_rounded,
+                label: 'EDIT',
+                color: _accentColor,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          NewReminderScreen(reminderToEdit: reminder),
+                    ),
+                  );
+                },
+              ),
+              SizedBox(width: 8.w),
+              // Delete button
+              _buildSmallActionButton(
+                icon: Icons.delete_rounded,
+                label: 'DELETE',
+                color: Colors.red.shade400,
+                onTap: () => _handleUpcomingCardDelete(reminder),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -957,6 +1018,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       ..sort((a, b) => a.time.compareTo(b.time));
     final displayReminders = sortedReminders.take(3).toList();
 
+    // Contextual message based on reminder count
+    String contextualMessage;
+    if (count <= 2) {
+      contextualMessage = 'Take it slow today.';
+    } else if (count <= 4) {
+      contextualMessage = 'Almost done for today.';
+    } else {
+      contextualMessage = 'You\'ve got this!';
+    }
+
     return Center(
       child: Column(
         children: [
@@ -966,6 +1037,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               fontSize: 16.sp,
               fontWeight: FontWeight.w500,
               color: subtitleColor,
+            ),
+          ),
+          SizedBox(height: 6.h),
+          Text(
+            contextualMessage,
+            style: TextStyle(
+              fontSize: 13.sp,
+              fontWeight: FontWeight.w400,
+              color: subtitleColor.withOpacity(0.7),
+              fontStyle: FontStyle.italic,
             ),
           ),
           if (displayReminders.isNotEmpty) ...[
@@ -997,6 +1078,137 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         shape: BoxShape.circle,
       ),
       child: Icon(icon, color: color, size: 22.sp),
+    );
+  }
+
+  // Helper method for small action buttons on upcoming cards back side
+  Widget _buildSmallActionButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 70.w,
+        padding: EdgeInsets.symmetric(vertical: 8.h),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(16.r),
+          border: Border.all(color: color.withOpacity(0.2), width: 1.5),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 36.w,
+              height: 36.h,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 18.sp),
+            ),
+            SizedBox(height: 6.h),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10.sp,
+                fontWeight: FontWeight.w600,
+                color: color,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Handle delete action for upcoming cards
+  Future<void> _handleUpcomingCardDelete(Reminder reminder) async {
+    final reminderService = ReminderService();
+
+    // For recurring reminders, show dialog to choose between skipping occurrence or deleting series
+    if (reminder.recurrence != null) {
+      final deleteOption = await DeleteRecurringDialog.show(
+        context: context,
+        reminderName: reminder.name,
+        accentColor: _accentColor,
+        isDarkMode: _isDarkMode,
+      );
+
+      // User cancelled the dialog
+      if (deleteOption == null) {
+        return;
+      }
+
+      if (deleteOption == DeleteRecurringOption.thisOccurrenceOnly) {
+        // Skip this occurrence by creating a skipped override
+        try {
+          final occurrenceDate = reminder.effectiveNextDueAt;
+          final dateKey = DateFormat('yyyy-MM-dd').format(occurrenceDate);
+
+          // Get existing overrides or create new map
+          final existingOverrides = reminder.overrides ?? {};
+          final newOverrides = Map<String, Map<String, dynamic>>.from(
+            existingOverrides,
+          );
+
+          // Create or update override for this date with skipped flag
+          newOverrides[dateKey] = {
+            ...(newOverrides[dateKey] ?? {}),
+            'skipped': true,
+          };
+
+          await reminderService.updateReminder(reminder.id, {
+            'overrides': newOverrides,
+          });
+
+          if (mounted) {
+            context.showSuccessSnackbar('Occurrence skipped');
+          }
+        } catch (e) {
+          if (mounted) {
+            context.showErrorSnackbar('Error skipping occurrence: $e');
+          }
+        }
+        return;
+      }
+      // If wholeSeries, fall through to show confirmation dialog
+    }
+
+    // For non-recurring reminders or when deleting whole series, show confirmation dialog
+    await ConfirmationDialog.show(
+      context: context,
+      title: reminder.recurrence != null
+          ? 'Delete Entire Series'
+          : 'Delete Reminder',
+      message: reminder.recurrence != null
+          ? 'Are you sure you want to permanently delete "${reminder.name}" and all its occurrences? This action cannot be undone.'
+          : 'Are you sure you want to delete "${reminder.name}"? This action cannot be undone.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      accentColor: _accentColor,
+      isDarkMode: _isDarkMode,
+      isDestructive: true,
+      onConfirm: () async {
+        try {
+          await reminderService.deleteReminder(reminder.id);
+          if (mounted) {
+            context.showSuccessSnackbar(
+              reminder.recurrence != null
+                  ? 'Reminder series deleted successfully'
+                  : 'Reminder deleted successfully',
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            context.showErrorSnackbar('Error deleting reminder: $e');
+          }
+        }
+      },
     );
   }
 

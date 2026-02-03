@@ -8,6 +8,7 @@
     <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="com.android.vending.BILLING" />
+    <uses-permission android:name="android.permission.VIBRATE" />
     
     <queries>
         <intent>
@@ -20,6 +21,12 @@
         android:label="cue"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_logo" />
+        <meta-data 
+            android:name="com.google.firebase.messaging.default_notification_color" 
+            android:resource="@color/colorAccent" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
