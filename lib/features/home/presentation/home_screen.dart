@@ -614,13 +614,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 customBorder: const CircleBorder(),
                 child: Container(
                   padding: EdgeInsets.all(8.r),
-                  child: Icon(
-                    Icons.settings_outlined,
-                    color: _isDarkMode
-                        ? Colors.white.withOpacity(0.8)
-                        : const Color(0xFF8A8A8A),
-                    size: 24.sp,
-                  ),
+                  child: Image.asset(
+                    'assets/settings.png',
+                    width: 28.w,
+                    height: 28.h,
+                    fit: BoxFit.cover,
+                  )
                 ),
               ),
             ),
