@@ -1184,13 +1184,17 @@ class _NewReminderScreenState extends State<NewReminderScreen> with SingleTicker
       ),
       body: Stack(
         children: [
-          Expanded(
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: EdgeInsets.all(20.r),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+          SingleChildScrollView(
+            child: Padding(
+              padding: EdgeInsets.only(
+                top: 20.r,
+                left: 20.r,
+                right: 20.r,
+                bottom: 325.r, // Extra padding for the save button
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                     // Dynamic Summary Text
                     RichText(
                       text: TextSpan(
@@ -1271,7 +1275,7 @@ class _NewReminderScreenState extends State<NewReminderScreen> with SingleTicker
                         children: [
                           // Reminder Name with Mic Button
                           Padding(
-                            padding: EdgeInsets.all(16.r),
+                            padding: EdgeInsets.all(12.r),
                             child: Row(
                               children: [
                                 Expanded(
@@ -1286,7 +1290,8 @@ class _NewReminderScreenState extends State<NewReminderScreen> with SingleTicker
                                       hintText: 'What needs your attention?',
                                       hintStyle: TextStyle(
                                         color: subtitleColor.withOpacity(0.5),
-                                        fontSize: 24.sp,
+                                        fontStyle: FontStyle.italic,
+                                        fontSize: 20.sp,
                                       ),
                                       border: InputBorder.none,
                                       contentPadding: EdgeInsets.zero,
@@ -1347,51 +1352,18 @@ class _NewReminderScreenState extends State<NewReminderScreen> with SingleTicker
                                 ),
                               ],
                             ),
-                            children: _buildSummaryTextSpans(textColor),
                           ),
-                        ),
+                          Divider(color: dividerColor, height: 1.h),
 
-                        SizedBox(height: 32.h),
-
-                        // Main container for all controls
-                        Container(
-                          decoration: BoxDecoration(
+                          // Main container for all controls
+                          Container(
+                            decoration: BoxDecoration(
                             color: cardColor,
                             borderRadius: BorderRadius.circular(24.r),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Reminder Name
-                              Padding(
-                                padding: EdgeInsets.all(10.r),
-                                child: TextField(
-                                  cursorColor: _accentColor,
-                                  controller: _reminderController,
-                                  style: TextStyle(
-                                    color: textColor,
-                                    fontSize: 20.sp,
-                                  ),
-                                  decoration: InputDecoration(
-                                    hintText: 'What needs your attention?',
-                                    hintStyle: TextStyle(
-                                      color: subtitleColor.withOpacity(0.5),
-                                      fontStyle: FontStyle.italic,
-                                      fontSize: 20.sp,
-                                    ),
-                                    border: InputBorder.none,
-                                    contentPadding: EdgeInsets.zero,
-                                  ),
-                                  onChanged: (_) {
-                                    setState(
-                                      () {},
-                                    ); // Trigger rebuild to check for changes
-                                  },
-                                ),
-                              ),
-
-                              Divider(color: dividerColor, height: 1.h),
-
                               // Date Selector
                               Padding(
                                 padding: EdgeInsets.all(16.r),
@@ -2183,54 +2155,57 @@ class _NewReminderScreenState extends State<NewReminderScreen> with SingleTicker
                       ],
                     ),
                   ),
-                ),
+                ],
               ),
-              if (widget.reminderToEdit == null || _hasChanges())
-                StickySaveButton(
-                  onPressed: _saveReminder,
-                  onCancel: widget.reminderToEdit != null
-                      ? _resetToInitial
-                      : null,
-                  showCancel: widget.reminderToEdit != null,
-                  isLoading: _isSaving,
+            ),
+          ),
+          if (widget.reminderToEdit == null || _hasChanges())
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: StickySaveButton(
+                onPressed: _saveReminder,
+                onCancel: widget.reminderToEdit != null
+                    ? _resetToInitial
+                    : null,
+                showCancel: widget.reminderToEdit != null,
+                isLoading: _isSaving,
+                accentColor: _accentColor,
+                isDarkMode: _isDarkMode,
+              ),
+            ),
+          // Tutorial overlays
+              if (_showRepeatTutorial && _repeatSwitchKey.currentContext != null)
+                TutorialOverlay(
+                  targetKey: _repeatSwitchKey,
+                  title: 'Repeat Reminders',
+                  description:
+                      'Enable repeat to make this reminder recur daily, weekly, or on a custom schedule. Perfect for habits and regular tasks!',
+                  onSkip: _onRepeatTutorialSkip,
+                  onNext: _onRepeatTutorialNext,
+                  isLastStep: false,
                   accentColor: _accentColor,
                   isDarkMode: _isDarkMode,
+                  highlightPadding: EdgeInsets.all(8.w),
                 ),
-            ],
-          ),
-
-          // Tutorial overlays
-          if (_showRepeatTutorial && _repeatSwitchKey.currentContext != null)
-            TutorialOverlay(
-              targetKey: _repeatSwitchKey,
-              title: 'Repeat Reminders',
-              description:
-                  'Enable repeat to make this reminder recur daily, weekly, or on a custom schedule. Perfect for habits and regular tasks!',
-              onSkip: _onRepeatTutorialSkip,
-              onNext: _onRepeatTutorialNext,
-              isLastStep: false,
-              accentColor: _accentColor,
-              isDarkMode: _isDarkMode,
-              highlightPadding: EdgeInsets.all(8.w),
-            ),
-
           if (_showAutoSnoozeTutorial &&
               _autoSnoozeSwitchKey.currentContext != null)
             TutorialOverlay(
-              targetKey: _autoSnoozeSwitchKey,
-              title: 'Auto-Snooze',
-              description:
-                  'Enable auto-snooze to automatically remind you again if you don\'t respond to a notification. Great for important tasks!',
-              onSkip: _onAutoSnoozeTutorialSkip,
-              onNext: _onAutoSnoozeTutorialNext,
-              isLastStep: true,
-              accentColor: _accentColor,
-              isDarkMode: _isDarkMode,
-              highlightPadding: EdgeInsets.all(8.w),
-            ),
-        ],
-      ),
-    );
+                  targetKey: _autoSnoozeSwitchKey,
+                  title: 'Auto-Snooze',
+                  description:
+                      'Enable auto-snooze to automatically remind you again if you don\'t respond to a notification. Great for important tasks!',
+                  onSkip: _onAutoSnoozeTutorialSkip,
+                  onNext: _onAutoSnoozeTutorialNext,
+                  isLastStep: true,
+                  accentColor: _accentColor,
+                  isDarkMode: _isDarkMode,
+                  highlightPadding: EdgeInsets.all(8.w),
+                ),
+            ],
+          ),
+        );
   }
 
   Widget _buildFrequencyChip(
