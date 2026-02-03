@@ -8,6 +8,7 @@ import '../../../services/local_storage_service.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
 import '../../home/presentation/home_screen.dart';
 import '../../onboarding/presentation/theme_preference_screen.dart';
+import '../../onboarding/presentation/onboarding_screen.dart';
 import 'login_screen.dart';
 import 'link_account_dialog.dart';
 
@@ -51,7 +52,7 @@ class _SignupScreenState extends State<SignupScreen> {
       if (mounted) {
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (context) => const ThemePreferenceScreen()),
+          MaterialPageRoute(builder: (context) => const OnboardingScreen()),
           (route) => false,
         );
       }
@@ -112,7 +113,7 @@ class _SignupScreenState extends State<SignupScreen> {
       if (mounted) {
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (context) => const ThemePreferenceScreen()),
+          MaterialPageRoute(builder: (context) => const OnboardingScreen()),
           (route) => false,
         );
       }
@@ -170,7 +171,7 @@ class _SignupScreenState extends State<SignupScreen> {
         // Create user document for new Apple sign-in users
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (context) => const ThemePreferenceScreen()),
+          MaterialPageRoute(builder: (context) => const OnboardingScreen()),
           (route) => false,
         );
       }

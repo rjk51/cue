@@ -540,9 +540,13 @@ class _IconPickerSheetState extends State<IconPickerSheet>
       }
     } catch (e) {
       if (mounted) {
+        String errorMessage = 'Error uploading icon';
+        if (e.toString().contains('exceeds 5MB')) {
+          errorMessage = 'Image is too large. Please select an image under 5MB.';
+        }
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Error uploading icon: $e')));
+        ).showSnackBar(SnackBar(content: Text(errorMessage)));
       }
     } finally {
       if (mounted) {

@@ -1,9 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <gradient
-        android:angle="135"
-        android:startColor="#4A4458"
-        android:endColor="#2D7A78"
-        android:type="linear" />
-    <corners android:radius="16dp" />
-</shape>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Deep background gradient -->
+    <item>
+        <shape>
+            <gradient
+                android:angle="135"
+                android:startColor="#1a1a2e"
+                android:centerColor="#16213e"
+                android:endColor="#0f3460"
+                android:type="linear" />
+            <corners android:radius="24dp" />
+        </shape>
+    </item>
+    
+    <!-- Glass overlay effect -->
+    <item>
+        <shape>
+            <solid android:color="#12FFFFFF" />
+            <corners android:radius="24dp" />
+        </shape>
+    </item>
+    
+    <!-- Glass edge border -->
+    <item>
+        <shape>
+            <stroke
+                android:width="0.5dp"
+                android:color="#33FFFFFF" />
+            <corners android:radius="24dp" />
+        </shape>
+    </item>
+</layer-list>

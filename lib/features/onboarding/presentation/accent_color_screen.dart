@@ -618,15 +618,15 @@ class _AccentColorScreenState extends State<AccentColorScreen> {
 
   Widget _buildDot(bool isActive) {
     return Container(
-      width: 8.w,
+      width: isActive ? 16.w : 8.w,
       height: 8.h,
       decoration: BoxDecoration(
-        color: isActive
-            ? (_isDarkMode ? Colors.white : const Color(0xFFFFB4A3))
+        color: isActive? (_isDarkMode ? Colors.white : const Color(0xFFFFB4A3))
             : (_isDarkMode
                   ? Colors.white.withOpacity(0.3)
                   : const Color(0xFFE0E0E0)),
-        shape: BoxShape.circle,
+        shape: isActive ? BoxShape.rectangle : BoxShape.circle,
+        borderRadius: isActive ? BorderRadius.circular(12.r) : null,
       ),
     );
   }

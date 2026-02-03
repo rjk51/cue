@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flip_card/flip_card.dart';
 import '../../reminders/domain/reminder_model.dart';
 import '../../reminders/data/reminder_service.dart';
 import '../../reminders/presentation/create_reminder_screen.dart';
@@ -12,8 +13,12 @@ import '../../../services/theme_service.dart';
 import '../../../services/theme_notifier.dart';
 import '../../../services/device_monitor_service.dart';
 import '../../../services/widget_service.dart';
+import '../../../services/tutorial_service.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
 import '../../../shared/widgets/expandable_fab.dart';
+import '../../../shared/widgets/confirmation_dialog.dart';
+import '../../../shared/widgets/delete_recurring_dialog.dart';
+import '../../../shared/widgets/tutorial_overlay.dart';
 import 'widgets/current_cue_card.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -28,14 +33,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   final ThemeService _themeService = ThemeService();
   final DeviceMonitorService _deviceMonitor = DeviceMonitorService();
   final WidgetService _widgetService = WidgetService();
+  final TutorialService _tutorialService = TutorialService();
 
   Color _accentColor = const Color(0xFF2D7A78); // Default teal
   bool _isDarkMode = false;
+
+  // Tutorial state
+  bool _showFabTutorial = false;
+  bool _showCueCardTutorial = false;
+  bool _hasShownCueCardTutorial = false;
+  int _cueCardTutorialStep =
+      0; // 0: highlight card, 1: snooze, 2: done, 3: notes, 4: flip
+  final GlobalKey _fabKey = GlobalKey();
+  final GlobalKey _cueCardKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
     _loadThemeSettings();
+    _checkTutorialState();
     // Listen for theme changes
     ThemeNotifier.instance.addListener(_onThemeChanged);
 
@@ -78,6 +94,125 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           _isDarkMode = themePreference == 'dark';
         }
       });
+    }
+  }
+
+  Future<void> _checkTutorialState() async {
+    // Show FAB tutorial only once based on stored flag
+    final shouldShowFab = await _tutorialService.shouldShowFabTutorial();
+
+    if (mounted && shouldShowFab) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (mounted) {
+        setState(() {
+          _showFabTutorial = true;
+        });
+      }
+    }
+  }
+
+  void _onFabTutorialNext() {
+    setState(() {
+      _showFabTutorial = false;
+    });
+    _tutorialService.markTutorialShown(TutorialService.homeFabShownKey);
+  }
+
+  void _onFabTutorialSkip() {
+    setState(() {
+      _showFabTutorial = false;
+    });
+    _tutorialService.completeTutorial();
+  }
+
+  void _checkCueCardTutorial(bool isCueCardPresent) {
+    // Only show cue card tutorial once per user when a cue card is visible
+    if (!isCueCardPresent || _showCueCardTutorial || _hasShownCueCardTutorial) {
+      return;
+    }
+
+    // Avoid showing while FAB tutorial is on screen
+    if (_showFabTutorial) return;
+
+    _tutorialService.shouldShowCueCardTutorial().then((shouldShow) {
+      if (!mounted ||
+          !shouldShow ||
+          _showCueCardTutorial ||
+          _hasShownCueCardTutorial) {
+        return;
+      }
+
+      Future.delayed(const Duration(milliseconds: 800), () {
+        if (mounted && !_showFabTutorial && !_showCueCardTutorial) {
+          setState(() {
+            _showCueCardTutorial = true;
+            _cueCardTutorialStep = 0;
+            _hasShownCueCardTutorial = true;
+          });
+        }
+      });
+    });
+  }
+
+  void _onCueCardTutorialNext() {
+    if (_cueCardTutorialStep < 4) {
+      setState(() {
+        _cueCardTutorialStep++;
+      });
+    } else {
+      setState(() {
+        _showCueCardTutorial = false;
+        _cueCardTutorialStep = 0;
+      });
+      _tutorialService.markMultipleTutorialsShown([
+        TutorialService.homeCueCardShownKey,
+        TutorialService.homeSnoozeShownKey,
+        TutorialService.homeDoneShownKey,
+        TutorialService.homeNotesShownKey,
+        TutorialService.homeFlipShownKey,
+      ]);
+    }
+  }
+
+  void _onCueCardTutorialSkip() {
+    setState(() {
+      _showCueCardTutorial = false;
+      _cueCardTutorialStep = 0;
+    });
+    _tutorialService.completeTutorial();
+  }
+
+  String _getCueCardTutorialTitle() {
+    switch (_cueCardTutorialStep) {
+      case 0:
+        return 'Your Current Cue';
+      case 1:
+        return 'Snooze';
+      case 2:
+        return 'Mark as Done';
+      case 3:
+        return 'Add Notes';
+      case 4:
+        return 'Flip for More';
+      default:
+        return '';
+    }
+  }
+
+  String _getCueCardTutorialDescription() {
+    switch (_cueCardTutorialStep) {
+      case 0:
+        return 'This is your current or next reminder. It shows what you need to focus on right now.';
+      case 1:
+        return 'Swipe left to snooze this reminder for a few minutes when you need more time.';
+      case 2:
+        return 'Swipe right to mark this reminder as completed. Great job staying on track!';
+      case 3:
+        return 'Tap inside the card to add notes or additional details about this reminder.';
+      case 4:
+        return 'Flip the card to see more options like editing or deleting this reminder.';
+      default:
+        return '';
     }
   }
 
@@ -403,6 +538,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ? upcomingReminders.first['reminder'] as Reminder
                     : null;
 
+                // Check tutorial for cue card (new logic)
+                _checkCueCardTutorial(currentReminder != null);
+
                 final currentOccurrenceTime = upcomingReminders.isNotEmpty
                     ? upcomingReminders.first['occurrenceTime'] as DateTime?
                     : null;
@@ -472,22 +610,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                 children: [
                                   // Current/Next Cue Card
                                   if (currentReminder != null)
-                                    CurrentCueCard(
-                                      reminder: currentReminder,
-                                      occurrenceTime: currentOccurrenceTime,
-                                      accentColor: _accentColor,
-                                      isDarkMode: _isDarkMode,
-                                      cardColor: cardColor,
-                                      textColor: textColor,
-                                      subtitleColor: subtitleColor,
-                                      onMarkCompleted: (reminderId) =>
-                                          _markAsCompleted(
-                                            reminderId,
-                                            occurrenceTime:
-                                                currentOccurrenceTime,
-                                          ),
-                                      getTimeDisplayText: _getTimeDisplayText,
-                                      isCurrentCue: _isCurrentCue,
+                                    Container(
+                                      key: _cueCardKey,
+                                      child: CurrentCueCard(
+                                        reminder: currentReminder,
+                                        occurrenceTime: currentOccurrenceTime,
+                                        accentColor: _accentColor,
+                                        isDarkMode: _isDarkMode,
+                                        cardColor: cardColor,
+                                        textColor: textColor,
+                                        subtitleColor: subtitleColor,
+                                        onMarkCompleted: (reminderId) =>
+                                            _markAsCompleted(
+                                              reminderId,
+                                              occurrenceTime:
+                                                  currentOccurrenceTime,
+                                            ),
+                                        getTimeDisplayText: _getTimeDisplayText,
+                                        isCurrentCue: _isCurrentCue,
+                                      ),
                                     )
                                   else
                                     _buildEmptyCueCard(
@@ -538,7 +679,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                               ),
                             )
                           else ...[
-                            SizedBox(height: 32.h),
+                            SizedBox(height: 22.h),
 
                             // Today's Reminders Count Section
                             _buildRemindersToday(
@@ -558,16 +699,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                   children: [
                                     // Current/Next Cue Card
                                     if (currentReminder != null)
-                                      CurrentCueCard(
-                                        reminder: currentReminder,
-                                        accentColor: _accentColor,
-                                        isDarkMode: _isDarkMode,
-                                        cardColor: cardColor,
-                                        textColor: textColor,
-                                        subtitleColor: subtitleColor,
-                                        onMarkCompleted: _markAsCompleted,
-                                        getTimeDisplayText: _getTimeDisplayText,
-                                        isCurrentCue: _isCurrentCue,
+                                      Container(
+                                        key: _cueCardKey,
+                                        child: CurrentCueCard(
+                                          reminder: currentReminder,
+                                          accentColor: _accentColor,
+                                          isDarkMode: _isDarkMode,
+                                          cardColor: cardColor,
+                                          textColor: textColor,
+                                          subtitleColor: subtitleColor,
+                                          onMarkCompleted: _markAsCompleted,
+                                          getTimeDisplayText:
+                                              _getTimeDisplayText,
+                                          isCurrentCue: _isCurrentCue,
+                                        ),
                                       )
                                     else
                                       _buildEmptyCueCard(
@@ -626,12 +771,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 customBorder: const CircleBorder(),
                 child: Container(
                   padding: EdgeInsets.all(8.r),
-                  child: Icon(
-                    Icons.settings_outlined,
-                    color: _isDarkMode
-                        ? Colors.white.withOpacity(0.8)
-                        : const Color(0xFF8A8A8A),
-                    size: 24.sp,
+                  child: Image.asset(
+                    'assets/settings.png',
+                    width: 28.w,
+                    height: 28.h,
+                    fit: BoxFit.cover,
                   ),
                 ),
               ),
@@ -640,14 +784,63 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
           // Expandable FAB positioned in Stack
           Positioned(
-            right: 16.w,
-            bottom: MediaQuery.of(context).padding.bottom + 24.h,
-            child: ExpandableFab(
-              accentColor: _accentColor,
-              onTextReminderTap: _navigateToCreateReminder,
-              onVoiceReminderTap: _navigateToVoiceReminder,
+            right: 34.w,
+            bottom: MediaQuery.of(context).padding.bottom + 30.h,
+            child: Container(
+              key: _fabKey,
+              width: 64.w,
+              height: 64.h,
+              decoration: BoxDecoration(
+                color: _accentColor,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: _accentColor.withOpacity(0.4),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _navigateToCreateReminder,
+                  customBorder: const CircleBorder(),
+                  child: Icon(Icons.add, color: Colors.white, size: 28.sp),
+                ),
+              ),
             ),
           ),
+
+          // Tutorial overlays
+          if (_showFabTutorial)
+            TutorialOverlay(
+              targetKey: _fabKey,
+              title: 'Create Your First Reminder',
+              description:
+                  'Tap the + button to create your first reminder. You can set a time, add notes, and customize it however you like!',
+              onSkip: _onFabTutorialSkip,
+              onNext: _onFabTutorialNext,
+              isLastStep: true,
+              accentColor: _accentColor,
+              isDarkMode: _isDarkMode,
+              highlightPadding: EdgeInsets.all(12.w),
+            ),
+
+          if (_showCueCardTutorial &&
+              // removed check for _cueCardKey.currentContext != null since we check mounted in TutorialOverlay
+              _cueCardKey.currentContext != null)
+            TutorialOverlay(
+              targetKey: _cueCardKey,
+              title: _getCueCardTutorialTitle(),
+              description: _getCueCardTutorialDescription(),
+              onSkip: _onCueCardTutorialSkip,
+              onNext: _onCueCardTutorialNext,
+              isLastStep: _cueCardTutorialStep == 4,
+              accentColor: _accentColor,
+              isDarkMode: _isDarkMode,
+              highlightPadding: EdgeInsets.all(16.w),
+            ),
         ],
       ),
       // bottomNavigationBar: Padding(
@@ -789,7 +982,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           child: upcomingReminders.isEmpty
               ? Center(
                   child: Text(
-                    'No more reminders scheduled',
+                    'That\'s everything for today',
                     style: TextStyle(fontSize: 14.sp, color: subtitleColor),
                   ),
                 )
@@ -827,117 +1020,175 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final timeOnly = DateFormat('hh:mm').format(displayTime);
     final amPm = DateFormat('a').format(displayTime);
 
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ReminderDetailsScreen(reminder: reminder),
-          ),
-        );
-      },
-      child: Container(
-        width: 180.w,
-        padding: EdgeInsets.all(20.r),
-        decoration: BoxDecoration(
-          color: cardColor,
-          borderRadius: BorderRadius.circular(20.r),
-          border: Border.all(
-            color: reminder.color.withOpacity(0.2),
-            width: 1.5,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(_isDarkMode ? 0.2 : 0.05),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            // Title and Icon row
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Reminder name
-                Expanded(
-                  child: Text(
-                    reminder.name,
-                    style: TextStyle(
-                      fontSize: 17.sp,
-                      fontWeight: FontWeight.w600,
-                      color: textColor,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                SizedBox(width: 8.w),
-                // Icon on the right
-                Container(
-                  width: 32.w,
-                  height: 32.h,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: reminder.color.withOpacity(0.15),
-                  ),
-                  child: reminder.customIconUrl != null
-                      ? ClipOval(
-                          child: Image.network(
-                            reminder.customIconUrl!,
-                            width: 32.w,
-                            height: 32.h,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Icon(
-                                reminder.icon,
-                                color: reminder.color,
-                                size: 20.sp,
-                              );
-                            },
-                          ),
-                        )
-                      : Icon(
-                          reminder.icon,
-                          color: reminder.color,
-                          size: 20.sp,
-                        ),
-                ),
-              ],
-            ),
+    final flipKey = GlobalKey<FlipCardState>();
 
-            // Time with AM/PM
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  timeOnly,
-                  style: TextStyle(
-                    fontSize: 18.sp,
-                    fontWeight: FontWeight.w600,
-                    color: textColor,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                SizedBox(width: 4.w),
-                Padding(
-                  padding: EdgeInsets.only(bottom: 2.h),
-                  child: Text(
-                    amPm,
-                    style: TextStyle(
-                      fontSize: 11.sp,
-                      fontWeight: FontWeight.w500,
-                      color: subtitleColor,
-                    ),
-                  ),
+    return GestureDetector(
+      onHorizontalDragEnd: (details) {
+        if (details.primaryVelocity != null) {
+          if (details.primaryVelocity!.abs() > 300) {
+            flipKey.currentState?.toggleCard();
+          }
+        }
+      },
+      child: FlipCard(
+        key: flipKey,
+        fill: Fill.fillBack,
+        direction: FlipDirection.HORIZONTAL,
+        flipOnTouch: false,
+        front: GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ReminderDetailsScreen(reminder: reminder),
+              ),
+            );
+          },
+          child: Container(
+            width: 180.w,
+            padding: EdgeInsets.all(20.r),
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(20.r),
+              border: Border.all(
+                color: reminder.color.withOpacity(0.2),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(_isDarkMode ? 0.2 : 0.05),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
-          ],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Title and Icon row
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Reminder name
+                    Expanded(
+                      child: Text(
+                        reminder.name,
+                        style: TextStyle(
+                          fontSize: 17.sp,
+                          fontWeight: FontWeight.w600,
+                          color: textColor,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    SizedBox(width: 8.w),
+                    // Icon on the right
+                    Container(
+                      width: 32.w,
+                      height: 32.h,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: reminder.color.withOpacity(0.15),
+                      ),
+                      child: reminder.customIconUrl != null
+                          ? ClipOval(
+                              child: Image.network(
+                                reminder.customIconUrl!,
+                                width: 32.w,
+                                height: 32.h,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Icon(
+                                    reminder.icon,
+                                    color: reminder.color,
+                                    size: 20.sp,
+                                  );
+                                },
+                              ),
+                            )
+                          : Icon(
+                              reminder.icon,
+                              color: reminder.color,
+                              size: 20.sp,
+                            ),
+                    ),
+                  ],
+                ),
+
+                // Time with AM/PM
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      timeOnly,
+                      style: TextStyle(
+                        fontSize: 18.sp,
+                        fontWeight: FontWeight.w600,
+                        color: textColor,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    SizedBox(width: 4.w),
+                    Padding(
+                      padding: EdgeInsets.only(bottom: 2.h),
+                      child: Text(
+                        amPm,
+                        style: TextStyle(
+                          fontSize: 11.sp,
+                          fontWeight: FontWeight.w500,
+                          color: subtitleColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        back: Container(
+          width: 180.w,
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(32.r),
+            border: Border.all(
+              color: reminder.color.withOpacity(0.2),
+              width: 1.5,
+            ),
+          ),
+          padding: EdgeInsets.all(8.w),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Edit button
+              _buildSmallActionButton(
+                icon: Icons.edit_rounded,
+                label: 'EDIT',
+                color: _accentColor,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          NewReminderScreen(reminderToEdit: reminder),
+                    ),
+                  );
+                },
+              ),
+              SizedBox(width: 8.w),
+              // Delete button
+              _buildSmallActionButton(
+                icon: Icons.delete_rounded,
+                label: 'DELETE',
+                color: Colors.red.shade400,
+                onTap: () => _handleUpcomingCardDelete(reminder),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -954,6 +1205,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       ..sort((a, b) => a.time.compareTo(b.time));
     final displayReminders = sortedReminders.take(3).toList();
 
+    // Contextual message based on reminder count
+    String contextualMessage;
+    if (count <= 2) {
+      contextualMessage = 'Take it slow today.';
+    } else if (count <= 4) {
+      contextualMessage = 'Almost done for today.';
+    } else {
+      contextualMessage = 'You\'ve got this!';
+    }
+
     return Center(
       child: Column(
         children: [
@@ -963,6 +1224,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               fontSize: 16.sp,
               fontWeight: FontWeight.w500,
               color: subtitleColor,
+            ),
+          ),
+          SizedBox(height: 6.h),
+          Text(
+            contextualMessage,
+            style: TextStyle(
+              fontSize: 13.sp,
+              fontWeight: FontWeight.w400,
+              color: subtitleColor.withOpacity(0.7),
+              fontStyle: FontStyle.italic,
             ),
           ),
           if (displayReminders.isNotEmpty) ...[
@@ -994,6 +1265,137 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         shape: BoxShape.circle,
       ),
       child: Icon(icon, color: color, size: 22.sp),
+    );
+  }
+
+  // Helper method for small action buttons on upcoming cards back side
+  Widget _buildSmallActionButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 70.w,
+        padding: EdgeInsets.symmetric(vertical: 8.h),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(16.r),
+          border: Border.all(color: color.withOpacity(0.2), width: 1.5),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 36.w,
+              height: 36.h,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 18.sp),
+            ),
+            SizedBox(height: 6.h),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10.sp,
+                fontWeight: FontWeight.w600,
+                color: color,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Handle delete action for upcoming cards
+  Future<void> _handleUpcomingCardDelete(Reminder reminder) async {
+    final reminderService = ReminderService();
+
+    // For recurring reminders, show dialog to choose between skipping occurrence or deleting series
+    if (reminder.recurrence != null) {
+      final deleteOption = await DeleteRecurringDialog.show(
+        context: context,
+        reminderName: reminder.name,
+        accentColor: _accentColor,
+        isDarkMode: _isDarkMode,
+      );
+
+      // User cancelled the dialog
+      if (deleteOption == null) {
+        return;
+      }
+
+      if (deleteOption == DeleteRecurringOption.thisOccurrenceOnly) {
+        // Skip this occurrence by creating a skipped override
+        try {
+          final occurrenceDate = reminder.effectiveNextDueAt;
+          final dateKey = DateFormat('yyyy-MM-dd').format(occurrenceDate);
+
+          // Get existing overrides or create new map
+          final existingOverrides = reminder.overrides ?? {};
+          final newOverrides = Map<String, Map<String, dynamic>>.from(
+            existingOverrides,
+          );
+
+          // Create or update override for this date with skipped flag
+          newOverrides[dateKey] = {
+            ...(newOverrides[dateKey] ?? {}),
+            'skipped': true,
+          };
+
+          await reminderService.updateReminder(reminder.id, {
+            'overrides': newOverrides,
+          });
+
+          if (mounted) {
+            context.showSuccessSnackbar('Occurrence skipped');
+          }
+        } catch (e) {
+          if (mounted) {
+            context.showErrorSnackbar('Error skipping occurrence: $e');
+          }
+        }
+        return;
+      }
+      // If wholeSeries, fall through to show confirmation dialog
+    }
+
+    // For non-recurring reminders or when deleting whole series, show confirmation dialog
+    await ConfirmationDialog.show(
+      context: context,
+      title: reminder.recurrence != null
+          ? 'Delete Entire Series'
+          : 'Delete Reminder',
+      message: reminder.recurrence != null
+          ? 'Are you sure you want to permanently delete "${reminder.name}" and all its occurrences? This action cannot be undone.'
+          : 'Are you sure you want to delete "${reminder.name}"? This action cannot be undone.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      accentColor: _accentColor,
+      isDarkMode: _isDarkMode,
+      isDestructive: true,
+      onConfirm: () async {
+        try {
+          await reminderService.deleteReminder(reminder.id);
+          if (mounted) {
+            context.showSuccessSnackbar(
+              reminder.recurrence != null
+                  ? 'Reminder series deleted successfully'
+                  : 'Reminder deleted successfully',
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            context.showErrorSnackbar('Error deleting reminder: $e');
+          }
+        }
+      },
     );
   }
 

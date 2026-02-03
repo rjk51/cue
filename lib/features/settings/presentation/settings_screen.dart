@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../services/theme_service.dart';
 import '../../../services/auth_service.dart';
 import '../../auth/presentation/welcome_screen.dart';
+import '../../onboarding/presentation/onboarding_screen.dart';
 import '../../subscription/presentation/cue_pro_paywall_screen.dart';
 import 'appearance_screen.dart';
 import 'devices_screen.dart';
@@ -355,7 +356,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Profile Section
-                    Container(
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const OnboardingScreen(),
+                          ),
+                        );
+                      },
+                      child: Container(
                       width: double.infinity,
                       padding: EdgeInsets.all(20.r),
                       decoration: BoxDecoration(
@@ -444,8 +454,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ],
                           ),
                         ),
+                        Icon(
+                          Icons.chevron_right,
+                          color: subtitleColor,
+                          size: 24.sp,
+                        ),
                         ],
                       ),
+                    ),
                     ),
 
                     SizedBox(height: 32.h),

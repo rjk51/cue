@@ -39,6 +39,13 @@ class CustomIconService {
     try {
       if (_userId == null) return null;
 
+      // Check file size (max 5MB)
+      final fileSize = await imageFile.length();
+      const maxSizeInBytes = 5 * 1024 * 1024; // 5MB
+      if (fileSize > maxSizeInBytes) {
+        throw Exception('File size exceeds 5MB limit');
+      }
+
       // Generate unique ID for the icon
       final iconId = DateTime.now().millisecondsSinceEpoch.toString();
 

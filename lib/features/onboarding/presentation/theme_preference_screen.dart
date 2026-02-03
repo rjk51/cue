@@ -64,113 +64,128 @@ class _ThemePreferenceScreenState extends State<ThemePreferenceScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
-      body: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 24.w),
-          child: Column(
-            children: [
-              SizedBox(height: 24.h),
-              // Progress dots
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _buildDot(false),
-                  SizedBox(width: 8.w),
-                  _buildDot(true), // Active dot
-                  SizedBox(width: 8.w),
-                  _buildDot(false),
-                ],
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF2C242A), Color(0xFF1C1922)],
+          ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 24.w),
+            child: Column(
+              children: [
+                SizedBox(height: 24.h),
+                // Progress dots
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildDot(false),
+                SizedBox(width: 8.w),
+                _buildDot(true), // Active dot
+                SizedBox(width: 8.w),
+                _buildDot(false),
+              ],
+            ),
+            SizedBox(height: 48.h),
+            // Theme image
+            Image.asset(
+              'assets/theme_image.png',
+              width: 180.w,
+              fit: BoxFit.contain,
+            ),
+            SizedBox(height: 32.h),
+            // Title
+            Text(
+              'How should we look?',
+              style: TextStyle(
+                fontSize: 32.sp,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                height: 1.2,
               ),
-              SizedBox(height: 48.h),
-              // Title
-              Text(
-                'How should we look?',
-                style: TextStyle(
-                  fontSize: 32.sp,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF2D2D2D),
-                  height: 1.2,
-                ),
-                textAlign: TextAlign.center,
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 16.h),
+            // Subtitle
+            Text(
+              'Customize your experience to\nmatch your environment.',
+              style: TextStyle(
+                fontSize: 16.sp,
+                color: Colors.white.withOpacity(0.6),
+                height: 1.5,
               ),
-              SizedBox(height: 16.h),
-              // Subtitle
-              Text(
-                'Customize your experience to\nmatch your environment.',
-                style: TextStyle(
-                  fontSize: 16.sp,
-                  color: const Color(0xFF8A8A8A),
-                  height: 1.5,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              SizedBox(height: 48.h),
-              // Light option
-              _buildThemeOption(
-                theme: 'light',
-                title: 'Light',
-                subtitle: 'Sunrise warmth',
-                isSelected: _selectedTheme == 'light',
-                backgroundColor: Colors.white,
-                borderColor: const Color(0xFFFFB4A3),
-              ),
-              SizedBox(height: 16.h),
-              // Dark option
-              _buildThemeOption(
-                theme: 'dark',
-                title: 'Dark',
-                subtitle: 'Evening calm',
-                isSelected: _selectedTheme == 'dark',
-                backgroundColor: const Color(0xFF3D3A47),
-                borderColor: const Color(0xFF3D3A47),
-              ),
-              SizedBox(height: 16.h),
-              // System option
-              _buildThemeOption(
-                theme: 'system',
-                title: 'System',
-                subtitle: 'Automatic',
-                isSelected: _selectedTheme == 'system',
-                backgroundColor: Colors.white,
-                borderColor: Colors.grey[300]!,
-              ),
-              const Spacer(),
-              // Next button
-              SizedBox(
-                width: double.infinity,
-                height: 56.h,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _handleNext,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFFB4A3),
-                    foregroundColor: Colors.black,
-                    elevation: 0,
-                    disabledBackgroundColor: const Color(0xFFFFB4A3).withOpacity(0.6),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(28.r),
-                    ),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 48.h),
+            // Light option
+            _buildThemeOption(
+              theme: 'light',
+              title: 'Light',
+              subtitle: 'Sunrise warmth',
+              isSelected: _selectedTheme == 'light',
+              backgroundColor: Colors.white,
+              borderColor: const Color(0xFFFFB4A3),
+            ),
+            SizedBox(height: 16.h),
+            // Dark option
+            _buildThemeOption(
+              theme: 'dark',
+              title: 'Dark',
+              subtitle: 'Evening calm',
+              isSelected: _selectedTheme == 'dark',
+              backgroundColor: const Color(0xFF3D3A47),
+              borderColor: const Color(0xFF3D3A47),
+            ),
+            SizedBox(height: 16.h),
+            // System option
+            _buildThemeOption(
+              theme: 'system',
+              title: 'System',
+              subtitle: 'Automatic',
+              isSelected: _selectedTheme == 'system',
+              backgroundColor: Colors.white,
+              borderColor: Colors.grey[300]!,
+            ),
+            const Spacer(),
+            // Next button
+            SizedBox(
+              width: double.infinity,
+              height: 56.h,
+              child: ElevatedButton(
+                onPressed: _isLoading ? null : _handleNext,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFFB4A3),
+                  foregroundColor: Colors.black,
+                  elevation: 0,
+                  disabledBackgroundColor: const Color(0xFFFFB4A3).withOpacity(0.6),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(28.r),
                   ),
-                  child: _isLoading
-                      ? SizedBox(
-                          height: 20.h,
-                          width: 20.w,
-                          child: const CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.black,
-                          ),
-                        )
-                      : Text(
-                          'Next',
-                          style: TextStyle(
-                            fontSize: 16.sp,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
                 ),
+                child: _isLoading
+                    ? SizedBox(
+                        height: 20.h,
+                        width: 20.w,
+                        child: const CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.black,
+                        ),
+                      )
+                    : Text(
+                        'Next',
+                        style: TextStyle(
+                          fontSize: 16.sp,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
               ),
-              SizedBox(height: 32.h),
-            ],
+            ),
+            SizedBox(height: 32.h),
+              ],
+            ),
           ),
         ),
       ),
@@ -179,11 +194,12 @@ class _ThemePreferenceScreenState extends State<ThemePreferenceScreen> {
 
   Widget _buildDot(bool isActive) {
     return Container(
-      width: 8.w,
+      width: isActive ? 16.w : 8.w,
       height: 8.h,
       decoration: BoxDecoration(
         color: isActive ? const Color(0xFFFFB4A3) : const Color(0xFFE0E0E0),
-        shape: BoxShape.circle,
+        shape: isActive ? BoxShape.rectangle : BoxShape.circle,
+        borderRadius: isActive ? BorderRadius.circular(12.r) : null,
       ),
     );
   }
