@@ -64,14 +64,23 @@ class _ThemePreferenceScreenState extends State<ThemePreferenceScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
-      body: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 24.w),
-          child: Column(
-            children: [
-              SizedBox(height: 24.h),
-              // Progress dots
+      body: Stack(
+        children: [
+          // Background image
+          Positioned.fill(
+            child: Image.asset(
+              'assets/bg.jpg',
+              fit: BoxFit.cover,
+            ),
+          ),
+          // Content
+          SafeArea(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24.w),
+              child: Column(
+                children: [
+                  SizedBox(height: 24.h),
+                  // Progress dots
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -83,13 +92,20 @@ class _ThemePreferenceScreenState extends State<ThemePreferenceScreen> {
                 ],
               ),
               SizedBox(height: 48.h),
+              // Theme image
+              Image.asset(
+                'assets/theme_image.png',
+                width: 180.w,
+                fit: BoxFit.contain,
+              ),
+              SizedBox(height: 32.h),
               // Title
               Text(
                 'How should we look?',
                 style: TextStyle(
                   fontSize: 32.sp,
                   fontWeight: FontWeight.w700,
-                  color: const Color(0xFF2D2D2D),
+                  color: Colors.white,
                   height: 1.2,
                 ),
                 textAlign: TextAlign.center,
@@ -100,7 +116,7 @@ class _ThemePreferenceScreenState extends State<ThemePreferenceScreen> {
                 'Customize your experience to\nmatch your environment.',
                 style: TextStyle(
                   fontSize: 16.sp,
-                  color: const Color(0xFF8A8A8A),
+                  color: Colors.white.withOpacity(0.6),
                   height: 1.5,
                 ),
                 textAlign: TextAlign.center,
@@ -170,20 +186,23 @@ class _ThemePreferenceScreenState extends State<ThemePreferenceScreen> {
                 ),
               ),
               SizedBox(height: 32.h),
-            ],
+                ],
+              ),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
 
   Widget _buildDot(bool isActive) {
     return Container(
-      width: 8.w,
+      width: isActive ? 16.w : 8.w,
       height: 8.h,
       decoration: BoxDecoration(
         color: isActive ? const Color(0xFFFFB4A3) : const Color(0xFFE0E0E0),
-        shape: BoxShape.circle,
+        shape: isActive ? BoxShape.rectangle : BoxShape.circle,
+        borderRadius: isActive ? BorderRadius.circular(12.r) : null,
       ),
     );
   }

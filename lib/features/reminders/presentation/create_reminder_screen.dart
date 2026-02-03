@@ -12,9 +12,11 @@ import '../data/reminder_service.dart';
 import '../../notifications/notification_service.dart';
 import '../../../services/theme_service.dart';
 import '../../../services/theme_notifier.dart';
+import '../../../services/tutorial_service.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
 import '../../../shared/widgets/cupertino_pickers.dart';
 import '../../../shared/widgets/edit_recurring_dialog.dart';
+import '../../../shared/widgets/tutorial_overlay.dart';
 import 'widgets/icon_picker_sheet.dart';
 import 'widgets/sticky_save_button.dart';
 
@@ -31,11 +33,18 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
   final ThemeService _themeService = ThemeService();
   final ReminderService _reminderService = ReminderService();
   final NotificationService _notificationService = NotificationService();
+  final TutorialService _tutorialService = TutorialService();
   final TextEditingController _reminderController = TextEditingController();
 
   Color _accentColor = const Color(0xFFFFB4A3);
   bool _isDarkMode = false;
   bool _isSaving = false;
+
+  // Tutorial state
+  bool _showRepeatTutorial = false;
+  bool _showAutoSnoozeTutorial = false;
+  final GlobalKey _repeatSwitchKey = GlobalKey();
+  final GlobalKey _autoSnoozeSwitchKey = GlobalKey();
 
   // Reminder fields
   DateTime _selectedDate = DateTime.now();
@@ -86,6 +95,7 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
   void initState() {
     super.initState();
     _loadThemeSettings();
+    _checkTutorialState();
     ThemeNotifier.instance.addListener(_onThemeChanged);
     _reminderController.addListener(() {
       if (mounted) setState(() {});
@@ -97,6 +107,88 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
     } else {
       _selectedDays = {_selectedDate.weekday};
     }
+  }
+
+  Future<void> _checkTutorialState() async {
+    // Only show tutorials when creating new reminder (not editing)
+    if (widget.reminderToEdit != null) return;
+
+    final state = await _tutorialService.getTutorialState();
+    final shouldShowRepeat =
+        !(state[TutorialService.createRepeatShownKey] ?? false);
+    final shouldShowAutoSnooze =
+        !(state[TutorialService.createAutoSnoozeShownKey] ?? false);
+
+    if (!mounted) return;
+
+    if (shouldShowRepeat) {
+      Future.delayed(const Duration(milliseconds: 600), () {
+        if (mounted) {
+          setState(() {
+            _showRepeatTutorial = true;
+          });
+        }
+      });
+    } else if (shouldShowAutoSnooze) {
+      Future.delayed(const Duration(milliseconds: 600), () {
+        if (mounted) {
+          setState(() {
+            _showAutoSnoozeTutorial = true;
+          });
+        }
+      });
+    }
+  }
+
+  void _onRepeatTutorialNext() {
+    setState(() {
+      _showRepeatTutorial = false;
+    });
+    _tutorialService.markTutorialShown(TutorialService.createRepeatShownKey);
+
+    // Check if auto-snooze tutorial should be shown next
+    _tutorialService
+        .getTutorialFlag(TutorialService.createAutoSnoozeShownKey)
+        .then((shown) {
+          if (!shown && mounted) {
+            Future.delayed(const Duration(milliseconds: 400), () {
+              if (mounted) {
+                setState(() {
+                  _showAutoSnoozeTutorial = true;
+                });
+              }
+            });
+          }
+        });
+  }
+
+  void _onRepeatTutorialSkip() {
+    setState(() {
+      _showRepeatTutorial = false;
+      _showAutoSnoozeTutorial = false;
+    });
+    _tutorialService.markMultipleTutorialsShown([
+      TutorialService.createRepeatShownKey,
+      TutorialService.createAutoSnoozeShownKey,
+    ]);
+  }
+
+  void _onAutoSnoozeTutorialNext() {
+    setState(() {
+      _showAutoSnoozeTutorial = false;
+    });
+    _tutorialService.markTutorialShown(
+      TutorialService.createAutoSnoozeShownKey,
+    );
+  }
+
+  void _onAutoSnoozeTutorialSkip() {
+    setState(() {
+      _showAutoSnoozeTutorial = false;
+    });
+    _tutorialService.markTutorialShown(
+      TutorialService.createAutoSnoozeShownKey,
+    );
   }
 
   void _initializeEditMode() {
@@ -973,829 +1065,905 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
           ),
         ),
       ),
-      body: Column(
+      body: Stack(
         children: [
-          Expanded(
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: EdgeInsets.all(20.r),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Dynamic Summary Text
-                    RichText(
-                      text: TextSpan(
-                        style: TextStyle(
-                          fontSize: 22.sp,
-                          height: 1.4,
-                          color: textColor,
+          Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Padding(
+                    padding: EdgeInsets.all(20.r),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Dynamic Summary Text
+                        RichText(
+                          text: TextSpan(
+                            style: TextStyle(
+                              fontSize: 22.sp,
+                              height: 1.4,
+                              color: textColor,
+                            ),
+                            children: _buildSummaryTextSpans(textColor),
+                          ),
                         ),
-                        children: _buildSummaryTextSpans(textColor),
-                      ),
-                    ),
 
-                    SizedBox(height: 32.h),
+                        SizedBox(height: 32.h),
 
-                    // Main container for all controls
-                    Container(
-                      decoration: BoxDecoration(
-                        color: cardColor,
-                        borderRadius: BorderRadius.circular(24.r),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Reminder Name
-                          Padding(
-                            padding: EdgeInsets.all(16.r),
-                            child: TextField(
-                              cursorColor: _accentColor,
-                              controller: _reminderController,
-                              style: TextStyle(
-                                color: textColor,
-                                fontSize: 24.sp,
-                              ),
-                              decoration: InputDecoration(
-                                hintText: 'What needs your attention?',
-                                hintStyle: TextStyle(
-                                  color: subtitleColor.withOpacity(0.5),
-                                  fontSize: 24.sp,
-                                ),
-                                border: InputBorder.none,
-                                contentPadding: EdgeInsets.zero,
-                              ),
-                              onChanged: (_) {
-                                setState(
-                                  () {},
-                                ); // Trigger rebuild to check for changes
-                              },
-                            ),
+                        // Main container for all controls
+                        Container(
+                          decoration: BoxDecoration(
+                            color: cardColor,
+                            borderRadius: BorderRadius.circular(24.r),
                           ),
-
-                          Divider(color: dividerColor, height: 1.h),
-
-                          // Date Selector
-                          Padding(
-                            padding: EdgeInsets.all(16.r),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'Date',
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Reminder Name
+                              Padding(
+                                padding: EdgeInsets.all(10.r),
+                                child: TextField(
+                                  cursorColor: _accentColor,
+                                  controller: _reminderController,
                                   style: TextStyle(
                                     color: textColor,
-                                    fontSize: 16.sp,
-                                    fontWeight: FontWeight.w500,
+                                    fontSize: 20.sp,
                                   ),
-                                ),
-                                InkWell(
-                                  onTap: _selectDate,
-                                  borderRadius: BorderRadius.circular(20.r),
-                                  child: Container(
-                                    padding: EdgeInsets.symmetric(
-                                      vertical: 8.h,
-                                      horizontal: 16.w,
+                                  decoration: InputDecoration(
+                                    hintText: 'What needs your attention?',
+                                    hintStyle: TextStyle(
+                                      color: subtitleColor.withOpacity(0.5),
+                                      fontStyle: FontStyle.italic,
+                                      fontSize: 20.sp,
                                     ),
-                                    decoration: BoxDecoration(
-                                      color: inputBgColor,
-                                      borderRadius: BorderRadius.circular(20.r),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          DateFormat(
-                                            'MMM dd, yyyy',
-                                          ).format(_selectedDate),
-                                          style: TextStyle(
-                                            color: textColor,
-                                            fontSize: 14.sp,
-                                          ),
-                                        ),
-                                        SizedBox(width: 8.w),
-                                        Icon(
-                                          Icons.calendar_today,
-                                          color: subtitleColor,
-                                          size: 16.sp,
-                                        ),
-                                      ],
-                                    ),
+                                    border: InputBorder.none,
+                                    contentPadding: EdgeInsets.zero,
                                   ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          Divider(color: dividerColor, height: 1.h),
-
-                          // Time Selector
-                          Padding(
-                            padding: EdgeInsets.all(16.r),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'Time',
-                                  style: TextStyle(
-                                    color: textColor,
-                                    fontSize: 16.sp,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                InkWell(
-                                  onTap: _selectTime,
-                                  borderRadius: BorderRadius.circular(20.r),
-                                  child: Container(
-                                    padding: EdgeInsets.symmetric(
-                                      vertical: 8.h,
-                                      horizontal: 16.w,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: inputBgColor,
-                                      borderRadius: BorderRadius.circular(20.r),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          () {
-                                            final hour =
-                                                _selectedTime.hourOfPeriod == 0
-                                                ? 12
-                                                : _selectedTime.hourOfPeriod;
-                                            final minute = _selectedTime.minute
-                                                .toString()
-                                                .padLeft(2, '0');
-                                            final period =
-                                                _selectedTime.period ==
-                                                    DayPeriod.am
-                                                ? 'AM'
-                                                : 'PM';
-                                            return '$hour:$minute $period';
-                                          }(),
-                                          style: TextStyle(
-                                            color: textColor,
-                                            fontSize: 14.sp,
-                                          ),
-                                        ),
-                                        SizedBox(width: 8.w),
-                                        Icon(
-                                          Icons.access_time,
-                                          color: subtitleColor,
-                                          size: 18.sp,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          Divider(color: dividerColor, height: 1.h),
-
-                          // Icon & Color - Combined in one row
-                          Padding(
-                            padding: EdgeInsets.all(16.r),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'Icon & Color',
-                                  style: TextStyle(
-                                    color: textColor,
-                                    fontSize: 16.sp,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                Row(
-                                  children: [
-                                    // Icon Button
-                                    InkWell(
-                                      onTap: _openIconPicker,
-                                      borderRadius: BorderRadius.circular(20.r),
-                                      child: Container(
-                                        padding: EdgeInsets.all(12.r),
-                                        decoration: BoxDecoration(
-                                          color: inputBgColor,
-                                          borderRadius: BorderRadius.circular(
-                                            20.r,
-                                          ),
-                                        ),
-                                        child: _selectedCustomIconUrl != null
-                                            ? ClipRRect(
-                                                borderRadius:
-                                                    BorderRadius.circular(8.r),
-                                                child: Image.network(
-                                                  _selectedCustomIconUrl!,
-                                                  width: 24.w,
-                                                  height: 24.h,
-                                                  fit: BoxFit.cover,
-                                                  errorBuilder:
-                                                      (
-                                                        context,
-                                                        error,
-                                                        stackTrace,
-                                                      ) {
-                                                        return Icon(
-                                                          Icons
-                                                              .notification_important_outlined,
-                                                          color: _selectedColor,
-                                                          size: 24.sp,
-                                                        );
-                                                      },
-                                                ),
-                                              )
-                                            : Icon(
-                                                _selectedIcon,
-                                                color: _selectedColor,
-                                                size: 24.sp,
-                                              ),
-                                      ),
-                                    ),
-                                    SizedBox(width: 12.w),
-                                    // Color Button (hidden when a custom icon is selected)
-                                    if (_selectedCustomIconUrl == null)
-                                      InkWell(
-                                        onTap: _openColorPicker,
-                                        borderRadius: BorderRadius.circular(20.r),
-                                        child: Container(
-                                          width: 48.w,
-                                          height: 48.h,
-                                          decoration: BoxDecoration(
-                                            color: _selectedColor,
-                                            borderRadius:
-                                                BorderRadius.circular(20.r),
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          Divider(color: dividerColor, height: 1.h),
-
-                          // Repeat Switch
-                          Padding(
-                            padding: EdgeInsets.all(16.r),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'Repeat',
-                                  style: TextStyle(
-                                    color: textColor,
-                                    fontSize: 16.sp,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                Switch(
-                                  value: _repeatEnabled,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      _repeatEnabled = value;
-                                    });
+                                  onChanged: (_) {
+                                    setState(
+                                      () {},
+                                    ); // Trigger rebuild to check for changes
                                   },
-                                  activeColor: _accentColor,
                                 ),
-                              ],
-                            ),
-                          ),
+                              ),
 
-                          Divider(color: dividerColor, height: 1.h),
+                              Divider(color: dividerColor, height: 1.h),
 
-                          // Auto-snooze Switch
-                          Padding(
-                            padding: EdgeInsets.all(16.r),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                              // Date Selector
+                              Padding(
+                                padding: EdgeInsets.all(16.r),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
                                     Text(
-                                      'Auto-snooze',
+                                      'Date',
                                       style: TextStyle(
                                         color: textColor,
                                         fontSize: 16.sp,
                                         fontWeight: FontWeight.w500,
                                       ),
                                     ),
-                                    SizedBox(height: 2.h),
-                                    Text(
-                                      'Snooze if no response',
-                                      style: TextStyle(
-                                        color: subtitleColor,
-                                        fontSize: 12.sp,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                Switch(
-                                  value: _autoSnoozeEnabled,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      _autoSnoozeEnabled = value;
-                                    });
-                                  },
-                                  activeColor: _accentColor,
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          // Auto-snooze Settings (only show when enabled)
-                          if (_autoSnoozeEnabled) ...[
-                            Divider(color: dividerColor, height: 1.h),
-                            Padding(
-                              padding: EdgeInsets.all(16.r),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Snooze Interval',
-                                    style: TextStyle(
-                                      color: textColor,
-                                      fontSize: 14.sp,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  SizedBox(height: 8.h),
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: Slider(
-                                          value: _autoSnoozeInterval.toDouble(),
-                                          min: 1,
-                                          max: 60,
-                                          divisions: 59,
-                                          label: '$_autoSnoozeInterval min',
-                                          activeColor: _accentColor,
-                                          onChanged: (value) {
-                                            setState(() {
-                                              _autoSnoozeInterval = value
-                                                  .toInt();
-                                            });
-                                          },
-                                        ),
-                                      ),
-                                      SizedBox(width: 8.w),
-                                      Text(
-                                        '$_autoSnoozeInterval min',
-                                        style: TextStyle(
-                                          color: textColor,
-                                          fontSize: 14.sp,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  SizedBox(height: 16.h),
-                                  Text(
-                                    'Max Snoozes',
-                                    style: TextStyle(
-                                      color: textColor,
-                                      fontSize: 14.sp,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  SizedBox(height: 8.h),
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: Slider(
-                                          value: _autoSnoozeMaxCount.toDouble(),
-                                          min: 1,
-                                          max: 10,
-                                          divisions: 9,
-                                          label: '$_autoSnoozeMaxCount times',
-                                          activeColor: _accentColor,
-                                          onChanged: (value) {
-                                            setState(() {
-                                              _autoSnoozeMaxCount = value
-                                                  .toInt();
-                                            });
-                                          },
-                                        ),
-                                      ),
-                                      SizedBox(width: 8.w),
-                                      Text(
-                                        '$_autoSnoozeMaxCount times',
-                                        style: TextStyle(
-                                          color: textColor,
-                                          fontSize: 14.sp,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-
-                    // Recurrence Options Container (separate container when repeat is enabled)
-                    if (_repeatEnabled) ...[
-                      SizedBox(height: 20.h),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: cardColor,
-                          borderRadius: BorderRadius.circular(24.r),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Frequency Selector
-                            Padding(
-                              padding: EdgeInsets.all(18.r),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'FREQUENCY',
-                                    style: TextStyle(
-                                      color: subtitleColor.withOpacity(0.7),
-                                      fontSize: 12.sp,
-                                      fontWeight: FontWeight.w600,
-                                      letterSpacing: 1.2,
-                                    ),
-                                  ),
-                                  SizedBox(height: 12.h),
-                                  Row(
-                                    children: [
-                                      _buildFrequencyChip(
-                                        'Hourly',
-                                        RecurrenceFrequency.hourly,
-                                        cardColor,
-                                        textColor,
-                                        subtitleColor,
-                                        inputBgColor,
-                                      ),
-                                      SizedBox(width: 6.w),
-                                      _buildFrequencyChip(
-                                        'Daily',
-                                        RecurrenceFrequency.daily,
-                                        cardColor,
-                                        textColor,
-                                        subtitleColor,
-                                        inputBgColor,
-                                      ),
-                                      SizedBox(width: 6.w),
-                                      _buildFrequencyChip(
-                                        'Weekly',
-                                        RecurrenceFrequency.weekly,
-                                        cardColor,
-                                        textColor,
-                                        subtitleColor,
-                                        inputBgColor,
-                                      ),
-                                      SizedBox(width: 6.w),
-                                      _buildFrequencyChip(
-                                        'Monthly',
-                                        RecurrenceFrequency.monthly,
-                                        cardColor,
-                                        textColor,
-                                        subtitleColor,
-                                        inputBgColor,
-                                      ),
-                                      SizedBox(width: 6.w),
-                                      _buildFrequencyChip(
-                                        'Yearly',
-                                        RecurrenceFrequency.yearly,
-                                        cardColor,
-                                        textColor,
-                                        subtitleColor,
-                                        inputBgColor,
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            // Interval Selector (only for hourly)
-                            if (_selectedFrequency ==
-                                RecurrenceFrequency.hourly) ...[
-                              Divider(color: dividerColor, height: 1.h),
-                              Padding(
-                                padding: EdgeInsets.all(16.r),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'REPEAT EVERY',
-                                      style: TextStyle(
-                                        color: subtitleColor.withOpacity(0.7),
-                                        fontSize: 12.sp,
-                                        fontWeight: FontWeight.w600,
-                                        letterSpacing: 1.2,
-                                      ),
-                                    ),
-                                    SizedBox(height: 12.h),
-                                    GestureDetector(
-                                      onTap: () {
-                                        _showIntervalPicker(
-                                          context,
-                                          cardColor,
-                                          textColor,
-                                          subtitleColor,
-                                        );
-                                      },
+                                    InkWell(
+                                      onTap: _selectDate,
+                                      borderRadius: BorderRadius.circular(20.r),
                                       child: Container(
                                         padding: EdgeInsets.symmetric(
+                                          vertical: 8.h,
                                           horizontal: 16.w,
-                                          vertical: 12.h,
                                         ),
                                         decoration: BoxDecoration(
                                           color: inputBgColor,
                                           borderRadius: BorderRadius.circular(
-                                            12.r,
+                                            20.r,
                                           ),
                                         ),
                                         child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceBetween,
+                                          mainAxisSize: MainAxisSize.min,
                                           children: [
                                             Text(
-                                              _getIntervalText(),
+                                              DateFormat(
+                                                'MMM dd, yyyy',
+                                              ).format(_selectedDate),
                                               style: TextStyle(
                                                 color: textColor,
-                                                fontSize: 16.sp,
-                                                fontWeight: FontWeight.w500,
+                                                fontSize: 14.sp,
                                               ),
                                             ),
+                                            SizedBox(width: 8.w),
                                             Icon(
-                                              Icons.arrow_drop_down,
+                                              Icons.calendar_today,
                                               color: subtitleColor,
-                                              size: 24.sp,
+                                              size: 16.sp,
                                             ),
                                           ],
                                         ),
                                       ),
                                     ),
-                                    // Validation message
-                                    if (_hourlyIntervalHours == 0 &&
-                                        _hourlyIntervalMinutes == 0) ...[
-                                      SizedBox(height: 8.h),
-                                      Text(
-                                        'Interval must be greater than 0',
-                                        style: TextStyle(
-                                          color: Colors.red,
-                                          fontSize: 12.sp,
-                                        ),
-                                      ),
-                                    ],
                                   ],
                                 ),
                               ),
-                            ],
 
-                            // Days Selector (only for weekly)
-                            if (_selectedFrequency ==
-                                RecurrenceFrequency.weekly) ...[
                               Divider(color: dividerColor, height: 1.h),
+
+                              // Time Selector
                               Padding(
                                 padding: EdgeInsets.all(16.r),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
                                     Text(
-                                      'ON THESE DAYS',
+                                      'Time',
                                       style: TextStyle(
-                                        color: subtitleColor.withOpacity(0.7),
-                                        fontSize: 12.sp,
-                                        fontWeight: FontWeight.w600,
-                                        letterSpacing: 1.2,
+                                        color: textColor,
+                                        fontSize: 16.sp,
+                                        fontWeight: FontWeight.w500,
                                       ),
                                     ),
-                                    SizedBox(height: 12.h),
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: List.generate(7, (index) {
-                                        final dayIndex = index + 1;
-                                        final isSelected = _selectedDays
-                                            .contains(dayIndex);
-                                        return _buildDayButton(
-                                          _dayAbbreviations[index],
-                                          dayIndex,
-                                          isSelected,
-                                          inputBgColor,
-                                          textColor,
-                                          subtitleColor,
-                                        );
-                                      }),
+                                    InkWell(
+                                      onTap: _selectTime,
+                                      borderRadius: BorderRadius.circular(20.r),
+                                      child: Container(
+                                        padding: EdgeInsets.symmetric(
+                                          vertical: 8.h,
+                                          horizontal: 16.w,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: inputBgColor,
+                                          borderRadius: BorderRadius.circular(
+                                            20.r,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              () {
+                                                final hour =
+                                                    _selectedTime
+                                                            .hourOfPeriod ==
+                                                        0
+                                                    ? 12
+                                                    : _selectedTime
+                                                          .hourOfPeriod;
+                                                final minute = _selectedTime
+                                                    .minute
+                                                    .toString()
+                                                    .padLeft(2, '0');
+                                                final period =
+                                                    _selectedTime.period ==
+                                                        DayPeriod.am
+                                                    ? 'AM'
+                                                    : 'PM';
+                                                return '$hour:$minute $period';
+                                              }(),
+                                              style: TextStyle(
+                                                color: textColor,
+                                                fontSize: 14.sp,
+                                              ),
+                                            ),
+                                            SizedBox(width: 8.w),
+                                            Icon(
+                                              Icons.access_time,
+                                              color: subtitleColor,
+                                              size: 18.sp,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                     ),
                                   ],
                                 ),
                               ),
-                            ],
 
-                            // End Date Section
-                            Divider(color: dividerColor, height: 1.h),
-                            Padding(
-                              padding: EdgeInsets.all(16.r),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    'End Date',
-                                    style: TextStyle(
-                                      color: textColor,
-                                      fontSize: 16.sp,
-                                      fontWeight: FontWeight.w500,
+                              Divider(color: dividerColor, height: 1.h),
+
+                              // Icon & Color - Combined in one row
+                              Padding(
+                                padding: EdgeInsets.all(16.r),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      'Icon & Color',
+                                      style: TextStyle(
+                                        color: textColor,
+                                        fontSize: 16.sp,
+                                        fontWeight: FontWeight.w500,
+                                      ),
                                     ),
-                                  ),
-                                  Row(
-                                    children: [
-                                      if (_endDateEnabled) ...[
+                                    Row(
+                                      children: [
+                                        // Icon Button
                                         InkWell(
-                                          onTap: _selectEndDate,
+                                          onTap: _openIconPicker,
                                           borderRadius: BorderRadius.circular(
                                             20.r,
                                           ),
                                           child: Container(
-                                            padding: EdgeInsets.symmetric(
-                                              vertical: 8.h,
-                                              horizontal: 16.w,
-                                            ),
+                                            padding: EdgeInsets.all(12.r),
                                             decoration: BoxDecoration(
                                               color: inputBgColor,
                                               borderRadius:
                                                   BorderRadius.circular(20.r),
                                             ),
+                                            child:
+                                                _selectedCustomIconUrl != null
+                                                ? ClipRRect(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          8.r,
+                                                        ),
+                                                    child: Image.network(
+                                                      _selectedCustomIconUrl!,
+                                                      width: 24.w,
+                                                      height: 24.h,
+                                                      fit: BoxFit.cover,
+                                                      errorBuilder:
+                                                          (
+                                                            context,
+                                                            error,
+                                                            stackTrace,
+                                                          ) {
+                                                            return Icon(
+                                                              Icons
+                                                                  .notification_important_outlined,
+                                                              color:
+                                                                  _selectedColor,
+                                                              size: 24.sp,
+                                                            );
+                                                          },
+                                                    ),
+                                                  )
+                                                : Icon(
+                                                    _selectedIcon,
+                                                    color: _selectedColor,
+                                                    size: 24.sp,
+                                                  ),
+                                          ),
+                                        ),
+                                        SizedBox(width: 12.w),
+                                        // Color Button (hidden when a custom icon is selected)
+                                        if (_selectedCustomIconUrl == null)
+                                          InkWell(
+                                            onTap: _openColorPicker,
+                                            borderRadius: BorderRadius.circular(
+                                              20.r,
+                                            ),
+                                            child: Container(
+                                              width: 48.w,
+                                              height: 48.h,
+                                              decoration: BoxDecoration(
+                                                color: _selectedColor,
+                                                borderRadius:
+                                                    BorderRadius.circular(20.r),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              Divider(color: dividerColor, height: 1.h),
+
+                              // Repeat Switch
+                              Padding(
+                                key: _repeatSwitchKey,
+                                padding: EdgeInsets.all(16.r),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      'Repeat',
+                                      style: TextStyle(
+                                        color: textColor,
+                                        fontSize: 16.sp,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    Switch(
+                                      value: _repeatEnabled,
+                                      onChanged: (value) {
+                                        setState(() {
+                                          _repeatEnabled = value;
+                                        });
+                                      },
+                                      activeColor: _accentColor,
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              Divider(color: dividerColor, height: 1.h),
+
+                              // Auto-snooze Switch
+                              Padding(
+                                key: _autoSnoozeSwitchKey,
+                                padding: EdgeInsets.all(16.r),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Auto-snooze',
+                                          style: TextStyle(
+                                            color: textColor,
+                                            fontSize: 16.sp,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        SizedBox(height: 2.h),
+                                        Text(
+                                          'Snooze if no response',
+                                          style: TextStyle(
+                                            color: subtitleColor,
+                                            fontSize: 12.sp,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    Switch(
+                                      value: _autoSnoozeEnabled,
+                                      onChanged: (value) {
+                                        setState(() {
+                                          _autoSnoozeEnabled = value;
+                                        });
+                                      },
+                                      activeColor: _accentColor,
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              // Auto-snooze Settings (only show when enabled)
+                              if (_autoSnoozeEnabled) ...[
+                                Divider(color: dividerColor, height: 1.h),
+                                Padding(
+                                  padding: EdgeInsets.all(16.r),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Snooze Interval',
+                                        style: TextStyle(
+                                          color: textColor,
+                                          fontSize: 14.sp,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      SizedBox(height: 8.h),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Slider(
+                                              value: _autoSnoozeInterval
+                                                  .toDouble(),
+                                              min: 1,
+                                              max: 60,
+                                              divisions: 59,
+                                              label: '$_autoSnoozeInterval min',
+                                              activeColor: _accentColor,
+                                              onChanged: (value) {
+                                                setState(() {
+                                                  _autoSnoozeInterval = value
+                                                      .toInt();
+                                                });
+                                              },
+                                            ),
+                                          ),
+                                          SizedBox(width: 8.w),
+                                          Text(
+                                            '$_autoSnoozeInterval min',
+                                            style: TextStyle(
+                                              color: textColor,
+                                              fontSize: 14.sp,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      SizedBox(height: 16.h),
+                                      Text(
+                                        'Max Snoozes',
+                                        style: TextStyle(
+                                          color: textColor,
+                                          fontSize: 14.sp,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      SizedBox(height: 8.h),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Slider(
+                                              value: _autoSnoozeMaxCount
+                                                  .toDouble(),
+                                              min: 1,
+                                              max: 10,
+                                              divisions: 9,
+                                              label:
+                                                  '$_autoSnoozeMaxCount times',
+                                              activeColor: _accentColor,
+                                              onChanged: (value) {
+                                                setState(() {
+                                                  _autoSnoozeMaxCount = value
+                                                      .toInt();
+                                                });
+                                              },
+                                            ),
+                                          ),
+                                          SizedBox(width: 8.w),
+                                          Text(
+                                            '$_autoSnoozeMaxCount times',
+                                            style: TextStyle(
+                                              color: textColor,
+                                              fontSize: 14.sp,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+
+                        // Recurrence Options Container (separate container when repeat is enabled)
+                        if (_repeatEnabled) ...[
+                          SizedBox(height: 20.h),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: cardColor,
+                              borderRadius: BorderRadius.circular(24.r),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Frequency Selector
+                                Padding(
+                                  padding: EdgeInsets.all(18.r),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'FREQUENCY',
+                                        style: TextStyle(
+                                          color: subtitleColor.withOpacity(0.7),
+                                          fontSize: 12.sp,
+                                          fontWeight: FontWeight.w600,
+                                          letterSpacing: 1.2,
+                                        ),
+                                      ),
+                                      SizedBox(height: 12.h),
+                                      Row(
+                                        children: [
+                                          _buildFrequencyChip(
+                                            'Hourly',
+                                            RecurrenceFrequency.hourly,
+                                            cardColor,
+                                            textColor,
+                                            subtitleColor,
+                                            inputBgColor,
+                                          ),
+                                          SizedBox(width: 6.w),
+                                          _buildFrequencyChip(
+                                            'Daily',
+                                            RecurrenceFrequency.daily,
+                                            cardColor,
+                                            textColor,
+                                            subtitleColor,
+                                            inputBgColor,
+                                          ),
+                                          SizedBox(width: 6.w),
+                                          _buildFrequencyChip(
+                                            'Weekly',
+                                            RecurrenceFrequency.weekly,
+                                            cardColor,
+                                            textColor,
+                                            subtitleColor,
+                                            inputBgColor,
+                                          ),
+                                          SizedBox(width: 6.w),
+                                          _buildFrequencyChip(
+                                            'Monthly',
+                                            RecurrenceFrequency.monthly,
+                                            cardColor,
+                                            textColor,
+                                            subtitleColor,
+                                            inputBgColor,
+                                          ),
+                                          SizedBox(width: 6.w),
+                                          _buildFrequencyChip(
+                                            'Yearly',
+                                            RecurrenceFrequency.yearly,
+                                            cardColor,
+                                            textColor,
+                                            subtitleColor,
+                                            inputBgColor,
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+
+                                // Interval Selector (only for hourly)
+                                if (_selectedFrequency ==
+                                    RecurrenceFrequency.hourly) ...[
+                                  Divider(color: dividerColor, height: 1.h),
+                                  Padding(
+                                    padding: EdgeInsets.all(16.r),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'REPEAT EVERY',
+                                          style: TextStyle(
+                                            color: subtitleColor.withOpacity(
+                                              0.7,
+                                            ),
+                                            fontSize: 12.sp,
+                                            fontWeight: FontWeight.w600,
+                                            letterSpacing: 1.2,
+                                          ),
+                                        ),
+                                        SizedBox(height: 12.h),
+                                        GestureDetector(
+                                          onTap: () {
+                                            _showIntervalPicker(
+                                              context,
+                                              cardColor,
+                                              textColor,
+                                              subtitleColor,
+                                            );
+                                          },
+                                          child: Container(
+                                            padding: EdgeInsets.symmetric(
+                                              horizontal: 16.w,
+                                              vertical: 12.h,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: inputBgColor,
+                                              borderRadius:
+                                                  BorderRadius.circular(12.r),
+                                            ),
                                             child: Row(
-                                              mainAxisSize: MainAxisSize.min,
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment
+                                                      .spaceBetween,
                                               children: [
                                                 Text(
-                                                  _endDate != null
-                                                      ? DateFormat(
-                                                          'MMM dd, yyyy',
-                                                        ).format(_endDate!)
-                                                      : 'Select Date',
+                                                  _getIntervalText(),
                                                   style: TextStyle(
                                                     color: textColor,
-                                                    fontSize: 14.sp,
+                                                    fontSize: 16.sp,
+                                                    fontWeight: FontWeight.w500,
                                                   ),
                                                 ),
-                                                SizedBox(width: 8.w),
                                                 Icon(
-                                                  Icons.calendar_today,
+                                                  Icons.arrow_drop_down,
                                                   color: subtitleColor,
-                                                  size: 16.sp,
+                                                  size: 24.sp,
                                                 ),
                                               ],
                                             ),
                                           ),
                                         ),
-                                        SizedBox(width: 12.w),
+                                        // Validation message
+                                        if (_hourlyIntervalHours == 0 &&
+                                            _hourlyIntervalMinutes == 0) ...[
+                                          SizedBox(height: 8.h),
+                                          Text(
+                                            'Interval must be greater than 0',
+                                            style: TextStyle(
+                                              color: Colors.red,
+                                              fontSize: 12.sp,
+                                            ),
+                                          ),
+                                        ],
                                       ],
-                                      Switch(
-                                        value: _endDateEnabled,
-                                        onChanged: (value) {
-                                          setState(() {
-                                            _endDateEnabled = value;
-                                            if (value && _endDate == null) {
-                                              _endDate = _selectedDate.add(
-                                                const Duration(days: 30),
-                                              );
-                                            }
-                                          });
-                                        },
-                                        activeColor: _accentColor,
+                                    ),
+                                  ),
+                                ],
+
+                                // Days Selector (only for weekly)
+                                if (_selectedFrequency ==
+                                    RecurrenceFrequency.weekly) ...[
+                                  Divider(color: dividerColor, height: 1.h),
+                                  Padding(
+                                    padding: EdgeInsets.all(16.r),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'ON THESE DAYS',
+                                          style: TextStyle(
+                                            color: subtitleColor.withOpacity(
+                                              0.7,
+                                            ),
+                                            fontSize: 12.sp,
+                                            fontWeight: FontWeight.w600,
+                                            letterSpacing: 1.2,
+                                          ),
+                                        ),
+                                        SizedBox(height: 12.h),
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: List.generate(7, (index) {
+                                            final dayIndex = index + 1;
+                                            final isSelected = _selectedDays
+                                                .contains(dayIndex);
+                                            return _buildDayButton(
+                                              _dayAbbreviations[index],
+                                              dayIndex,
+                                              isSelected,
+                                              inputBgColor,
+                                              textColor,
+                                              subtitleColor,
+                                            );
+                                          }),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+
+                                // End Date Section
+                                Divider(color: dividerColor, height: 1.h),
+                                Padding(
+                                  padding: EdgeInsets.all(16.r),
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        'End Date',
+                                        style: TextStyle(
+                                          color: textColor,
+                                          fontSize: 16.sp,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      Row(
+                                        children: [
+                                          if (_endDateEnabled) ...[
+                                            InkWell(
+                                              onTap: _selectEndDate,
+                                              borderRadius:
+                                                  BorderRadius.circular(20.r),
+                                              child: Container(
+                                                padding: EdgeInsets.symmetric(
+                                                  vertical: 8.h,
+                                                  horizontal: 16.w,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: inputBgColor,
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                        20.r,
+                                                      ),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    Text(
+                                                      _endDate != null
+                                                          ? DateFormat(
+                                                              'MMM dd, yyyy',
+                                                            ).format(_endDate!)
+                                                          : 'Select Date',
+                                                      style: TextStyle(
+                                                        color: textColor,
+                                                        fontSize: 14.sp,
+                                                      ),
+                                                    ),
+                                                    SizedBox(width: 8.w),
+                                                    Icon(
+                                                      Icons.calendar_today,
+                                                      color: subtitleColor,
+                                                      size: 16.sp,
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                            SizedBox(width: 12.w),
+                                          ],
+                                          Switch(
+                                            value: _endDateEnabled,
+                                            onChanged: (value) {
+                                              setState(() {
+                                                _endDateEnabled = value;
+                                                if (value && _endDate == null) {
+                                                  _endDate = _selectedDate.add(
+                                                    const Duration(days: 30),
+                                                  );
+                                                }
+                                              });
+                                            },
+                                            activeColor: _accentColor,
+                                          ),
+                                        ],
                                       ),
                                     ],
                                   ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-
-                    // Next 3 Occurrences (only shown when repeat is enabled)
-                    if (_repeatEnabled) ...[
-                      SizedBox(height: 32.h),
-                      Text(
-                        'NEXT 3 OCCURRENCES',
-                        style: TextStyle(
-                          color: subtitleColor.withOpacity(0.7),
-                          fontSize: 12.sp,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                      SizedBox(height: 12.h),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: cardColor,
-                          borderRadius: BorderRadius.circular(24.r),
-                        ),
-                        child: Column(
-                          children: () {
-                            final occurrences = _generateNextOccurrences();
-                            if (occurrences.isEmpty) {
-                              return [
-                                Padding(
-                                  padding: EdgeInsets.all(16.r),
-                                  child: Text(
-                                    'No occurrences found',
-                                    style: TextStyle(
-                                      color: subtitleColor,
-                                      fontSize: 14.sp,
-                                    ),
-                                  ),
                                 ),
-                              ];
-                            }
-                            return occurrences.asMap().entries.map((entry) {
-                              final index = entry.key;
-                              final occurrence = entry.value;
-                              final isLast = index == occurrences.length - 1;
+                              ],
+                            ),
+                          ),
+                        ],
 
-                              return Column(
-                                children: [
-                                  Padding(
-                                    padding: EdgeInsets.all(16.r),
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
+                        // Next 3 Occurrences (only shown when repeat is enabled)
+                        if (_repeatEnabled) ...[
+                          SizedBox(height: 32.h),
+                          Text(
+                            'NEXT 3 OCCURRENCES',
+                            style: TextStyle(
+                              color: subtitleColor.withOpacity(0.7),
+                              fontSize: 12.sp,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                          SizedBox(height: 12.h),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: cardColor,
+                              borderRadius: BorderRadius.circular(24.r),
+                            ),
+                            child: Column(
+                              children: () {
+                                final occurrences = _generateNextOccurrences();
+                                if (occurrences.isEmpty) {
+                                  return [
+                                    Padding(
+                                      padding: EdgeInsets.all(16.r),
+                                      child: Text(
+                                        'No occurrences found',
+                                        style: TextStyle(
+                                          color: subtitleColor,
+                                          fontSize: 14.sp,
+                                        ),
+                                      ),
+                                    ),
+                                  ];
+                                }
+                                return occurrences.asMap().entries.map((entry) {
+                                  final index = entry.key;
+                                  final occurrence = entry.value;
+                                  final isLast =
+                                      index == occurrences.length - 1;
+
+                                  return Column(
+                                    children: [
+                                      Padding(
+                                        padding: EdgeInsets.all(16.r),
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
                                           children: [
-                                            Text(
-                                              occurrence['title']!,
-                                              style: TextStyle(
-                                                color: textColor,
-                                                fontSize: 16.sp,
-                                                fontWeight: FontWeight.w500,
-                                              ),
+                                            Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  occurrence['title']!,
+                                                  style: TextStyle(
+                                                    color: textColor,
+                                                    fontSize: 16.sp,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                ),
+                                                SizedBox(height: 4.h),
+                                                Text(
+                                                  occurrence['subtitle']!,
+                                                  style: TextStyle(
+                                                    color: subtitleColor,
+                                                    fontSize: 13.sp,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
-                                            SizedBox(height: 4.h),
-                                            Text(
-                                              occurrence['subtitle']!,
-                                              style: TextStyle(
-                                                color: subtitleColor,
-                                                fontSize: 13.sp,
+                                            Container(
+                                              padding: EdgeInsets.symmetric(
+                                                vertical: 6.h,
+                                                horizontal: 12.w,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: inputBgColor,
+                                                borderRadius:
+                                                    BorderRadius.circular(20.r),
+                                              ),
+                                              child: Text(
+                                                occurrence['time']!,
+                                                style: TextStyle(
+                                                  color: subtitleColor,
+                                                  fontSize: 13.sp,
+                                                ),
                                               ),
                                             ),
                                           ],
                                         ),
-                                        Container(
-                                          padding: EdgeInsets.symmetric(
-                                            vertical: 6.h,
-                                            horizontal: 12.w,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: inputBgColor,
-                                            borderRadius: BorderRadius.circular(
-                                              20.r,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            occurrence['time']!,
-                                            style: TextStyle(
-                                              color: subtitleColor,
-                                              fontSize: 13.sp,
-                                            ),
-                                          ),
+                                      ),
+                                      if (!isLast)
+                                        Divider(
+                                          color: dividerColor,
+                                          height: 1.h,
                                         ),
-                                      ],
-                                    ),
-                                  ),
-                                  if (!isLast)
-                                    Divider(color: dividerColor, height: 1.h),
-                                ],
-                              );
-                            }).toList();
-                          }(),
-                        ),
-                      ),
-                    ],
+                                    ],
+                                  );
+                                }).toList();
+                              }(),
+                            ),
+                          ),
+                        ],
 
-                    SizedBox(height: 32.h),
-                  ],
+                        SizedBox(height: 32.h),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
+              if (widget.reminderToEdit == null || _hasChanges())
+                StickySaveButton(
+                  onPressed: _saveReminder,
+                  onCancel: widget.reminderToEdit != null
+                      ? _resetToInitial
+                      : null,
+                  showCancel: widget.reminderToEdit != null,
+                  isLoading: _isSaving,
+                  accentColor: _accentColor,
+                  isDarkMode: _isDarkMode,
+                ),
+            ],
           ),
-          if (widget.reminderToEdit == null || _hasChanges())
-            StickySaveButton(
-              onPressed: _saveReminder,
-              onCancel: widget.reminderToEdit != null ? _resetToInitial : null,
-              showCancel: widget.reminderToEdit != null,
-              isLoading: _isSaving,
+
+          // Tutorial overlays
+          if (_showRepeatTutorial && _repeatSwitchKey.currentContext != null)
+            TutorialOverlay(
+              targetKey: _repeatSwitchKey,
+              title: 'Repeat Reminders',
+              description:
+                  'Enable repeat to make this reminder recur daily, weekly, or on a custom schedule. Perfect for habits and regular tasks!',
+              onSkip: _onRepeatTutorialSkip,
+              onNext: _onRepeatTutorialNext,
+              isLastStep: false,
               accentColor: _accentColor,
               isDarkMode: _isDarkMode,
+              highlightPadding: EdgeInsets.all(8.w),
+            ),
+
+          if (_showAutoSnoozeTutorial &&
+              _autoSnoozeSwitchKey.currentContext != null)
+            TutorialOverlay(
+              targetKey: _autoSnoozeSwitchKey,
+              title: 'Auto-Snooze',
+              description:
+                  'Enable auto-snooze to automatically remind you again if you don\'t respond to a notification. Great for important tasks!',
+              onSkip: _onAutoSnoozeTutorialSkip,
+              onNext: _onAutoSnoozeTutorialNext,
+              isLastStep: true,
+              accentColor: _accentColor,
+              isDarkMode: _isDarkMode,
+              highlightPadding: EdgeInsets.all(8.w),
             ),
         ],
       ),

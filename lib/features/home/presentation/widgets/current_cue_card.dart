@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
+import 'package:flip_card/flip_card.dart';
+import 'package:flip_card/flip_card_controller.dart';
 import '../../../reminders/domain/reminder_model.dart';
 import '../../../reminders/data/reminder_service.dart';
 import '../../../reminders/presentation/reminder_details_screen.dart';
 import '../../../snooze/presentation/snooze_screen.dart';
+import '../../../../shared/widgets/card_back_side.dart';
 
 class CurrentCueCard extends StatefulWidget {
   final Reminder reminder;
@@ -37,12 +41,15 @@ class CurrentCueCard extends StatefulWidget {
 }
 
 class _CurrentCueCardState extends State<CurrentCueCard>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late TextEditingController _notesController;
   final FocusNode _notesFocusNode = FocusNode();
   final ReminderService _reminderService = ReminderService();
+  final FlipCardController _flipController = FlipCardController();
 
   late AnimationController _swipeController;
+  late AnimationController _bounceController;
+  late Animation<double> _bounceAnimation;
   double _dragOffset = 0;
 
   @override
@@ -55,6 +62,22 @@ class _CurrentCueCardState extends State<CurrentCueCard>
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
+
+    // Initialize bounce animation controller
+    _bounceController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _bounceAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
+      CurvedAnimation(parent: _bounceController, curve: Curves.elasticOut),
+    );
+
+    // Start bounce animation when loaded
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _bounceController.forward().then((_) {
+        _bounceController.reverse();
+      });
+    });
 
     // Listen to focus changes to update UI and save notes on blur
     _notesFocusNode.addListener(() {
@@ -80,6 +103,7 @@ class _CurrentCueCardState extends State<CurrentCueCard>
   @override
   void dispose() {
     _swipeController.dispose();
+    _bounceController.dispose();
     _notesController.dispose();
     _notesFocusNode.dispose();
     super.dispose();
@@ -131,159 +155,219 @@ class _CurrentCueCardState extends State<CurrentCueCard>
         ? DateFormat('hh:mm a').format(snoozedUntil)
         : null;
 
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) =>
-                ReminderDetailsScreen(reminder: widget.reminder),
-          ),
-        );
-      },
-      child: Container(
-        width: double.infinity,
-        padding: EdgeInsets.all(42.r),
-        decoration: BoxDecoration(
-          color: widget.cardColor,
-          borderRadius: BorderRadius.circular(28.r),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(widget.isDarkMode ? 0.3 : 0.08),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header row with label and icon
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // Reminder title
-                Text(
-                  displayTitle,
-                  style: TextStyle(
-                    fontSize: 46.sp,
-                    fontWeight: FontWeight.w700,
-                    color: widget.textColor,
-                    height: 1.2,
-                  ),
+    return SizedBox(
+      width: double.infinity,
+      child: GestureDetector(
+        onHorizontalDragEnd: (details) {
+          if (details.primaryVelocity != null) {
+            if (details.primaryVelocity!.abs() > 300) {
+              _flipController.toggleCard();
+            }
+          }
+        },
+        child: FlipCard(
+          controller: _flipController,
+          direction: FlipDirection.HORIZONTAL,
+          flipOnTouch: false,
+          front: GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      ReminderDetailsScreen(reminder: widget.reminder),
                 ),
-                // Dynamic icon from reminder
-                Container(
-                  width: 50.w,
-                  height: 50.h,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: widget.reminder.color.withOpacity(0.15),
-                  ),
-                  child: widget.reminder.customIconUrl != null
-                      ? ClipOval(
-                          child: Image.network(
-                            widget.reminder.customIconUrl!,
-                            width: 50.w,
-                            height: 50.h,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Icon(
-                                widget.reminder.icon,
-                                color: widget.reminder.color,
-                                size: 30.sp,
-                              );
-                            },
-                          ),
-                        )
-                      : Icon(
-                          widget.reminder.icon,
-                          color: widget.reminder.color,
-                          size: 30.sp,
-                        ),
-                ),
-              ],
-            ),
-
-            SizedBox(height: 12.h),
-
-            // Time info (below title) — scheduled time only
-            Row(
-              children: [
-                Icon(
-                  Icons.access_time_filled,
-                  size: 18.sp,
-                  color: widget.subtitleColor,
-                ),
-                SizedBox(width: 6.w),
-                Text(
-                  timeText,
-                  style: TextStyle(
-                    fontSize: 16.sp,
-                    fontWeight: FontWeight.w600,
-                    color: widget.accentColor,
-                  ),
-                ),
-                SizedBox(width: 8.w),
-                Text(
-                  '·',
-                  style: TextStyle(
-                    fontSize: 16.sp,
-                    color: widget.subtitleColor,
-                  ),
-                ),
-                SizedBox(width: 8.w),
-                Text(
-                  formattedTime,
-                  style: TextStyle(
-                    fontSize: 16.sp,
-                    color: widget.subtitleColor,
-                  ),
-                ),
-              ],
-            ),
-
-            // Snooze chip — only when snoozed: "Rings at [time]"
-            if (isSnoozed && snoozedUntilFormatted != null) ...[
-              SizedBox(height: 10.h),
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
-                decoration: BoxDecoration(
-                  color: widget.accentColor.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(20.r),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.snooze_rounded,
-                      size: 14.sp,
-                      color: widget.accentColor,
+              );
+            },
+            child: Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: widget.cardColor,
+                borderRadius: BorderRadius.circular(28.r),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(
+                      widget.isDarkMode ? 0.3 : 0.08,
                     ),
-                    SizedBox(width: 6.w),
-                    Text(
-                      'Snoozed until $snoozedUntilFormatted',
-                      style: TextStyle(
-                        fontSize: 13.sp,
-                        fontWeight: FontWeight.w500,
-                        color: widget.accentColor,
-                      ),
-                    ),
-                  ],
-                ),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
               ),
-            ],
+              child: Stack(
+                children: [
+                  // Main content
+                  Padding(
+                    padding: EdgeInsets.all(42.r),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header row with label and icon
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            // Reminder title
+                            Expanded(
+                              child: Text(
+                                displayTitle,
+                                style: TextStyle(
+                                  fontSize: 46.sp,
+                                  fontWeight: FontWeight.w700,
+                                  color: widget.textColor,
+                                  height: 1.2,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            // Dynamic icon from reminder with bounce animation
+                            AnimatedBuilder(
+                              animation: _bounceAnimation,
+                              builder: (context, child) {
+                                return Transform.scale(
+                                  scale: _bounceAnimation.value,
+                                  child: Container(
+                                    width: 50.w,
+                                    height: 50.h,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: widget.reminder.color.withOpacity(
+                                        0.15,
+                                      ),
+                                    ),
+                                    child: widget.reminder.customIconUrl != null
+                                        ? ClipOval(
+                                            child: Image.network(
+                                              widget.reminder.customIconUrl!,
+                                              width: 50.w,
+                                              height: 50.h,
+                                              fit: BoxFit.cover,
+                                              errorBuilder:
+                                                  (context, error, stackTrace) {
+                                                    return Icon(
+                                                      widget.reminder.icon,
+                                                      color:
+                                                          widget.reminder.color,
+                                                      size: 30.sp,
+                                                    );
+                                                  },
+                                            ),
+                                          )
+                                        : Icon(
+                                            widget.reminder.icon,
+                                            color: widget.reminder.color,
+                                            size: 30.sp,
+                                          ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
 
-            SizedBox(height: 32.h),
+                        SizedBox(height: 12.h),
 
-            // Notes section
-            _buildNotesSection(),
+                        // Time info (below title) — scheduled time only
+                        Row(
+                          children: [
+                            Image.asset(
+                              'assets/clock.png',
+                              width: 28.w,
+                              height: 28.h,
+                            ),
+                            SizedBox(width: 6.w),
+                            Text(
+                              timeText,
+                              style: TextStyle(
+                                fontSize: 16.sp,
+                                fontWeight: FontWeight.w600,
+                                color: timeText.contains('ago')
+                                    ? const Color(0xFFFFC107)
+                                    : widget.accentColor,
+                              ),
+                            ),
+                            SizedBox(width: 8.w),
+                            Text(
+                              '·',
+                              style: TextStyle(
+                                fontSize: 16.sp,
+                                color: widget.subtitleColor,
+                              ),
+                            ),
+                            SizedBox(width: 8.w),
+                            Text(
+                              formattedTime,
+                              style: TextStyle(
+                                fontSize: 16.sp,
+                                color: widget.subtitleColor,
+                              ),
+                            ),
+                          ],
+                        ),
 
-            SizedBox(height: 60.h),
+                        // Snooze chip — only when snoozed: "Rings at [time]"
+                        if (isSnoozed && snoozedUntilFormatted != null) ...[
+                          SizedBox(height: 10.h),
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 12.w,
+                              vertical: 6.h,
+                            ),
+                            decoration: BoxDecoration(
+                              color: widget.accentColor.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(20.r),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.snooze_rounded,
+                                  size: 14.sp,
+                                  color: widget.accentColor,
+                                ),
+                                SizedBox(width: 6.w),
+                                Text(
+                                  'Snoozed until $snoozedUntilFormatted',
+                                  style: TextStyle(
+                                    fontSize: 13.sp,
+                                    fontWeight: FontWeight.w500,
+                                    color: widget.accentColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
 
-            // Action buttons (Done and Snooze)
-            _buildActionButtons(),
-          ],
+                        SizedBox(height: 32.h),
+
+                        // Notes section
+                        _buildNotesSection(),
+
+                        SizedBox(height: 60.h),
+
+                        // Action buttons (Done and Snooze)
+                        _buildActionButtons(),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          back: CardBackSide(
+            reminder: widget.reminder,
+            accentColor: widget.accentColor,
+            isDarkMode: widget.isDarkMode,
+            cardColor: widget.cardColor,
+            textColor: widget.textColor,
+            onDeleted: () {
+              // Pop back to home screen
+              if (mounted) {
+                Navigator.of(context).popUntil((route) => route.isFirst);
+              }
+            },
+          ),
         ),
       ),
     );
@@ -455,6 +539,15 @@ class _CurrentCueCardState extends State<CurrentCueCard>
                 AnimatedBuilder(
                   animation: _swipeController,
                   builder: (context, child) {
+                    // Calculate glow intensity based on drag progress
+                    final progress = _dragOffset / maxSlide;
+                    final glowIntensity = progress > 0
+                        ? 0.4 + (progress * 0.3)
+                        : 0.2;
+                    final blurRadius = progress > 0
+                        ? 12.0 + (progress * 8.0)
+                        : 8.0;
+
                     return Positioned(
                       left: 8.w + _dragOffset,
                       top: 8.h,
@@ -466,8 +559,11 @@ class _CurrentCueCardState extends State<CurrentCueCard>
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: widget.accentColor,
-                              blurRadius: 8,
+                              color: widget.accentColor.withOpacity(
+                                glowIntensity,
+                              ),
+                              blurRadius: blurRadius,
+                              spreadRadius: progress > 0 ? 2 : 0,
                               offset: const Offset(0, 2),
                             ),
                           ],
@@ -490,33 +586,61 @@ class _CurrentCueCardState extends State<CurrentCueCard>
   }
 
   Widget _buildDoneButton() {
-    return GestureDetector(
-      onTap: () {
-        widget.onMarkCompleted(widget.reminder.id);
-      },
-      child: Container(
-        height: 64.h,
-        decoration: BoxDecoration(
-          color: widget.accentColor,
-          borderRadius: BorderRadius.circular(36.r),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.check_rounded, color: Colors.white, size: 20.sp),
-            SizedBox(width: 8.w),
-            Text(
-              'DONE',
-              style: TextStyle(
-                fontSize: 14.sp,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
-                letterSpacing: 0.5,
+    return StatefulBuilder(
+      builder: (context, setState) {
+        return GestureDetector(
+          onTap: () async {
+            // Haptic feedback
+            try {
+              await HapticFeedback.mediumImpact();
+            } catch (e) {
+              // Haptic feedback not available on all platforms
+            }
+            widget.onMarkCompleted(widget.reminder.id);
+          },
+          child: AnimatedScale(
+            scale: 1.0,
+            duration: const Duration(milliseconds: 100),
+            child: Container(
+              height: 64.h,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    widget.accentColor,
+                    widget.accentColor.withOpacity(0.9),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(36.r),
+                boxShadow: [
+                  BoxShadow(
+                    color: widget.accentColor.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.check_rounded, color: Colors.white, size: 20.sp),
+                  SizedBox(width: 8.w),
+                  Text(
+                    'DONE',
+                    style: TextStyle(
+                      fontSize: 14.sp,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

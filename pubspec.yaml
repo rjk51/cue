@@ -58,6 +58,7 @@ dependencies:
   purchases_ui_flutter: ^9.10.8
   shared_preferences: ^2.2.3
   url_launcher: ^6.1.10
+  flip_card: ^0.7.0
 
 dev_dependencies:
   flutter_test:
