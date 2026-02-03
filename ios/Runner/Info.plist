@@ -4,6 +4,8 @@
 <dict>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This app requires access to the photo library to select and upload custom icons.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>This app needs microphone access to create voice reminders.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

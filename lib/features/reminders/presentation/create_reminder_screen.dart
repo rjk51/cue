@@ -5,6 +5,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
 import 'package:flex_color_picker/flex_color_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:io';
 
 import '../domain/recurrence_rule.dart';
 import '../domain/reminder_model.dart';
@@ -16,29 +17,39 @@ import '../../../services/tutorial_service.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
 import '../../../shared/widgets/cupertino_pickers.dart';
 import '../../../shared/widgets/edit_recurring_dialog.dart';
+import '../../../services/whisper_speech_service.dart';
+import '../../../services/chatgpt_service.dart';
 import '../../../shared/widgets/tutorial_overlay.dart';
 import 'widgets/icon_picker_sheet.dart';
 import 'widgets/sticky_save_button.dart';
 
 class NewReminderScreen extends StatefulWidget {
   final Reminder? reminderToEdit;
+  final bool openedForVoice;
 
-  const NewReminderScreen({super.key, this.reminderToEdit});
+  const NewReminderScreen({super.key, this.reminderToEdit, this.openedForVoice = false});
 
   @override
   State<NewReminderScreen> createState() => _NewReminderScreenState();
 }
 
-class _NewReminderScreenState extends State<NewReminderScreen> {
+class _NewReminderScreenState extends State<NewReminderScreen> with SingleTickerProviderStateMixin {
   final ThemeService _themeService = ThemeService();
   final ReminderService _reminderService = ReminderService();
   final NotificationService _notificationService = NotificationService();
   final TutorialService _tutorialService = TutorialService();
   final TextEditingController _reminderController = TextEditingController();
+  final WhisperSpeechService _whisperService = WhisperSpeechService.instance;
+  final ChatGPTService _chatGPTService = ChatGPTService.instance;
 
   Color _accentColor = const Color(0xFFFFB4A3);
   bool _isDarkMode = false;
   bool _isSaving = false;
+  bool _isRecording = false;
+  bool _isProcessingVoice = false;
+  bool _showVoiceHint = false;
+  late AnimationController _glowController;
+  late Animation<double> _glowAnimation;
 
   // Tutorial state
   bool _showRepeatTutorial = false;
@@ -100,6 +111,28 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
     _reminderController.addListener(() {
       if (mounted) setState(() {});
     });
+
+    // Initialize glow animation
+    _glowController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+    _glowAnimation = Tween<double>(begin: 0.3, end: 1.0).animate(
+      CurvedAnimation(parent: _glowController, curve: Curves.easeInOut),
+    );
+    
+    // Show voice hint if opened for voice
+    if (widget.openedForVoice) {
+      _showVoiceHint = true;
+      _glowController.repeat(reverse: true);
+      // Auto-hide hint after 5 seconds
+      Future.delayed(const Duration(seconds: 5), () {
+        if (mounted) {
+          setState(() => _showVoiceHint = false);
+          _glowController.stop();
+        }
+      });
+    }
 
     // If editing, pre-fill fields
     if (widget.reminderToEdit != null) {
@@ -369,6 +402,7 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
   void dispose() {
     ThemeNotifier.instance.removeListener(_onThemeChanged);
     _reminderController.dispose();
+    _glowController.dispose();
     super.dispose();
   }
 
@@ -1022,6 +1056,89 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
     }
   }
 
+  Future<void> _toggleVoiceRecording() async {
+    if (_isRecording) {
+      await _stopVoiceRecording();
+    } else {
+      await _startVoiceRecording();
+    }
+  }
+
+  Future<void> _startVoiceRecording() async {
+    try {
+      await _whisperService.startRecording();
+      setState(() {
+        _isRecording = true;
+        _showVoiceHint = false;
+      });
+      _glowController.stop();
+    } catch (e) {
+      if (mounted) {
+        context.showErrorSnackbar('Failed to start recording: $e');
+      }
+    }
+  }
+
+  Future<void> _stopVoiceRecording() async {
+    try {
+      setState(() {
+        _isRecording = false;
+        _isProcessingVoice = true;
+      });
+
+      final File? audioFile = await _whisperService.stopRecording();
+
+      if (audioFile == null) {
+        setState(() => _isProcessingVoice = false);
+        if (mounted) {
+          context.showWarningSnackbar('Recording too short');
+        }
+        return;
+      }
+
+      final transcription = await _whisperService.transcribeWithWhisper(audioFile);
+
+      if (transcription == null || transcription.isEmpty) {
+        setState(() => _isProcessingVoice = false);
+        if (mounted) {
+          context.showWarningSnackbar('Could not understand speech');
+        }
+        return;
+      }
+
+      final parseResult = await _chatGPTService.parseReminderFromVoice(transcription);
+
+      if (parseResult == null) {
+        setState(() => _isProcessingVoice = false);
+        if (mounted) {
+          context.showWarningSnackbar('Could not parse reminder');
+        }
+        return;
+      }
+
+      // Fill in the fields
+      setState(() {
+        _reminderController.text = parseResult.reminderText;
+        _selectedDate = DateTime(
+          parseResult.scheduledTime.year,
+          parseResult.scheduledTime.month,
+          parseResult.scheduledTime.day,
+        );
+        _selectedTime = TimeOfDay.fromDateTime(parseResult.scheduledTime);
+        _isProcessingVoice = false;
+      });
+
+      if (mounted) {
+        context.showSuccessSnackbar('Voice input processed!');
+      }
+    } catch (e) {
+      setState(() => _isProcessingVoice = false);
+      if (mounted) {
+        context.showErrorSnackbar('Error: $e');
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // Match home screen colors
@@ -1067,22 +1184,168 @@ class _NewReminderScreenState extends State<NewReminderScreen> {
       ),
       body: Stack(
         children: [
-          Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Padding(
-                    padding: EdgeInsets.all(20.r),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Dynamic Summary Text
-                        RichText(
-                          text: TextSpan(
-                            style: TextStyle(
-                              fontSize: 22.sp,
-                              height: 1.4,
-                              color: textColor,
+          Expanded(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: EdgeInsets.all(20.r),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Dynamic Summary Text
+                    RichText(
+                      text: TextSpan(
+                        style: TextStyle(
+                          fontSize: 22.sp,
+                          height: 1.4,
+                          color: textColor,
+                        ),
+                        children: _buildSummaryTextSpans(textColor),
+                      ),
+                    ),
+
+                    SizedBox(height: 32.h),
+
+                    // Voice hint banner
+                    if (_showVoiceHint)
+                      Container(
+                        margin: EdgeInsets.only(bottom: 16.h),
+                        padding: EdgeInsets.all(16.r),
+                        decoration: BoxDecoration(
+                          color: _accentColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(16.r),
+                          border: Border.all(
+                            color: _accentColor.withOpacity(0.3),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.mic,
+                              color: _accentColor,
+                              size: 20.sp,
+                            ),
+                            SizedBox(width: 12.w),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Try Voice Input!',
+                                    style: TextStyle(
+                                      color: _accentColor,
+                                      fontSize: 14.sp,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  SizedBox(height: 4.h),
+                                  Text(
+                                    'Tap the mic and say: "Remind me to call John at 3pm"',
+                                    style: TextStyle(
+                                      color: subtitleColor,
+                                      fontSize: 12.sp,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: Icon(Icons.close, color: subtitleColor, size: 18.sp),
+                              onPressed: () {
+                                setState(() => _showVoiceHint = false);
+                                _glowController.stop();
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+
+                    // Main container for all controls
+                    Container(
+                      decoration: BoxDecoration(
+                        color: cardColor,
+                        borderRadius: BorderRadius.circular(24.r),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Reminder Name with Mic Button
+                          Padding(
+                            padding: EdgeInsets.all(16.r),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    cursorColor: _accentColor,
+                                    controller: _reminderController,
+                                    style: TextStyle(
+                                      color: textColor,
+                                      fontSize: 24.sp,
+                                    ),
+                                    decoration: InputDecoration(
+                                      hintText: 'What needs your attention?',
+                                      hintStyle: TextStyle(
+                                        color: subtitleColor.withOpacity(0.5),
+                                        fontSize: 24.sp,
+                                      ),
+                                      border: InputBorder.none,
+                                      contentPadding: EdgeInsets.zero,
+                                    ),
+                                    onChanged: (_) {
+                                      setState(
+                                        () {},
+                                      );
+                                    },
+                                  ),
+                                ),
+                                SizedBox(width: 12.w),
+                                // Mic Button with glow
+                                AnimatedBuilder(
+                                  animation: _glowAnimation,
+                                  builder: (context, child) {
+                                    return GestureDetector(
+                                      onTap: _isProcessingVoice ? null : _toggleVoiceRecording,
+                                      child: Container(
+                                        width: 44.w,
+                                        height: 44.h,
+                                        decoration: BoxDecoration(
+                                          color: _isRecording
+                                              ? _accentColor.withOpacity(0.2)
+                                              : inputBgColor,
+                                          shape: BoxShape.circle,
+                                          border: _isRecording
+                                              ? Border.all(color: _accentColor, width: 2)
+                                              : null,
+                                          boxShadow: _showVoiceHint && !_isRecording
+                                              ? [
+                                                  BoxShadow(
+                                                    color: _accentColor.withOpacity(_glowAnimation.value * 0.5),
+                                                    blurRadius: 12 * _glowAnimation.value,
+                                                    spreadRadius: 2 * _glowAnimation.value,
+                                                  ),
+                                                ]
+                                              : null,
+                                        ),
+                                        child: _isProcessingVoice
+                                            ? Padding(
+                                                padding: EdgeInsets.all(12.r),
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  valueColor: AlwaysStoppedAnimation(_accentColor),
+                                                ),
+                                              )
+                                            : Icon(
+                                                _isRecording ? Icons.stop : Icons.mic,
+                                                color: _isRecording
+                                                    ? _accentColor
+                                                    : (_showVoiceHint ? _accentColor : textColor),
+                                                size: 22.sp,
+                                              ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
                             ),
                             children: _buildSummaryTextSpans(textColor),
                           ),

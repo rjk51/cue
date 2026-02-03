@@ -15,6 +15,7 @@ import '../../../services/device_monitor_service.dart';
 import '../../../services/widget_service.dart';
 import '../../../services/tutorial_service.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
+import '../../../shared/widgets/expandable_fab.dart';
 import '../../../shared/widgets/confirmation_dialog.dart';
 import '../../../shared/widgets/delete_recurring_dialog.dart';
 import '../../../shared/widgets/tutorial_overlay.dart';
@@ -224,6 +225,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final result = await Navigator.push<Reminder>(
       context,
       MaterialPageRoute(builder: (context) => const NewReminderScreen()),
+    );
+
+    if (result != null && mounted) {
+      context.showSuccessSnackbar('Reminder created successfully!');
+    }
+  }
+
+  void _navigateToVoiceReminder() async {
+    final result = await Navigator.push<Reminder>(
+      context,
+      MaterialPageRoute(builder: (context) => const NewReminderScreen(openedForVoice: true)),
     );
 
     if (result != null && mounted) {
@@ -720,6 +732,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                         subtitleColor,
                                       ),
                                     ),
+                                    
+                                    // Bottom padding to prevent FAB overlap
+                                    SizedBox(height: 120.h),
                                   ],
                                 ),
                               ),
@@ -767,7 +782,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
           ),
 
-          // FAB positioned in Stack to avoid layout constraints
+          // Expandable FAB positioned in Stack
           Positioned(
             right: 34.w,
             bottom: MediaQuery.of(context).padding.bottom + 30.h,
