@@ -265,14 +265,14 @@ class MyApp extends StatelessWidget {
                         print('⏰ Handling custom snooze input');
                         print('  - customMinutes value: $customMinutes');
                         
-                        if (customMinutes != null && customMinutes > 0 && customMinutes <= 59) {
-                          // Valid input (1-59 minutes)
+                        if (customMinutes != null && customMinutes > 0) {
+                          // Valid input (any positive number)
                           print('✅ Valid input, snoozing for $customMinutes minutes');
                           if (!actualReminderId.startsWith('test_reminder')) {
                             await reminderService.snoozeReminder(actualReminderId, minutes: customMinutes);
                           }
                         } else {
-                          print('❌ Invalid custom minutes: $customMinutes (must be 1-59)');
+                          print('❌ Invalid custom minutes: $customMinutes (must be at least 1)');
                         }
                       } else if (action == 'snooze_5') {
                         print('⏰ Handling 5-minute snooze');

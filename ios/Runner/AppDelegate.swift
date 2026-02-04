@@ -73,7 +73,7 @@ import WidgetKit
       title: "Custom",
       options: [],
       textInputButtonTitle: "Snooze",
-      textInputPlaceholder: "1-59 minutes"
+      textInputPlaceholder: "Enter minutes"
     )
     
     let reminderCategory = UNNotificationCategory(

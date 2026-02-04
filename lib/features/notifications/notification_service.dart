@@ -214,7 +214,7 @@ class NotificationService {
         if (action != null && reminderId != null && onNotificationAction != null) {
           print('✅ Processing iOS action: $action for reminder: $reminderId');
 
-          // For custom snooze input, validate numeric range 1–59
+          // For custom snooze input, validate numeric input (any positive number)
           if (action == 'snooze_input') {
             final inputStr = (userInput ?? '').trim();
             final minutes = int.tryParse(inputStr);
@@ -223,8 +223,8 @@ class NotificationService {
               print('❌ Invalid custom snooze input on iOS (not a number): "$inputStr"');
               return;
             }
-            if (minutes < 1 || minutes > 59) {
-              print('❌ Invalid custom snooze input on iOS (out of range 1-59): $minutes');
+            if (minutes < 1) {
+              print('❌ Invalid custom snooze input on iOS (must be at least 1 minute): $minutes');
               return;
             }
 
@@ -314,7 +314,7 @@ class NotificationService {
       if (onNotificationAction != null) {
         print('✅ Calling onNotificationAction callback');
         
-        // For Android custom snooze input, validate numeric range 1–59
+        // For Android custom snooze input, validate numeric input (any positive number)
         if (actionId == 'snooze_input') {
           final inputStr = (input ?? '').trim();
           final minutes = int.tryParse(inputStr);
@@ -323,8 +323,8 @@ class NotificationService {
             print('❌ Invalid custom snooze input on Android (not a number): "$inputStr"');
             return;
           }
-          if (minutes < 1 || minutes > 59) {
-            print('❌ Invalid custom snooze input on Android (out of range 1-59): $minutes');
+          if (minutes < 1) {
+            print('❌ Invalid custom snooze input on Android (must be at least 1 minute): $minutes');
             return;
           }
 
@@ -584,7 +584,7 @@ class NotificationService {
           cancelNotification: false,
           inputs: <AndroidNotificationActionInput>[
             AndroidNotificationActionInput(
-              label: '1-59 minutes',
+              label: 'Enter minutes',
               allowFreeFormInput: true,
             ),
           ],
