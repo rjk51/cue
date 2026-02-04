@@ -1,9 +1,13 @@
+import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
 import 'features/auth/presentation/welcome_screen.dart';
 import 'features/notifications/notification_service.dart';
@@ -17,6 +21,53 @@ import 'shared/widgets/onboarding_gate.dart';
 
 // Global navigator key for navigation from notification handlers
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+// Device deletion listener subscription
+StreamSubscription<DocumentSnapshot>? _deviceListenerSubscription;
+
+// Listen for device removal and navigate to sign-in screen
+Future<void> _listenForDeviceRemoval(String userId) async {
+  try {
+    final deviceInfo = DeviceInfoPlugin();
+    String deviceId;
+    
+    if (Platform.isAndroid) {
+      final androidInfo = await deviceInfo.androidInfo;
+      deviceId = androidInfo.id;
+    } else if (Platform.isIOS) {
+      final iosInfo = await deviceInfo.iosInfo;
+      deviceId = iosInfo.identifierForVendor ?? '';
+    } else {
+      return;
+    }
+    
+    if (deviceId.isEmpty) return;
+    
+    await _deviceListenerSubscription?.cancel();
+    
+    _deviceListenerSubscription = FirebaseFirestore.instance
+        .collection('devices')
+        .doc(deviceId)
+        .snapshots()
+        .listen((snapshot) async {
+      if (!snapshot.exists || snapshot.data()?['active'] == false) {
+        print('🚨 Device removed or deactivated - signing out');
+        await FirebaseAuth.instance.signOut();
+        final context = navigatorKey.currentContext;
+        if (context != null && context.mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => const WelcomeScreen()),
+            (route) => false,
+          );
+        }
+      }
+    }, onError: (error) {
+      print('❌ Error listening to device: $error');
+    });
+  } catch (e) {
+    print('❌ Error setting up device listener: $e');
+  }
+}
 
 // Top-level function for handling background messages
 @pragma('vm:entry-point')
@@ -170,14 +221,15 @@ class MyApp extends StatelessWidget {
 
             // Show home screen if user is logged in, otherwise show welcome screen
             if (snapshot.hasData) {
+              _listenForDeviceRemoval(snapshot.data!.uid);
+              
               // Initialize notifications after user is authenticated
               WidgetsBinding.instance.addPostFrameCallback((_) async {
                 try {
                   final notificationService = NotificationService();
                   await notificationService.initialize();
                   
-                  // Reactivate device (set active to true after login)
-                  await notificationService.reactivateDevice();
+                  await notificationService.ensureDeviceRegistered();
 
                   // Check for any pending reminders that might have been missed
                   await notificationService.checkPendingReminders(snapshot.data!.uid);

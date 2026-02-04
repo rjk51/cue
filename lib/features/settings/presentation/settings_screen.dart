@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'dart:io';
+import 'package:device_info_plus/device_info_plus.dart';
 import '../../../services/theme_service.dart';
 import '../../../services/auth_service.dart';
 import '../../auth/presentation/welcome_screen.dart';
@@ -11,6 +13,7 @@ import '../../onboarding/presentation/onboarding_screen.dart';
 import '../../subscription/presentation/cue_pro_paywall_screen.dart';
 import 'appearance_screen.dart';
 import 'devices_screen.dart';
+import 'sync_devices_screen.dart';
 // import 'notification_settings_screen.dart'; // Used when Notifications card is enabled
 
 class SettingsScreen extends StatefulWidget {
@@ -711,7 +714,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (context) => const DevicesScreen(),
+                                  builder: (context) => const SyncDevicesScreen(),
                                 ),
                               );
                             },

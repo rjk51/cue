@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+import '../features/notifications/notification_service.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -33,6 +34,7 @@ class AuthService {
         email: email,
         password: password,
       );
+      _registerDevice();
       return credential;
     } on FirebaseAuthException catch (e) {
       throw _handleAuthException(e);
@@ -61,6 +63,8 @@ class AuthService {
         email: email,
         displayName: fullName,
       );
+      
+      _registerDevice();
       
       return credential;
     } on FirebaseAuthException catch (e) {
@@ -130,6 +134,8 @@ class AuthService {
           displayName: userCredential.user?.displayName,
         );
       }
+      
+      _registerDevice();
 
       return userCredential;
     } on FirebaseAuthException catch (e) {
@@ -286,6 +292,8 @@ class AuthService {
           displayName: userCredential.user?.displayName,
         );
       }
+      
+      _registerDevice();
 
       return userCredential;
     } on SignInWithAppleAuthorizationException catch (e) {
@@ -448,6 +456,18 @@ class AuthService {
       default:
         return e.message ?? 'Authentication failed. Please try again.';
     }
+  }
+  
+  void _registerDevice() {
+    Future.delayed(const Duration(milliseconds: 500), () async {
+      try {
+        final notificationService = NotificationService();
+        await notificationService.ensureDeviceRegistered();
+        print('✅ Device registered after login');
+      } catch (e) {
+        print('❌ Error registering device: $e');
+      }
+    });
   }
 }
 

@@ -52,6 +52,30 @@ class NotificationService {
   // Stream subscription for reminder updates
   StreamSubscription<QuerySnapshot>? _reminderSubscription;
 
+  Future<void> ensureDeviceRegistered() async {
+    print('🔄 Ensuring device is registered...');
+    if (_fcmToken != null) {
+      await _saveFCMTokenToFirestore(_fcmToken);
+    } else {
+      try {
+        if (Platform.isIOS) {
+          final apnsToken = await _messaging.getAPNSToken();
+          if (apnsToken != null) {
+            _fcmToken = await _messaging.getToken();
+          }
+        } else {
+          _fcmToken = await _messaging.getToken();
+        }
+        if (_fcmToken != null) {
+          print('✅ Got FCM token: ${_fcmToken!.substring(0, 20)}...');
+          await _saveFCMTokenToFirestore(_fcmToken);
+        }
+      } catch (e) {
+        print('❌ Error in ensureDeviceRegistered: $e');
+      }
+    }
+  }
+
   Future<void> initialize() async {
     // Initialize timezone database
     tz.initializeTimeZones();
@@ -792,78 +816,83 @@ class NotificationService {
 
   // Save FCM token to Firestore for Cloud Functions
   Future<void> _saveFCMTokenToFirestore(String? token) async {
-    if (token != null) {
+    if (token == null) {
+      print('❌ FCM token is null, cannot save to Firestore');
+      return;
+    }
+    
+    for (int attempt = 0; attempt < 5; attempt++) {
       try {
-        // Get current user ID from Firebase Auth
         final userId = FirebaseAuth.instance.currentUser?.uid;
         if (userId == null) {
-          print('⚠️ No user logged in, cannot save FCM token');
-          return;
+          if (attempt < 4) {
+            print('⚠️ No user logged in (attempt ${attempt + 1}/5), retrying...');
+            await Future.delayed(Duration(milliseconds: 500 * (attempt + 1)));
+            continue;
+          } else {
+            print('⚠️ No user logged in after 5 attempts');
+            return;
+          }
+        }
+        
+        final deviceInfo = DeviceInfoPlugin();
+        String deviceId;
+        String deviceName;
+        
+        if (Platform.isAndroid) {
+          final androidInfo = await deviceInfo.androidInfo;
+          deviceId = androidInfo.id;
+          deviceName = '${androidInfo.brand} ${androidInfo.model}';
+        } else if (Platform.isIOS) {
+          final iosInfo = await deviceInfo.iosInfo;
+          deviceId = iosInfo.identifierForVendor ?? token;
+          deviceName = iosInfo.name;
+        } else {
+          deviceId = token;
+          deviceName = 'Unknown Device';
         }
         
         print('💾 Saving FCM token to devices collection...');
+        print('Device ID: $deviceId');
+        print('Device Name: $deviceName');
         print('Token: ${token.substring(0, 20)}...');
         print('User ID: $userId');
         
-        // Get device name
-        final deviceName = await _getDeviceName();
-        print('Device Name: $deviceName');
-        
-        // Check if a device with this FCM token already exists
-        final existingDevice = await FirebaseFirestore.instance
+        await FirebaseFirestore.instance
             .collection('devices')
-            .doc(token)
-            .get();
-        
-        if (existingDevice.exists) {
-          // Device already exists, just update it
-          print('📱 Device already exists, updating...');
-          await FirebaseFirestore.instance
-              .collection('devices')
-              .doc(token)
-              .update({
-            'userId': userId,
-            'lastUpdated': FieldValue.serverTimestamp(),
-            'platform': Platform.isAndroid ? 'android' : 'ios',
-            'deviceName': deviceName,
-            'active': true,
-          });
-        } else {
-          // Create new device document
-          print('📱 Creating new device document...');
-          await FirebaseFirestore.instance
-              .collection('devices')
-              .doc(token)
-              .set({
-            'fcmToken': token,
-            'userId': userId,
-            'lastUpdated': FieldValue.serverTimestamp(),
-            'platform': Platform.isAndroid ? 'android' : 'ios',
-            'deviceName': deviceName,
-            'active': true,
-          });
-        }
+            .doc(deviceId)
+            .set({
+          'deviceId': deviceId,
+          'deviceName': deviceName,
+          'fcmToken': token,
+          'userId': userId,
+          'lastUpdated': FieldValue.serverTimestamp(),
+          'platform': Platform.isAndroid ? 'android' : 'ios',
+          'active': true,
+        }, SetOptions(merge: true));
         
         print('✅ FCM Token saved to devices collection for user: $userId');
         
-        // Verify it was saved
         final doc = await FirebaseFirestore.instance
             .collection('devices')
-            .doc(token)
+            .doc(deviceId)
             .get();
         
         if (doc.exists) {
           print('✅ Verified: Device document exists');
-          print('   Device name: ${doc.data()?['deviceName']}');
         } else {
           print('❌ Warning: Device document not found after save');
         }
+        
+        break;
       } catch (e) {
-        print('❌ Error saving FCM token to Firestore: $e');
-        print('Stack trace: ${StackTrace.current}');
+        if (attempt < 4) {
+          print('❌ Error saving FCM token (attempt ${attempt + 1}/5): $e');
+          await Future.delayed(Duration(milliseconds: 500 * (attempt + 1)));
+        } else {
+          print('❌ Error saving FCM token after 5 attempts: $e');
+        }
       }
-    } else {
-      print('❌ FCM token is null, cannot save to Firestore');
     }
   }
   
