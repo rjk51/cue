@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../services/revenue_cat_service.dart';
 
 /// Simplified Cue Pro Paywall - Features list + Bottom sheet for plans
@@ -359,6 +360,19 @@ class _SubscriptionBottomSheetState extends State<_SubscriptionBottomSheet> {
   Package? _selectedPackage;
   bool _isPurchasing = false;
 
+  String _getPackageDescription(PackageType type) {
+    switch (type) {
+      case PackageType.monthly:
+        return 'Billed monthly • Cancel anytime';
+      case PackageType.annual:
+        return 'Billed annually • Cancel anytime';
+      case PackageType.lifetime:
+        return 'One-time purchase • Lifetime access';
+      default:
+        return 'Auto-renewing subscription';
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -576,13 +590,21 @@ class _SubscriptionBottomSheetState extends State<_SubscriptionBottomSheet> {
                                     ],
                                   ),
                                   SizedBox(height: 4.h),
-                                  // Force display price to $0.90 as requested
                                   Text(
-                                    '\$0.90',
+                                    package.storeProduct.priceString ?? '',
                                     style: TextStyle(
                                       fontSize: 20.sp,
                                       fontWeight: FontWeight.bold,
                                       color: accentColor,
+                                    ),
+                                  ),
+                                  SizedBox(height: 6.h),
+                                  Text(
+                                    _getPackageDescription(package.packageType),
+                                    style: TextStyle(
+                                      fontSize: 12.sp,
+                                      color: (isDark ? Colors.white : Colors.black)
+                                          .withOpacity(0.6),
                                     ),
                                   ),
                                 ],
@@ -632,7 +654,7 @@ class _SubscriptionBottomSheetState extends State<_SubscriptionBottomSheet> {
 
                 SizedBox(height: 16.h),
 
-                // Terms
+                // Terms and Links
                 Text(
                   'Subscription auto-renews unless cancelled. Cancel anytime in Settings.',
                   textAlign: TextAlign.center,
@@ -641,6 +663,48 @@ class _SubscriptionBottomSheetState extends State<_SubscriptionBottomSheet> {
                     color: (isDark ? Colors.white : Colors.black)
                         .withOpacity(0.5),
                   ),
+                ),
+
+                SizedBox(height: 12.h),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    TextButton(
+                      onPressed: () async {
+                        const url = 'https://cue-landing-amber.vercel.app/terms';
+                        final uri = Uri.parse(url);
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Could not open terms')),
+                          );
+                        }
+                      },
+                      child: Text(
+                        'Terms of Use',
+                        style: TextStyle(fontSize: 12.sp),
+                      ),
+                    ),
+                    Text(' | ', style: TextStyle(fontSize: 12.sp, color: (isDark ? Colors.white : Colors.black).withOpacity(0.6))),
+                    TextButton(
+                      onPressed: () async {
+                        const url = 'https://cue-landing-amber.vercel.app/#privacy';
+                        final uri = Uri.parse(url);
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Could not open privacy policy')),
+                          );
+                        }
+                      },
+                      child: Text(
+                        'Privacy Policy',
+                        style: TextStyle(fontSize: 12.sp),
+                      ),
+                    ),
+                  ],
                 ),
 
                 SizedBox(height: 24.h),

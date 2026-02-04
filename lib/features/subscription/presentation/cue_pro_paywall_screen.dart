@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../services/revenue_cat_service.dart';
 import '../../../services/theme_service.dart';
 
@@ -159,6 +160,19 @@ class _CueProPaywallScreenState extends State<CueProPaywallScreen> {
         return 'Lifetime';
       default:
         return 'Subscription';
+    }
+  }
+
+  String _getPackageDescription(PackageType type) {
+    switch (type) {
+      case PackageType.monthly:
+        return 'Billed monthly • Cancel anytime';
+      case PackageType.annual:
+        return 'Billed annually • Cancel anytime';
+      case PackageType.lifetime:
+        return 'One-time purchase • Lifetime access';
+      default:
+        return 'Auto-renewing subscription';
     }
   }
 
@@ -407,6 +421,14 @@ class _CueProPaywallScreenState extends State<CueProPaywallScreen> {
                                   ],
                                 ],
                               ),
+                              SizedBox(height: 4.h),
+                              Text(
+                                _getPackageDescription(package.packageType),
+                                style: TextStyle(
+                                  fontSize: 14.sp,
+                                  color: isSelected ? Colors.white.withOpacity(0.9) : secondaryTextColor,
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -475,26 +497,101 @@ class _CueProPaywallScreenState extends State<CueProPaywallScreen> {
                         ),
                 ),
               ),
-              SizedBox(height: 12.h),
-              TextButton(
-                onPressed: _isPurchasing ? null : _restorePurchases,
-                child: Text(
-                  'Restore Purchases',
-                  style: TextStyle(
-                    fontSize: 14.sp,
-                    color: _accentColor,
+                SizedBox(height: 12.h),
+                TextButton(
+                  onPressed: _restorePurchases,
+                  child: Text(
+                    'Restore Purchases',
+                    style: TextStyle(
+                      fontSize: 14.sp,
+                      color: _accentColor,
+                    ),
                   ),
                 ),
-              ),
-              SizedBox(height: 4.h),
-              Text(
-                'Cancel anytime from subscription settings',
-                style: TextStyle(
-                  fontSize: 11.sp,
-                  color: secondaryTextColor,
+                SizedBox(height: 8.h),
+                // Selected package summary + auto-renew disclosure
+                if (_selectedPackage != null) ...[
+                  SizedBox(height: 6.h),
+                  Text(
+                    '${_getPackageLabel(_selectedPackage!.packageType)} — ${_selectedPackage!.storeProduct.priceString}\nSubscription automatically renews and will be charged to your Apple ID.',
+                    style: TextStyle(
+                      fontSize: 12.sp,
+                      color: secondaryTextColor,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+                SizedBox(height: 8.h),
+                // Terms and Privacy Links
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    TextButton(
+                      onPressed: () async {
+                        const url = 'https://cue-landing-amber.vercel.app/#terms-of-use'; // Replace with your actual terms URL
+                        final uri = Uri.parse(url);
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        } else {
+                          _showError('Could not open terms of use');
+                        }
+                      },
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Text(
+                        'Terms of Use',
+                        style: TextStyle(
+                          fontSize: 12.sp,
+                          color: secondaryTextColor,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      ' | ',
+                      style: TextStyle(
+                        fontSize: 12.sp,
+                        color: secondaryTextColor,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () async {
+                        const url = 'https://cue-landing-amber.vercel.app/#privacy'; // Replace with your actual privacy policy URL
+                        final uri = Uri.parse(url);
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        } else {
+                          _showError('Could not open privacy policy');
+                        }
+                      },
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Text(
+                        'Privacy Policy',
+                        style: TextStyle(
+                          fontSize: 12.sp,
+                          color: secondaryTextColor,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                textAlign: TextAlign.center,
-              ),
+                SizedBox(height: 4.h),
+                Text(
+                  'Cancel anytime from subscription settings',
+                  style: TextStyle(
+                    fontSize: 11.sp,
+                    color: secondaryTextColor,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
             ],
           ),
         ),

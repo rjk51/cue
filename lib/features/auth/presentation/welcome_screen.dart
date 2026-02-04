@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'login_screen.dart';
 import 'signup_screen.dart';
 
@@ -119,25 +120,34 @@ class WelcomeScreen extends StatelessWidget {
               ),
               SizedBox(height: 32.h),
               // Terms and Privacy Policy
-              Text.rich(
-                TextSpan(
-                  text: 'By continuing, you agree to our\n',
-                  style: TextStyle(
-                    fontSize: 12.sp,
-                    color: Colors.white.withOpacity(0.5),
-                    height: 1.5,
-                  ),
-                  children: [
-                    TextSpan(
-                      text: 'Terms & Privacy Policy',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.7),
-                        decoration: TextDecoration.underline,
-                      ),
+              GestureDetector(
+                onTap: () async {
+                  const url = 'https://cue-landing-amber.vercel.app/terms'; // Replace with your actual terms URL
+                  final uri = Uri.parse(url);
+                  if (await canLaunchUrl(uri)) {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  }
+                },
+                child: Text.rich(
+                  TextSpan(
+                    text: 'By continuing, you agree to our\n',
+                    style: TextStyle(
+                      fontSize: 12.sp,
+                      color: Colors.white.withOpacity(0.5),
+                      height: 1.5,
                     ),
-                  ],
+                    children: [
+                      TextSpan(
+                        text: 'Terms & Privacy Policy',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.7),
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ],
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-                textAlign: TextAlign.center,
               ),
               SizedBox(height: 24.h),
             ],
