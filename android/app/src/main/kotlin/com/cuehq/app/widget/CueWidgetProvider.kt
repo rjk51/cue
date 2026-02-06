@@ -144,18 +144,39 @@ class CueWidgetProvider : AppWidgetProvider() {
                 return
             }
 
-            // Show reminder count
-            views.setTextViewText(R.id.reminder_count, "$count reminder${if (count == 1) "" else "s"} today")
+            // Hide empty state, show reminders
+            views.setViewVisibility(R.id.empty_state, android.view.View.GONE)
+            views.setViewVisibility(R.id.reminders_container, android.view.View.VISIBLE)
 
-            // Update up to 5 reminders
-            val reminderIds = listOf(
-                R.id.reminder_1,
-                R.id.reminder_2,
-                R.id.reminder_3,
-                R.id.reminder_4,
-                R.id.reminder_5
+            // Update reminder count
+            views.setTextViewText(R.id.reminder_count, "$count Task${if (count == 1) "" else "s"}")
+
+            // Define view IDs for rows, names, and times
+            val reminderRows = listOf(
+                R.id.reminder_row_1,
+                R.id.reminder_row_2,
+                R.id.reminder_row_3,
+                R.id.reminder_row_4,
+                R.id.reminder_row_5
+            )
+            
+            val reminderNames = listOf(
+                R.id.reminder_name_1,
+                R.id.reminder_name_2,
+                R.id.reminder_name_3,
+                R.id.reminder_name_4,
+                R.id.reminder_name_5
+            )
+            
+            val reminderTimes = listOf(
+                R.id.reminder_time_1,
+                R.id.reminder_time_2,
+                R.id.reminder_time_3,
+                R.id.reminder_time_4,
+                R.id.reminder_time_5
             )
 
+            // Update up to 5 reminders
             for (i in 0 until minOf(5, count)) {
                 try {
                     val reminder = reminders.getJSONObject(i)
@@ -163,33 +184,43 @@ class CueWidgetProvider : AppWidgetProvider() {
                     val time = reminder.getString("time")
 
                     Log.d(TAG, "Reminder $i: $name at $time")
-                    views.setTextViewText(reminderIds[i], "• $time - $name")
-                    views.setViewVisibility(reminderIds[i], android.view.View.VISIBLE)
+                    
+                    // Show and update the row
+                    views.setViewVisibility(reminderRows[i], android.view.View.VISIBLE)
+                    views.setTextViewText(reminderNames[i], name)
+                    views.setTextViewText(reminderTimes[i], time)
                 } catch (e: JSONException) {
                     Log.e(TAG, "Error reading reminder $i: ${e.message}", e)
+                    views.setViewVisibility(reminderRows[i], android.view.View.GONE)
                 }
             }
 
             // Hide unused reminder slots
             for (i in count until 5) {
-                views.setViewVisibility(reminderIds[i], android.view.View.GONE)
+                views.setViewVisibility(reminderRows[i], android.view.View.GONE)
             }
         }
 
         private fun showEmptyState(views: RemoteViews) {
             Log.d(TAG, "Showing empty state")
-            views.setTextViewText(R.id.reminder_count, "No reminders today")
+            
+            // Show empty state, hide reminders
+            views.setViewVisibility(R.id.empty_state, android.view.View.VISIBLE)
+            views.setViewVisibility(R.id.reminders_container, android.view.View.GONE)
+            
+            // Update count text
+            views.setTextViewText(R.id.reminder_count, "0 Tasks")
 
-            // Hide all reminder items
-            val reminderIds = listOf(
-                R.id.reminder_1,
-                R.id.reminder_2,
-                R.id.reminder_3,
-                R.id.reminder_4,
-                R.id.reminder_5
+            // Hide all reminder rows
+            val reminderRows = listOf(
+                R.id.reminder_row_1,
+                R.id.reminder_row_2,
+                R.id.reminder_row_3,
+                R.id.reminder_row_4,
+                R.id.reminder_row_5
             )
 
-            for (id in reminderIds) {
+            for (id in reminderRows) {
                 views.setViewVisibility(id, android.view.View.GONE)
             }
         }
