@@ -1,4 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:android="http://schemas.android.com/apk/res/android">
     <color name="colorAccent">#ff8e6e</color>
+    
+    <!-- Widget Theme Colors - matching iOS -->
+    <color name="widget_primary">#FFAD87</color>        <!-- Peach -->
+    <color name="widget_secondary">#C5A059</color>      <!-- Gold -->
+    <color name="widget_surface">#2A262E</color>        <!-- Dark Background -->
+    <color name="widget_surface_highlight">#352F3C</color> <!-- Card Background -->
+    <color name="widget_on_surface">#FDFCF0</color>     <!-- Text Color -->
+    <color name="widget_on_surface_60">#99FDFCF0</color> <!-- 60% opacity -->
+    <color name="widget_on_surface_50">#80FDFCF0</color> <!-- 50% opacity -->
 </resources>

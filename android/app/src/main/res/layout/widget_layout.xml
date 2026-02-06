@@ -7,7 +7,7 @@
     android:padding="16dp"
     android:background="@drawable/widget_background">
 
-<!-- Header with title -->
+    <!-- Header with TODAY label and task count -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -16,75 +16,226 @@
         android:paddingBottom="12dp">
 
         <TextView
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="Cue Reminders"
-            android:textSize="16sp"
+            android:layout_weight="1"
+            android:text="TODAY"
+            android:textSize="14sp"
             android:textStyle="bold"
-            android:textColor="#FFFFFF"
-            android:gravity="center" />
+            android:textColor="@color/widget_primary"
+            android:fontFamily="sans-serif-medium"
+            android:letterSpacing="0.05" />
+
+        <TextView
+            android:id="@+id/reminder_count"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="0 Tasks"
+            android:textSize="12sp"
+            android:textColor="@color/widget_on_surface_50"
+            android:fontFamily="sans-serif-medium" />
     </LinearLayout>
 
-    <!-- Reminder Count -->
-    <TextView
-        android:id="@+id/reminder_count"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="0 reminders today"
-        android:textSize="14sp"
-        android:textColor="#E0E0E0"
-        android:paddingBottom="12dp" />
-
-    <!-- Reminder List -->
+    <!-- Reminder List Container -->
     <LinearLayout
+        android:id="@+id/reminders_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/reminder_1"
+        <!-- Reminder Row 1 -->
+        <LinearLayout
+            android:id="@+id/reminder_row_1"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textSize="13sp"
-            android:textColor="#FFFFFF"
-            android:paddingVertical="4dp"
-            android:visibility="gone" />
+            android:orientation="horizontal"
+            android:padding="12dp"
+            android:layout_marginBottom="8dp"
+            android:gravity="center_vertical"
+            android:background="@drawable/task_row_background"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/reminder_name_1"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="14sp"
+                android:textColor="@color/widget_on_surface"
+                android:fontFamily="sans-serif-medium"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/reminder_time_1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textColor="@color/widget_on_surface_50"
+                android:fontFamily="sans-serif"
+                android:layout_marginStart="8dp" />
+        </LinearLayout>
+
+        <!-- Reminder Row 2 -->
+        <LinearLayout
+            android:id="@+id/reminder_row_2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="12dp"
+            android:layout_marginBottom="8dp"
+            android:gravity="center_vertical"
+            android:background="@drawable/task_row_background"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/reminder_name_2"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="14sp"
+                android:textColor="@color/widget_on_surface"
+                android:fontFamily="sans-serif-medium"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/reminder_time_2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textColor="@color/widget_on_surface_50"
+                android:fontFamily="sans-serif"
+                android:layout_marginStart="8dp" />
+        </LinearLayout>
+
+        <!-- Reminder Row 3 -->
+        <LinearLayout
+            android:id="@+id/reminder_row_3"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="12dp"
+            android:layout_marginBottom="8dp"
+            android:gravity="center_vertical"
+            android:background="@drawable/task_row_background"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/reminder_name_3"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="14sp"
+                android:textColor="@color/widget_on_surface"
+                android:fontFamily="sans-serif-medium"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/reminder_time_3"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textColor="@color/widget_on_surface_50"
+                android:fontFamily="sans-serif"
+                android:layout_marginStart="8dp" />
+        </LinearLayout>
+
+        <!-- Reminder Row 4 -->
+        <LinearLayout
+            android:id="@+id/reminder_row_4"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="12dp"
+            android:layout_marginBottom="8dp"
+            android:gravity="center_vertical"
+            android:background="@drawable/task_row_background"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/reminder_name_4"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="14sp"
+                android:textColor="@color/widget_on_surface"
+                android:fontFamily="sans-serif-medium"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/reminder_time_4"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textColor="@color/widget_on_surface_50"
+                android:fontFamily="sans-serif"
+                android:layout_marginStart="8dp" />
+        </LinearLayout>
+
+        <!-- Reminder Row 5 -->
+        <LinearLayout
+            android:id="@+id/reminder_row_5"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="12dp"
+            android:gravity="center_vertical"
+            android:background="@drawable/task_row_background"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/reminder_name_5"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="14sp"
+                android:textColor="@color/widget_on_surface"
+                android:fontFamily="sans-serif-medium"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/reminder_time_5"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textColor="@color/widget_on_surface_50"
+                android:fontFamily="sans-serif"
+                android:layout_marginStart="8dp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Empty State (shown when no reminders) -->
+    <LinearLayout
+        android:id="@+id/empty_state"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginTop="32dp"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:visibility="gone">
 
         <TextView
-            android:id="@+id/reminder_2"
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textSize="13sp"
-            android:textColor="#FFFFFF"
-            android:paddingVertical="4dp"
-            android:visibility="gone" />
+            android:text="✓"
+            android:textSize="40sp"
+            android:textColor="@color/widget_secondary"
+            android:alpha="0.5" />
 
         <TextView
-            android:id="@+id/reminder_3"
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textSize="13sp"
-            android:textColor="#FFFFFF"
-            android:paddingVertical="4dp"
-            android:visibility="gone" />
-
-        <TextView
-            android:id="@+id/reminder_4"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textSize="13sp"
-            android:textColor="#FFFFFF"
-            android:paddingVertical="4dp"
-            android:visibility="gone" />
-
-        <TextView
-            android:id="@+id/reminder_5"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textSize="13sp"
-            android:textColor="#FFFFFF"
-            android:paddingVertical="4dp"
-            android:visibility="gone" />
+            android:text="All Clear"
+            android:textSize="14sp"
+            android:textColor="@color/widget_on_surface"
+            android:alpha="0.7"
+            android:fontFamily="sans-serif-medium"
+            android:layout_marginTop="8dp" />
     </LinearLayout>
 
 </LinearLayout>
