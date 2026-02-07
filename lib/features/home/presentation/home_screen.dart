@@ -568,17 +568,26 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         if (isKeyboardOpen) ...[
                           // Date header - keyboard open
                           Padding(
-                            padding: EdgeInsets.symmetric(vertical: 16.h),
-                            child: Text(
-                              DateFormat(
-                                'EEEE, MMM d',
-                              ).format(now).toUpperCase(),
-                              style: TextStyle(
-                                fontSize: 12.sp,
-                                fontWeight: FontWeight.w600,
-                                color: subtitleColor,
-                                letterSpacing: 1.5,
-                              ),
+                            padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 16.h),
+                            child: Row(
+                              children: [
+                                Text(
+                                  '📆Today, ',
+                                  style: TextStyle(
+                                    fontSize: 24.sp,
+                                    fontWeight: FontWeight.w600,
+                                    color: textColor,
+                                  ),
+                                ),
+                                Text(
+                                  '${DateFormat('MMM d').format(now)}',
+                                  style: TextStyle(
+                                    fontSize: 24.sp,
+                                    fontWeight: FontWeight.w400,
+                                    color: subtitleColor,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
 
@@ -657,17 +666,27 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         ] else ...[
                           // Date header - always shown
                           Padding(
-                            padding: EdgeInsets.symmetric(vertical: 16.h),
-                            child: Text(
-                              DateFormat(
-                                'EEEE, MMM d',
-                              ).format(now).toUpperCase(),
-                              style: TextStyle(
-                                fontSize: 12.sp,
-                                fontWeight: FontWeight.w600,
-                                color: subtitleColor,
-                                letterSpacing: 1.5,
-                              ),
+                            padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 16.h),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  'Today, ',
+                                  style: TextStyle(
+                                    fontSize: 32.sp,
+                                    fontWeight: FontWeight.w600,
+                                    color: textColor,
+                                  ),
+                                ),
+                                Text(
+                                  '${DateFormat('MMM d').format(now)}',
+                                  style: TextStyle(
+                                    fontSize: 22.sp,
+                                    fontWeight: FontWeight.w400,
+                                    color: subtitleColor,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
 
