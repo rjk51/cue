@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="@drawable/widget_bg">
+
+    <!-- Header matching iOS MediumWidgetView -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="12dp">
+
+        <TextView
+            android:id="@+id/header_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="TODAY"
+            android:textColor="#FFAD87"
+            android:textStyle="bold"
+            android:textSize="12sp"
+            android:letterSpacing="0.05"
+            android:fontFamily="sans-serif-medium" />
+
+        <TextView
+            android:id="@+id/task_count"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="3 Tasks"
+            android:textColor="#FDFCF0"
+            android:textSize="11sp"
+            android:alpha="0.5"
+            android:fontFamily="sans-serif-medium" />
+    </LinearLayout>
+
+    <!-- Task List Container matching iOS TaskRow styling -->
+    <LinearLayout
+        android:id="@+id/tasks_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- Task 1 -->
+        <LinearLayout
+            android:id="@+id/task_1"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:padding="12dp"
+            android:layout_marginBottom="8dp"
+            android:background="@drawable/card_bg">
+
+            <TextView
+                android:id="@+id/task_1_icon"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="@drawable/accent_circle"
+                android:gravity="center"
+                android:text="🎨"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/task_1_name"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="12dp"
+                android:text="Design Review"
+                android:textColor="#FDFCF0"
+                android:textSize="14sp"
+                android:textStyle="normal"
+                android:fontFamily="sans-serif-medium"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/task_1_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="10:00 AM"
+                android:textColor="#FDFCF0"
+                android:textSize="12sp"
+                android:alpha="0.5" />
+        </LinearLayout>
+
+        <!-- Task 2 -->
+        <LinearLayout
+            android:id="@+id/task_2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:padding="12dp"
+            android:layout_marginBottom="8dp"
+            android:background="@drawable/card_bg"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/task_2_icon"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="@drawable/accent_circle"
+                android:gravity="center"
+                android:text="👥"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/task_2_name"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="12dp"
+                android:text="Team Sync"
+                android:textColor="#FDFCF0"
+                android:textSize="14sp"
+                android:fontFamily="sans-serif-medium"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/task_2_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="11:30 AM"
+                android:textColor="#FDFCF0"
+                android:textSize="12sp"
+                android:alpha="0.5" />
+        </LinearLayout>
+
+        <!-- Task 3 -->
+        <LinearLayout
+            android:id="@+id/task_3"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:padding="12dp"
+            android:background="@drawable/card_bg"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/task_3_icon"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="@drawable/accent_circle"
+                android:gravity="center"
+                android:text="☎️"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/task_3_name"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="12dp"
+                android:text="Client Call"
+                android:textColor="#FDFCF0"
+                android:textSize="14sp"
+                android:fontFamily="sans-serif-medium"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/task_3_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="3:00 PM"
+                android:textColor="#FDFCF0"
+                android:textSize="12sp"
+                android:alpha="0.5" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

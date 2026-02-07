@@ -34,13 +34,22 @@ class WidgetService {
       final widgetData = todayReminders.take(6).map((reminder) {
         final timeFormat = DateFormat('h:mm a');
 
-        return {
-          'id': reminder.id,
-          'name': reminder.name,
-          'time': timeFormat.format(reminder.effectiveNextDueAt),
-          'iconName': _getSystemIconName(reminder.icon),
-          'colorHex': _colorToHex(reminder.color),
-        };
+        if (Platform.isIOS) {
+          return {
+            'id': reminder.id,
+            'name': reminder.name,
+            'time': timeFormat.format(reminder.effectiveNextDueAt),
+            'iconName': _getEmojiIcon(reminder.icon),
+            'colorHex': _colorToHex(reminder.color),
+          };
+        } else {
+          // Android uses emoji icons
+          return {
+            'name': reminder.name,
+            'time': timeFormat.format(reminder.effectiveNextDueAt),
+            'icon': _getEmojiIcon(reminder.icon),
+          };
+        }
       }).toList();
 
       // Convert to JSON string
@@ -104,33 +113,30 @@ class WidgetService {
     }
   }
 
-  /// Map Flutter IconData to SF Symbol name
-  String _getSystemIconName(IconData icon) {
-    // Map common Flutter icons to SF Symbols
+  /// Map Flutter IconData to emoji
+  String _getEmojiIcon(IconData icon) {
+    // Map common Flutter icons to emojis
     final iconCode = icon.codePoint;
     final iconMap = {
-      0xe566: 'figure.run', // Icons.directions_run
-      0xe566: 'figure.walk', // Icons.directions_walk
-      0xe7ef: 'person.3', // Icons.group
-      0xe56c: 'fork.knife', // Icons.restaurant
-      0xe318: 'house', // Icons.home
-      0xe59c: 'briefcase', // Icons.work
-      0xe87d: 'cart', // Icons.shopping_cart
-      0xe7f4: 'heart.fill', // Icons.favorite
-      0xe878: 'calendar', // Icons.event
-      0xe153: 'figure.run', // Icons.fitness_center
-      0xe1c3: 'moon.stars.fill', // Icons.bedtime
-      0xe1c3: 'bed.double.fill', // Icons.hotel
-      0xe1fd: 'pills.fill', // Icons.medication
-      0xe1b0: 'book.fill', // Icons.menu_book
-      0xe1b2: 'building.2.fill', // Icons.business
-      0xe531: 'laptopcomputer', // Icons.computer
-      0xe30b: 'graduationcap.fill', // Icons.school
-      0xe558: 'airplane', // Icons.flight
-      0xe531: 'desktopcomputer', // Icons.desktop_windows
+      0xe566: '🏃', // Icons.directions_run
+      0xe7ef: '👥', // Icons.group
+      0xe56c: '🍽️', // Icons.restaurant
+      0xe318: '🏠', // Icons.home
+      0xe59c: '💼', // Icons.work
+      0xe87d: '🛒', // Icons.shopping_cart
+      0xe7f4: '❤️', // Icons.favorite
+      0xe878: '📅', // Icons.event
+      0xe153: '💪', // Icons.fitness_center
+      0xe1c3: '😴', // Icons.bedtime
+      0xe1fd: '💊', // Icons.medication
+      0xe1b0: '📖', // Icons.menu_book
+      0xe1b2: '🏢', // Icons.business
+      0xe531: '💻', // Icons.computer
+      0xe30b: '🎓', // Icons.school
+      0xe558: '✈️', // Icons.flight
     };
 
-    return iconMap[iconCode] ?? 'bell.fill';
+    return iconMap[iconCode] ?? '🔔';
   }
 
   /// Convert Flutter Color to hex string
