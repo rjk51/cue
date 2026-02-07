@@ -239,6 +239,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   controller: _fullNameController,
                   keyboardType: TextInputType.name,
                   textCapitalization: TextCapitalization.words,
+                  style: TextStyle(color: Colors.black),
                   decoration: InputDecoration(
                     hintText: 'Jane Doe',
                     hintStyle: TextStyle(
@@ -300,6 +301,7 @@ class _SignupScreenState extends State<SignupScreen> {
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
+                  style: TextStyle(color: Colors.black),
                   decoration: InputDecoration(
                     hintText: 'jane@cue.app',
                     hintStyle: TextStyle(
@@ -364,6 +366,7 @@ class _SignupScreenState extends State<SignupScreen> {
                 TextFormField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
+                  style: TextStyle(color: Colors.black),
                   decoration: InputDecoration(
                     hintText: '••••••••',
                     hintStyle: TextStyle(

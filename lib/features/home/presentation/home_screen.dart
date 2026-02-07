@@ -204,9 +204,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       case 0:
         return 'This is your current or next reminder. It shows what you need to focus on right now.';
       case 1:
-        return 'Swipe left to snooze this reminder for a few minutes when you need more time.';
+        return 'Swipe right to snooze this reminder for a few minutes when you need more time.';
       case 2:
-        return 'Swipe right to mark this reminder as completed. Great job staying on track!';
+        return 'Tap done to mark the reminder completed. Great job staying on track!';
       case 3:
         return 'Tap inside the card to add notes or additional details about this reminder.';
       case 4:

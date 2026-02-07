@@ -239,6 +239,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
+                  style: TextStyle(color: Colors.black),
                   decoration: InputDecoration(
                     hintText: 'jane@cue.app',
                     hintStyle: TextStyle(
@@ -303,6 +304,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextFormField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
+                  style: TextStyle(color: Colors.black),
                   decoration: InputDecoration(
                     hintText: '••••••••',
                     hintStyle: TextStyle(
