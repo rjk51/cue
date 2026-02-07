@@ -160,7 +160,7 @@ class CardBackSide extends StatelessWidget {
           _buildActionButton(
             context: context,
             icon: Icons.delete_rounded,
-            label: 'DELETE',
+            label: 'SKIP/DELETE',
             color: Colors.red.shade400,
             onTap: () => _handleDelete(context),
           ),

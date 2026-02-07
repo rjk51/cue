@@ -1184,7 +1184,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               // Delete button
               _buildSmallActionButton(
                 icon: Icons.delete_rounded,
-                label: 'DELETE',
+                label: 'Skip/Delete',
                 color: Colors.red.shade400,
                 onTap: () => _handleUpcomingCardDelete(reminder),
               ),
