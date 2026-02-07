@@ -274,7 +274,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (mounted) {
       setState(() {
         _locallyCompletedIds.add(completionKey);
-        _completedTasksCount = _locallyCompletedIds.length.clamp(0, _totalTasksCount > 0 ? _totalTasksCount : 1);
         _isRunnerAnimating = true;
       });
       
@@ -1553,17 +1552,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
     
     // Use the higher of Firestore count vs local count (local tracks optimistic completions)
-    final effectiveCompleted = _locallyCompletedIds.length.clamp(0, todayTotal);
-    final completedCount = effectiveCompleted > firestoreCompleted ? effectiveCompleted : firestoreCompleted;
+    // Local set should never decrease unless we restart the app
+    final localCount = _locallyCompletedIds.length;
+    final completedCount = localCount > firestoreCompleted ? localCount : firestoreCompleted;
     
-    // Only update state if values actually changed
-    if (_totalTasksCount != todayTotal || 
-        (!_isRunnerAnimating && _completedTasksCount != completedCount)) {
+    // Always update state - both total and completed
+    if (_totalTasksCount != todayTotal || _completedTasksCount != completedCount) {
       setState(() {
         _totalTasksCount = todayTotal;
-        if (!_isRunnerAnimating) {
-          _completedTasksCount = completedCount;
-        }
+        _completedTasksCount = completedCount;
       });
     }
   }
@@ -1589,10 +1586,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   : 0.0;
               targetPosition = previousProgress + (progress - previousProgress) * _runnerAnimation.value;
             }
-            final runnerOffset = barWidth * targetPosition;
+            // Clamp target position to ensure runner stays within 0-100%
+            targetPosition = targetPosition.clamp(0.0, 1.0);
+            
+            // Position runner so it stays within bar: 0% = left edge, 100% = right edge
+            // Runner is 70w wide, so center it at the progress point but keep within bounds
+            final runnerWidth = 70.w;
+            final effectiveBarWidth = barWidth.w;
+            final runnerCenter = effectiveBarWidth * targetPosition;
+            // Clamp so runner doesn't go past edges
+            final runnerLeft = (runnerCenter - runnerWidth / 2).clamp(0.0, effectiveBarWidth - runnerWidth);
             
             return Transform.translate(
-              offset: Offset(runnerOffset - 35.w, 0), // Center the runner
+              offset: Offset(runnerLeft, 0),
               child: Lottie.asset(
                 'assets/runner.json',
                 width: 70.w,
