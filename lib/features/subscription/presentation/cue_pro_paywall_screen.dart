@@ -4,6 +4,7 @@ import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../services/revenue_cat_service.dart';
+import '../../../services/pro_status_service.dart';
 import '../../../services/theme_service.dart';
 
 class CueProPaywallScreen extends StatefulWidget {
@@ -15,6 +16,8 @@ class CueProPaywallScreen extends StatefulWidget {
 
 class _CueProPaywallScreenState extends State<CueProPaywallScreen> {
   final ThemeService _themeService = ThemeService();
+  final ProStatusService _proStatusService = ProStatusService();
+  final TextEditingController _promoCodeController = TextEditingController();
   
   bool _isLoading = true;
   bool _isPro = false;
@@ -23,6 +26,8 @@ class _CueProPaywallScreenState extends State<CueProPaywallScreen> {
   Offerings? _offerings;
   Package? _selectedPackage;
   bool _isPurchasing = false;
+  bool _showPromoCodeField = false;
+  String? _proSource;
 
   @override
   void initState() {
@@ -52,13 +57,15 @@ class _CueProPaywallScreenState extends State<CueProPaywallScreen> {
   Future<void> _initialize() async {
     setState(() => _isLoading = true);
     try {
-      final isPro = await RevenueCatService().hasCueProAccess();
+      final isPro = await _proStatusService.hasProAccess();
       final offerings = await RevenueCatService().getOfferings();
+      final proSource = await _proStatusService.getProSource();
       
       if (mounted) {
         setState(() {
           _isPro = isPro;
           _offerings = offerings;
+          _proSource = proSource;
           // Pre-select annual package as default
           _selectedPackage = offerings?.current?.availablePackages
               .firstWhere(
@@ -117,6 +124,37 @@ class _CueProPaywallScreenState extends State<CueProPaywallScreen> {
       if (mounted) {
         setState(() => _isPurchasing = false);
         _showError('Restore failed: $e');
+      }
+    }
+  }
+
+  Future<void> _redeemPromoCode() async {
+    final code = _promoCodeController.text.trim();
+    if (code.isEmpty) {
+      _showError('Please enter a promo code');
+      return;
+    }
+
+    setState(() => _isPurchasing = true);
+    try {
+      await _proStatusService.redeemPromoCode(code);
+      if (mounted) {
+        setState(() {
+          _isPurchasing = false;
+          _promoCodeController.clear();
+          _showPromoCodeField = false;
+        });
+        _showSuccess('Promo code redeemed! You have 30 days of Pro access.');
+        // Refresh to show pro status
+        await _initialize();
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isPurchasing = false);
+        _showError(e.toString().contains('Invalid') 
+            ? 'Invalid promo code' 
+            : 'Failed to redeem: $e');
       }
     }
   }
@@ -252,28 +290,57 @@ class _CueProPaywallScreenState extends State<CueProPaywallScreen> {
               ),
               textAlign: TextAlign.center,
             ),
+            if (_proSource == 'promo_code') ...[
+              SizedBox(height: 12.h),
+              FutureBuilder<DateTime?>(
+                future: _proStatusService.getProExpiryDate(),
+                builder: (context, snapshot) {
+                  if (snapshot.hasData && snapshot.data != null) {
+                    final daysLeft = snapshot.data!.difference(DateTime.now()).inDays;
+                    return Container(
+                      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+                      decoration: BoxDecoration(
+                        color: _accentColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20.r),
+                        border: Border.all(color: _accentColor.withOpacity(0.3)),
+                      ),
+                      child: Text(
+                        'Promo access expires in $daysLeft days',
+                        style: TextStyle(
+                          fontSize: 14.sp,
+                          fontWeight: FontWeight.w500,
+                          color: _accentColor,
+                        ),
+                      ),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
+            ],
             SizedBox(height: 32.h),
-            SizedBox(
-              width: double.infinity,
-              height: 50.h,
-              child: ElevatedButton(
-                onPressed: _manageSubscription,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _accentColor,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12.r),
+            if (_proSource == 'revenuecat')
+              SizedBox(
+                width: double.infinity,
+                height: 50.h,
+                child: ElevatedButton(
+                  onPressed: _manageSubscription,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _accentColor,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12.r),
+                    ),
                   ),
-                ),
-                child: Text(
-                  'Manage Subscription',
-                  style: TextStyle(
-                    fontSize: 16.sp,
-                    fontWeight: FontWeight.w600,
+                  child: Text(
+                    'Manage Subscription',
+                    style: TextStyle(
+                      fontSize: 16.sp,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
-            ),
             SizedBox(height: 16.h),
             TextButton(
               onPressed: _restorePurchases,
@@ -509,6 +576,88 @@ class _CueProPaywallScreenState extends State<CueProPaywallScreen> {
                   ),
                 ),
                 SizedBox(height: 8.h),
+                // Promo code section
+                if (_showPromoCodeField) ...[
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+                    decoration: BoxDecoration(
+                      color: _isDarkMode 
+                          ? Colors.white.withOpacity(0.05)
+                          : Colors.black.withOpacity(0.03),
+                      borderRadius: BorderRadius.circular(12.r),
+                    ),
+                    child: Column(
+                      children: [
+                        TextField(
+                          controller: _promoCodeController,
+                          style: TextStyle(color: textColor),
+                          decoration: InputDecoration(
+                            hintText: 'Enter promo code',
+                            hintStyle: TextStyle(color: secondaryTextColor),
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                          textCapitalization: TextCapitalization.characters,
+                        ),
+                        SizedBox(height: 12.h),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _showPromoCodeField = false;
+                                    _promoCodeController.clear();
+                                  });
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  side: BorderSide(color: secondaryTextColor),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8.r),
+                                  ),
+                                ),
+                                child: Text(
+                                  'Cancel',
+                                  style: TextStyle(color: textColor),
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: 12.w),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: _isPurchasing ? null : _redeemPromoCode,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: _accentColor,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8.r),
+                                  ),
+                                ),
+                                child: Text('Redeem'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: 8.h),
+                ] else ...[
+                  TextButton.icon(
+                    onPressed: () {
+                      setState(() => _showPromoCodeField = true);
+                    },
+                    icon: Icon(Icons.card_giftcard, size: 18.sp, color: _accentColor),
+                    label: Text(
+                      'Have a promo code?',
+                      style: TextStyle(
+                        fontSize: 14.sp,
+                        color: _accentColor,
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 8.h),
+                ],
                 // Selected package summary + auto-renew disclosure
                 if (_selectedPackage != null) ...[
                   SizedBox(height: 6.h),

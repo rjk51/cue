@@ -4,6 +4,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flip_card/flip_card.dart';
+import 'package:lottie/lottie.dart';
 import '../../reminders/domain/reminder_model.dart';
 import '../../reminders/data/reminder_service.dart';
 import '../../reminders/presentation/create_reminder_screen.dart';
@@ -47,6 +48,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   final GlobalKey _fabKey = GlobalKey();
   final GlobalKey _cueCardKey = GlobalKey();
 
+  // Progress bar state
+  int _completedTasksCount = 0;
+  int _totalTasksCount = 0;
+  bool _isRunnerAnimating = false;
+  late AnimationController _runnerController;
+  late Animation<double> _runnerAnimation;
+  final Set<String> _locallyCompletedIds = {}; // Track completed tasks locally so they persist
+
   @override
   void initState() {
     super.initState();
@@ -54,6 +63,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _checkTutorialState();
     // Listen for theme changes
     ThemeNotifier.instance.addListener(_onThemeChanged);
+
+    // Initialize runner animation controller
+    _runnerController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+    _runnerAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _runnerController, curve: Curves.easeInOut),
+    );
 
     // Start monitoring device status after a delay to ensure device is reactivated
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -67,6 +85,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _runnerController.dispose();
     ThemeNotifier.instance.removeListener(_onThemeChanged);
     _deviceMonitor.stopMonitoring();
     super.dispose();
@@ -247,16 +266,30 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     String reminderId, {
     DateTime? occurrenceTime,
   }) async {
-    // Show snackbar immediately (optimistic UI)
+    // Track this completion locally so it persists across stream rebuilds
+    final completionKey = occurrenceTime != null
+        ? '${reminderId}_${occurrenceTime.toIso8601String()}'
+        : reminderId;
+    
     if (mounted) {
-      context.showSuccessSnackbar('Marked as done!');
+      setState(() {
+        _locallyCompletedIds.add(completionKey);
+        _isRunnerAnimating = true;
+      });
+      
+      _runnerController.forward(from: 0.0).then((_) {
+        if (mounted) {
+          setState(() {
+            _isRunnerAnimating = false;
+          });
+        }
+      });
     }
 
     // Execute in background without blocking UI
     _reminderService
         .markAsCompleted(reminderId, occurrenceTime: occurrenceTime)
         .catchError((e) {
-          // Only show error if it fails
           if (mounted) {
             context.showErrorSnackbar('Error: $e');
           }
@@ -432,6 +465,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 // Update widgets whenever reminders change (including empty state)
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   _updateWidgets(reminders);
+                  _updateProgressCounts(reminders);
                 });
 
                 // Sort reminders by time
@@ -568,30 +602,30 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         if (isKeyboardOpen) ...[
                           // Date header - keyboard open
                           Padding(
-                            padding: EdgeInsets.symmetric(vertical: 16.h),
-                            child: Text(
-                              DateFormat(
-                                'EEEE, MMM d',
-                              ).format(now).toUpperCase(),
-                              style: TextStyle(
-                                fontSize: 12.sp,
-                                fontWeight: FontWeight.w600,
-                                color: subtitleColor,
-                                letterSpacing: 1.5,
-                              ),
+                            padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 16.h),
+                            child: Row(
+                              children: [
+                                Text(
+                                  '📆Today, ',
+                                  style: TextStyle(
+                                    fontSize: 24.sp,
+                                    fontWeight: FontWeight.w600,
+                                    color: textColor,
+                                  ),
+                                ),
+                                Text(
+                                  '${DateFormat('MMM d').format(now)}',
+                                  style: TextStyle(
+                                    fontSize: 24.sp,
+                                    fontWeight: FontWeight.w400,
+                                    color: subtitleColor,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
 
-                          // Show full-screen empty state if no reminders at all
-                          if (sortedReminders.isEmpty)
-                            SizedBox(
-                              height: screenHeight - 100.h,
-                              child: _buildFullScreenEmptyState(
-                                textColor,
-                                subtitleColor,
-                              ),
-                            )
-                          else ...[
+                          if (sortedReminders.isNotEmpty) ...[
                             SizedBox(height: 32.h),
 
                             // Today's Reminders Count Section
@@ -653,33 +687,51 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                 ],
                               ),
                             ),
+                          ] else ...[
+                            // Show empty cue card when no reminders
+                            SizedBox(height: 32.h),
+                            Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 32.w),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildEmptyCueCard(
+                                    cardColor,
+                                    textColor,
+                                    subtitleColor,
+                                  ),
+                                ],
+                              ),
+                            ),
                           ],
                         ] else ...[
                           // Date header - always shown
                           Padding(
-                            padding: EdgeInsets.symmetric(vertical: 16.h),
-                            child: Text(
-                              DateFormat(
-                                'EEEE, MMM d',
-                              ).format(now).toUpperCase(),
-                              style: TextStyle(
-                                fontSize: 12.sp,
-                                fontWeight: FontWeight.w600,
-                                color: subtitleColor,
-                                letterSpacing: 1.5,
-                              ),
+                            padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 16.h),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  'Today, ',
+                                  style: TextStyle(
+                                    fontSize: 32.sp,
+                                    fontWeight: FontWeight.w600,
+                                    color: textColor,
+                                  ),
+                                ),
+                                Text(
+                                  '${DateFormat('MMM d').format(now)}',
+                                  style: TextStyle(
+                                    fontSize: 22.sp,
+                                    fontWeight: FontWeight.w400,
+                                    color: subtitleColor,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
 
-                          // Show full-screen empty state if no reminders at all
-                          if (sortedReminders.isEmpty)
-                            Expanded(
-                              child: _buildFullScreenEmptyState(
-                                textColor,
-                                subtitleColor,
-                              ),
-                            )
-                          else ...[
+                          if (sortedReminders.isNotEmpty) ...[
                             SizedBox(height: 22.h),
 
                             // Today's Reminders Count Section
@@ -736,6 +788,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                     
                                     // Bottom padding to prevent FAB overlap
                                     SizedBox(height: 120.h),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ] else ...[
+                            // Show empty cue card when no reminders
+                            SizedBox(height: 22.h),
+                            Expanded(
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 32.w),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _buildEmptyCueCard(
+                                      cardColor,
+                                      textColor,
+                                      subtitleColor,
+                                    ),
                                   ],
                                 ),
                               ),
@@ -812,6 +882,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
             ),
           ),
+
+          // Progress bar at bottom left (always visible if tasks exist today)
+          if (_totalTasksCount > 0)
+            Positioned(
+              left: 20.w,
+              bottom: MediaQuery.of(context).padding.bottom + 30.h,
+              child: _buildProgressBar(),
+            ),
 
           // Tutorial overlays
           if (_showFabTutorial)
@@ -907,10 +985,26 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       ),
       child: Column(
         children: [
-          Icon(
-            Icons.check_circle_outline_rounded,
-            size: 64.sp,
-            color: _accentColor,
+          ColorFiltered(
+            colorFilter: ColorFilter.mode(
+              const Color(0xFFFF8E6E),
+              BlendMode.srcIn,
+            ),
+            child: Lottie.asset(
+              'assets/success.json',
+              width: 120.w,
+              height: 120.h,
+              fit: BoxFit.contain,
+              repeat: true,
+              errorBuilder: (context, error, stackTrace) {
+                // Fallback to icon if Lottie fails to load
+                return Icon(
+                  Icons.check_circle_outline_rounded,
+                  size: 64.sp,
+                  color: _accentColor,
+                );
+              },
+            ),
           ),
           SizedBox(height: 32.h),
           Text(
@@ -1400,48 +1494,171 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildFullScreenEmptyState(Color textColor, Color subtitleColor) {
-    return Center(
-      child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 48.w),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.celebration_outlined,
-              size: 120.sp,
-              color: _accentColor.withOpacity(0.3),
-            ),
-            SizedBox(height: 48.h),
-            Text(
-              'No Reminders Yet',
-              style: TextStyle(
-                fontSize: 32.sp,
-                fontWeight: FontWeight.w700,
-                color: textColor,
+  void _updateProgressCounts(List<Reminder> reminders) {
+    if (!mounted) return;
+    final now = DateTime.now();
+    
+    int todayTotal = 0;
+    int firestoreCompleted = 0;
+    
+    for (final reminder in reminders) {
+      if (reminder.recurrence != null) {
+        final recurrence = reminder.recurrence!;
+        final type = recurrence['type'] as String?;
+        final unit = recurrence['unit'] as String?;
+
+        if (type == 'interval' && (unit == 'hours' || unit == 'minutes')) {
+          final occurrences = _getHourlyOccurrencesForDay(reminder, now);
+          for (final occurrence in occurrences) {
+            final dateKey = DateFormat('yyyy-MM-dd').format(occurrence);
+            if (!reminder.isSkippedOnDate(dateKey)) {
+              todayTotal++;
+              if (reminder.isOccurrenceCompleted(occurrence)) {
+                firestoreCompleted++;
+                // Sync local set with Firestore state
+                _locallyCompletedIds.add('${reminder.id}_${occurrence.toIso8601String()}');
+              }
+            }
+          }
+        } else {
+          final effectiveDate = reminder.effectiveNextDueAt;
+          final isToday = effectiveDate.year == now.year &&
+              effectiveDate.month == now.month &&
+              effectiveDate.day == now.day;
+          
+          if (isToday) {
+            todayTotal++;
+            if (reminder.isCompletedToday) {
+              firestoreCompleted++;
+              _locallyCompletedIds.add(reminder.id);
+            }
+          }
+        }
+      } else {
+        // Non-recurring reminder — use original time to always count it today
+        final reminderTime = reminder.time;
+        final isToday = reminderTime.year == now.year &&
+            reminderTime.month == now.month &&
+            reminderTime.day == now.day;
+        
+        if (isToday) {
+          todayTotal++;
+          if (reminder.isCompletedToday) {
+            firestoreCompleted++;
+            _locallyCompletedIds.add(reminder.id);
+          }
+        }
+      }
+    }
+    
+    // Use the higher of Firestore count vs local count (local tracks optimistic completions)
+    // Local set should never decrease unless we restart the app
+    final localCount = _locallyCompletedIds.length;
+    final completedCount = localCount > firestoreCompleted ? localCount : firestoreCompleted;
+    
+    // Always update state - both total and completed
+    if (_totalTasksCount != todayTotal || _completedTasksCount != completedCount) {
+      setState(() {
+        _totalTasksCount = todayTotal;
+        _completedTasksCount = completedCount;
+      });
+    }
+  }
+
+  Widget _buildProgressBar() {
+    final progress = _totalTasksCount > 0 ? _completedTasksCount / _totalTasksCount : 0.0;
+    const barWidth = 150.0;
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Running character animation
+        AnimatedBuilder(
+          animation: _runnerAnimation,
+          builder: (context, child) {
+            // Calculate runner position based on progress
+            double targetPosition = progress;
+            if (_isRunnerAnimating) {
+              // During animation, interpolate from previous position to new position
+              final previousProgress = _totalTasksCount > 0 
+                  ? (_completedTasksCount - 1) / _totalTasksCount 
+                  : 0.0;
+              targetPosition = previousProgress + (progress - previousProgress) * _runnerAnimation.value;
+            }
+            // Clamp target position to ensure runner stays within 0-100%
+            targetPosition = targetPosition.clamp(0.0, 1.0);
+            
+            // Position runner so it stays within bar: 0% = left edge, 100% = right edge
+            // Runner is 70w wide, so center it at the progress point but keep within bounds
+            final runnerWidth = 70.w;
+            final effectiveBarWidth = barWidth.w;
+            final runnerCenter = effectiveBarWidth * targetPosition;
+            // Clamp so runner doesn't go past edges
+            final runnerLeft = (runnerCenter - runnerWidth / 2).clamp(0.0, effectiveBarWidth - runnerWidth);
+            
+            return Transform.translate(
+              offset: Offset(runnerLeft, 0),
+              child: Lottie.asset(
+                'assets/runner.json',
+                width: 70.w,
+                height: 70.h,
+                fit: BoxFit.contain,
+                repeat: _isRunnerAnimating,
+                errorBuilder: (context, error, stackTrace) {
+                  // Fallback to emoji if Lottie fails
+                  return Text(
+                    '🏃',
+                    style: TextStyle(fontSize: 40.sp),
+                  );
+                },
               ),
-              textAlign: TextAlign.center,
-            ),
-            SizedBox(height: 16.h),
-            Text(
-              'Tap the + button to create your first reminder',
-              style: TextStyle(
-                fontSize: 16.sp,
-                color: subtitleColor,
-                height: 1.5,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            SizedBox(height: 64.h),
-            // Arrow pointing to FAB
-            Icon(
-              Icons.arrow_downward_rounded,
-              size: 32.sp,
-              color: _accentColor.withOpacity(0.5),
-            ),
-          ],
+            );
+          },
         ),
-      ),
+        SizedBox(height: 8.h),
+        
+        // Progress bar container
+        Container(
+          width: barWidth.w,
+          height: 8.h,
+          decoration: BoxDecoration(
+            color: _isDarkMode 
+                ? Colors.white.withOpacity(0.1) 
+                : Colors.black.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(4.r),
+          ),
+          child: Stack(
+            children: [
+              // Progress fill
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                width: (barWidth * progress).w,
+                height: 8.h,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF8E6E),
+                  borderRadius: BorderRadius.circular(4.r),
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: 4.h),
+        
+        // Task count text
+        Text(
+          '$_completedTasksCount/$_totalTasksCount tasks',
+          style: TextStyle(
+            fontSize: 11.sp,
+            fontWeight: FontWeight.w600,
+            color: _isDarkMode 
+                ? Colors.white.withOpacity(0.7) 
+                : Colors.black.withOpacity(0.6),
+          ),
+        ),
+      ],
     );
   }
+
+
 }

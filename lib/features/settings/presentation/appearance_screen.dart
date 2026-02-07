@@ -14,6 +14,7 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
   final ThemeService _themeService = ThemeService();
   Color _selectedColor = const Color(0xFFFFB4A3);
   String _themeMode = 'light';
+  double _fontSizeScale = 1.0;
   bool _isLoading = false;
 
   @override
@@ -25,9 +26,11 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
   Future<void> _loadSettings() async {
     final color = await _themeService.getAccentColor();
     final theme = await _themeService.getThemePreference();
+    final fontSize = await _themeService.getFontSizeScale();
     setState(() {
       _selectedColor = color;
       _themeMode = theme;
+      _fontSizeScale = fontSize;
     });
   }
 
@@ -124,6 +127,39 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error updating theme: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _updateFontSizeScale(double scale) async {
+    setState(() {
+      _fontSizeScale = scale;
+      _isLoading = true;
+    });
+
+    try {
+      await _themeService.setFontSizeScale(scale);
+      if (mounted) {
+        String sizeLabel = scale == 1.0 ? 'Default' : scale == 1.15 ? 'Medium' : 'Large';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Font size updated to $sizeLabel!'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating font size: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -247,6 +283,60 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
                           ),
                         ],
                       ),
+                    ),
+
+                    SizedBox(height: 32.h),
+
+                    // Font Size Section
+                    Text(
+                      'FONT SIZE',
+                      style: TextStyle(
+                        fontSize: 12.sp,
+                        fontWeight: FontWeight.w600,
+                        color: subtitleColor,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    SizedBox(height: 16.h),
+
+                    // Single row with three font size options (compact, no outer card)
+                    SizedBox(height: 8.h),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: _buildCompactFontOption(
+                            label: 'Default',
+                            scale: 1.0,
+                            isSelected: _fontSizeScale == 1.0,
+                            onTap: () => _updateFontSizeScale(1.0),
+                            textColor: textColor,
+                            subtitleColor: subtitleColor,
+                          ),
+                        ),
+                        SizedBox(width: 12.w),
+                        Expanded(
+                          child: _buildCompactFontOption(
+                            label: 'Medium',
+                            scale: 1.15,
+                            isSelected: _fontSizeScale == 1.15,
+                            onTap: () => _updateFontSizeScale(1.15),
+                            textColor: textColor,
+                            subtitleColor: subtitleColor,
+                          ),
+                        ),
+                        SizedBox(width: 12.w),
+                        Expanded(
+                          child: _buildCompactFontOption(
+                            label: 'Large',
+                            scale: 1.3,
+                            isSelected: _fontSizeScale == 1.3,
+                            onTap: () => _updateFontSizeScale(1.3),
+                            textColor: textColor,
+                            subtitleColor: subtitleColor,
+                          ),
+                        ),
+                      ],
                     ),
 
                     SizedBox(height: 32.h),
@@ -706,6 +796,54 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
             ),
             if (isSelected)
               Icon(Icons.check_circle, color: _selectedColor, size: 24.sp),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactFontOption({
+    required String label,
+    required double scale,
+    required bool isSelected,
+    required VoidCallback onTap,
+    required Color textColor,
+    required Color subtitleColor,
+  }) {
+    return GestureDetector(
+      onTap: _isLoading ? null : onTap,
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: 6.h, horizontal: 6.w),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Aa',
+              style: TextStyle(
+                // Compact preview without boxed container
+                fontSize: (16.sp * scale),
+                fontWeight: FontWeight.w700,
+                color: isSelected ? _selectedColor : textColor,
+              ),
+            ),
+            SizedBox(height: 4.h),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12.sp,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                    color: isSelected ? _selectedColor : subtitleColor,
+                  ),
+                ),
+                if (isSelected) ...[
+                  SizedBox(width: 6.w),
+                  Icon(Icons.check_circle, color: _selectedColor, size: 16.sp),
+                ]
+              ],
+            ),
           ],
         ),
       ),
