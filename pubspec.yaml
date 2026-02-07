@@ -62,7 +62,7 @@ dependencies:
   flutter_sound: ^9.2.13
   path_provider: ^2.1.1
   flip_card: ^0.7.0
-  uni_links: ^0.5.1
+  app_links: ^6.3.2
 
 dev_dependencies:
   flutter_test:
