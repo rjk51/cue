@@ -299,58 +299,44 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
                     ),
                     SizedBox(height: 16.h),
 
-                    // Single row with three font size options
-                    Container(
-                      padding: EdgeInsets.all(16.r),
-                      decoration: BoxDecoration(
-                        color: cardColor,
-                        borderRadius: BorderRadius.circular(16.r),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(
-                              _isDarkMode ? 0.3 : 0.08,
-                            ),
-                            blurRadius: 20,
-                            offset: const Offset(0, 4),
+                    // Single row with three font size options (compact, no outer card)
+                    SizedBox(height: 8.h),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: _buildCompactFontOption(
+                            label: 'Default',
+                            scale: 1.0,
+                            isSelected: _fontSizeScale == 1.0,
+                            onTap: () => _updateFontSizeScale(1.0),
+                            textColor: textColor,
+                            subtitleColor: subtitleColor,
                           ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: _buildCompactFontOption(
-                              label: 'Default',
-                              scale: 1.0,
-                              isSelected: _fontSizeScale == 1.0,
-                              onTap: () => _updateFontSizeScale(1.0),
-                              textColor: textColor,
-                              subtitleColor: subtitleColor,
-                            ),
+                        ),
+                        SizedBox(width: 12.w),
+                        Expanded(
+                          child: _buildCompactFontOption(
+                            label: 'Medium',
+                            scale: 1.15,
+                            isSelected: _fontSizeScale == 1.15,
+                            onTap: () => _updateFontSizeScale(1.15),
+                            textColor: textColor,
+                            subtitleColor: subtitleColor,
                           ),
-                          SizedBox(width: 12.w),
-                          Expanded(
-                            child: _buildCompactFontOption(
-                              label: 'Medium',
-                              scale: 1.15,
-                              isSelected: _fontSizeScale == 1.15,
-                              onTap: () => _updateFontSizeScale(1.15),
-                              textColor: textColor,
-                              subtitleColor: subtitleColor,
-                            ),
+                        ),
+                        SizedBox(width: 12.w),
+                        Expanded(
+                          child: _buildCompactFontOption(
+                            label: 'Large',
+                            scale: 1.3,
+                            isSelected: _fontSizeScale == 1.3,
+                            onTap: () => _updateFontSizeScale(1.3),
+                            textColor: textColor,
+                            subtitleColor: subtitleColor,
                           ),
-                          SizedBox(width: 12.w),
-                          Expanded(
-                            child: _buildCompactFontOption(
-                              label: 'Large',
-                              scale: 1.3,
-                              isSelected: _fontSizeScale == 1.3,
-                              onTap: () => _updateFontSizeScale(1.3),
-                              textColor: textColor,
-                              subtitleColor: subtitleColor,
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
 
                     SizedBox(height: 32.h),
@@ -826,41 +812,37 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
   }) {
     return GestureDetector(
       onTap: _isLoading ? null : onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(vertical: 16.h, horizontal: 8.w),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? _selectedColor.withOpacity(0.15)
-              : _isDarkMode
-                  ? Colors.white.withOpacity(0.05)
-                  : Colors.black.withOpacity(0.03),
-          borderRadius: BorderRadius.circular(12.r),
-          border: Border.all(
-            color: isSelected
-                ? _selectedColor
-                : Colors.transparent,
-            width: 2,
-          ),
-        ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: 6.h, horizontal: 6.w),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               'Aa',
               style: TextStyle(
-                fontSize: (20.sp * scale),
+                // Compact preview without boxed container
+                fontSize: (16.sp * scale),
                 fontWeight: FontWeight.w700,
                 color: isSelected ? _selectedColor : textColor,
               ),
             ),
-            SizedBox(height: 8.h),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13.sp,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                color: isSelected ? _selectedColor : subtitleColor,
-              ),
+            SizedBox(height: 4.h),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12.sp,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                    color: isSelected ? _selectedColor : subtitleColor,
+                  ),
+                ),
+                if (isSelected) ...[
+                  SizedBox(width: 6.w),
+                  Icon(Icons.check_circle, color: _selectedColor, size: 16.sp),
+                ]
+              ],
             ),
           ],
         ),
