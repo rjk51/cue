@@ -110,55 +110,6 @@ class _CurrentCueCardState extends State<CurrentCueCard>
     }
   }
 
-  Future<void> _skipCurrentReminder() async {
-    try {
-      final occurrenceDate = widget.occurrenceTime ?? widget.reminder.effectiveNextDueAt;
-      final dateKey = DateFormat('yyyy-MM-dd').format(occurrenceDate);
-
-      // Get existing overrides or create new map
-      final existingOverrides = widget.reminder.overrides ?? {};
-      final newOverrides = Map<String, Map<String, dynamic>>.from(
-        existingOverrides,
-      );
-
-      // Create or update override for this date with skipped flag
-      newOverrides[dateKey] = {
-        ...(newOverrides[dateKey] ?? {}),
-        'skipped': true,
-      };
-
-      await _reminderService.updateReminder(widget.reminder.id, {
-        'overrides': newOverrides,
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Reminder skipped',
-              style: TextStyle(color: Colors.white),
-            ),
-            backgroundColor: widget.accentColor,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Error skipping reminder: $e',
-              style: TextStyle(color: Colors.white),
-            ),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     // Show scheduled time only (original time when snoozed, not the snooze time)
@@ -644,3 +595,64 @@ class _CurrentCueCardState extends State<CurrentCueCard>
       }
     }
   }
+
+  Widget _buildDoneButton() {
+    return StatefulBuilder(
+      builder: (context, setState) {
+        return GestureDetector(
+          onTap: () async {
+            // Haptic feedback
+            try {
+              await HapticFeedback.mediumImpact();
+            } catch (e) {
+              // Haptic feedback not available on all platforms
+            }
+            widget.onMarkCompleted(widget.reminder.id);
+          },
+          child: AnimatedScale(
+            scale: 1.0,
+            duration: const Duration(milliseconds: 100),
+            child: Container(
+              height: 64.h,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    widget.accentColor,
+                    widget.accentColor.withOpacity(0.9),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(36.r),
+                boxShadow: [
+                  BoxShadow(
+                    color: widget.accentColor.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.check_rounded, color: Colors.white, size: 20.sp),
+                  SizedBox(width: 8.w),
+                  Text(
+                    'DONE',
+                    style: TextStyle(
+                      fontSize: 14.sp,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
