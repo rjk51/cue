@@ -111,7 +111,7 @@ struct SmallWidgetView: View {
     let reminders: [ReminderData]
 
     var body: some View {
-        VStack(alignment: .leading) {
+        VStack(alignment: .leading, spacing: 8) {
             if let reminder = reminders.first {
                 VStack(alignment: .leading, spacing: 0) {
                     // Header Icon
@@ -145,6 +145,23 @@ struct SmallWidgetView: View {
                 }
             } else {
                 EmptyStateView()
+            }
+            
+            // Add Button
+            Link(destination: URL(string: "cue://create-reminder")!) {
+                HStack {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 14))
+                    Text("Add")
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                }
+                .foregroundColor(AppTheme.onSurface)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(AppTheme.primary.opacity(0.2))
+                )
             }
         }
         .padding()
@@ -194,6 +211,23 @@ struct MediumWidgetView: View {
                 }
             }
             Spacer()
+            
+            // Add Button
+            Link(destination: URL(string: "cue://create-reminder")!) {
+                HStack {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 14))
+                    Text("Add Reminder")
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                }
+                .foregroundColor(AppTheme.onSurface)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(AppTheme.primary.opacity(0.2))
+                )
+            }
         }
         .padding()
         // Auto-cycle pages since we can't scroll
@@ -266,6 +300,23 @@ struct LargeWidgetView: View {
                 }
             }
             Spacer()
+            
+            // Add Button
+            Link(destination: URL(string: "cue://create-reminder")!) {
+                HStack {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 16))
+                    Text("Add Reminder")
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                }
+                .foregroundColor(AppTheme.onSurface)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(AppTheme.primary.opacity(0.2))
+                )
+            }
         }
         .padding()
         .onAppear {
