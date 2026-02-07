@@ -656,7 +656,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   SizedBox(width: 16.w),
                                   Expanded(
                                     child: Text(
-                                      'Cue Pro',
+                                      'Subscription',
                                       style: TextStyle(
                                         fontSize: 16.sp,
                                         fontWeight: FontWeight.w500,

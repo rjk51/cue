@@ -15,6 +15,7 @@ class ThemeService {
 
   static const String _themeKey = 'theme_preference';
   static const String _accentColorKey = 'accent_color';
+  static const String _fontSizeKey = 'font_size_scale';
 
   /// Get the current theme preference.
   ///
@@ -179,6 +180,74 @@ class ThemeService {
       }
     } catch (e) {
       print('Error saving accent color to Firestore: $e');
+      // Don't throw - local storage is sufficient
+    }
+  }
+
+  /// Get the font size scale preference.
+  ///
+  /// Returns a scale multiplier for font sizes:
+  /// - 1.0 = Default (normal)
+  /// - 1.15 = Medium (larger)
+  /// - 1.3 = Large (largest)
+  /// Defaults to 1.0 if not set.
+  Future<double> getFontSizeScale() async {
+    // Try to get from local storage first
+    final localScale = _localStorage.get<double>(_fontSizeKey);
+    if (localScale != null) {
+      return localScale;
+    }
+
+    // Try to get from Firestore if online
+    try {
+      final userId = _auth.currentUser?.uid;
+      if (userId != null) {
+        final userDoc = await _firestore.collection('users').doc(userId).get();
+        if (userDoc.exists) {
+          final firestoreScale = userDoc.data()?['fontSizeScale'] as double?;
+          if (firestoreScale != null) {
+            // Cache it locally
+            await _localStorage.set(_fontSizeKey, firestoreScale);
+            return firestoreScale;
+          }
+        }
+      }
+    } catch (e) {
+      print('Error fetching font size scale from Firestore: $e');
+    }
+
+    // Default to 1.0 (normal size)
+    return 1.0;
+  }
+
+  /// Set the font size scale preference.
+  ///
+  /// Valid values: 1.0 (default), 1.15 (medium), 1.3 (large)
+  Future<void> setFontSizeScale(double scale) async {
+    if (![1.0, 1.15, 1.3].contains(scale)) {
+      throw ArgumentError('Invalid font scale: $scale. Must be 1.0, 1.15, or 1.3.');
+    }
+
+    // Save locally first
+    await _localStorage.set(_fontSizeKey, scale);
+
+    // Notify all listeners of the font size change
+    ThemeNotifier.instance.updateFontSizeScale(scale);
+
+    // Try to sync with Firestore
+    try {
+      final userId = _auth.currentUser?.uid;
+      if (userId != null) {
+        await _firestore.collection('users').doc(userId).set(
+          {
+            'fontSizeScale': scale,
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      }
+    } catch (e) {
+      print('Error saving font size scale to Firestore: $e');
       // Don't throw - local storage is sufficient
     }
   }

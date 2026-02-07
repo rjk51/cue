@@ -130,9 +130,11 @@ void main() async {
   final themeService = ThemeService();
   final savedColor = await themeService.getAccentColor();
   final savedTheme = await themeService.getThemePreference();
+  final savedFontSize = await themeService.getFontSizeScale();
   ThemeNotifier.instance.initialize(
     accentColor: savedColor,
     themeMode: savedTheme,
+    fontSizeScale: savedFontSize,
   );
 
   // Set background message handler (needs to be set early)
@@ -191,6 +193,15 @@ class MyApp extends StatelessWidget {
             title: 'Cue',
             navigatorKey: navigatorKey,
             themeMode: themeMode,
+            builder: (context, child) {
+              // Apply global text scale factor based on user preference
+              return MediaQuery(
+                data: MediaQuery.of(context).copyWith(
+                  textScaleFactor: themeNotifier.fontSizeScale,
+                ),
+                child: child!,
+              );
+            },
             theme: ThemeData(
               colorScheme: lightColorScheme.copyWith(
                 surface: bgColor,

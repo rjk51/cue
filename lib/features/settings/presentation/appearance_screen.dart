@@ -14,6 +14,7 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
   final ThemeService _themeService = ThemeService();
   Color _selectedColor = const Color(0xFFFFB4A3);
   String _themeMode = 'light';
+  double _fontSizeScale = 1.0;
   bool _isLoading = false;
 
   @override
@@ -25,9 +26,11 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
   Future<void> _loadSettings() async {
     final color = await _themeService.getAccentColor();
     final theme = await _themeService.getThemePreference();
+    final fontSize = await _themeService.getFontSizeScale();
     setState(() {
       _selectedColor = color;
       _themeMode = theme;
+      _fontSizeScale = fontSize;
     });
   }
 
@@ -124,6 +127,39 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error updating theme: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _updateFontSizeScale(double scale) async {
+    setState(() {
+      _fontSizeScale = scale;
+      _isLoading = true;
+    });
+
+    try {
+      await _themeService.setFontSizeScale(scale);
+      if (mounted) {
+        String sizeLabel = scale == 1.0 ? 'Default' : scale == 1.15 ? 'Medium' : 'Large';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Font size updated to $sizeLabel!'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating font size: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -244,6 +280,74 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
                             onTap: () => _updateThemeMode('system'),
                             textColor: textColor,
                             subtitleColor: subtitleColor,
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    SizedBox(height: 32.h),
+
+                    // Font Size Section
+                    Text(
+                      'FONT SIZE',
+                      style: TextStyle(
+                        fontSize: 12.sp,
+                        fontWeight: FontWeight.w600,
+                        color: subtitleColor,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    SizedBox(height: 16.h),
+
+                    // Single row with three font size options
+                    Container(
+                      padding: EdgeInsets.all(16.r),
+                      decoration: BoxDecoration(
+                        color: cardColor,
+                        borderRadius: BorderRadius.circular(16.r),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(
+                              _isDarkMode ? 0.3 : 0.08,
+                            ),
+                            blurRadius: 20,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _buildCompactFontOption(
+                              label: 'Default',
+                              scale: 1.0,
+                              isSelected: _fontSizeScale == 1.0,
+                              onTap: () => _updateFontSizeScale(1.0),
+                              textColor: textColor,
+                              subtitleColor: subtitleColor,
+                            ),
+                          ),
+                          SizedBox(width: 12.w),
+                          Expanded(
+                            child: _buildCompactFontOption(
+                              label: 'Medium',
+                              scale: 1.15,
+                              isSelected: _fontSizeScale == 1.15,
+                              onTap: () => _updateFontSizeScale(1.15),
+                              textColor: textColor,
+                              subtitleColor: subtitleColor,
+                            ),
+                          ),
+                          SizedBox(width: 12.w),
+                          Expanded(
+                            child: _buildCompactFontOption(
+                              label: 'Large',
+                              scale: 1.3,
+                              isSelected: _fontSizeScale == 1.3,
+                              onTap: () => _updateFontSizeScale(1.3),
+                              textColor: textColor,
+                              subtitleColor: subtitleColor,
+                            ),
                           ),
                         ],
                       ),
@@ -706,6 +810,58 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
             ),
             if (isSelected)
               Icon(Icons.check_circle, color: _selectedColor, size: 24.sp),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactFontOption({
+    required String label,
+    required double scale,
+    required bool isSelected,
+    required VoidCallback onTap,
+    required Color textColor,
+    required Color subtitleColor,
+  }) {
+    return GestureDetector(
+      onTap: _isLoading ? null : onTap,
+      child: Container(
+        padding: EdgeInsets.symmetric(vertical: 16.h, horizontal: 8.w),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? _selectedColor.withOpacity(0.15)
+              : _isDarkMode
+                  ? Colors.white.withOpacity(0.05)
+                  : Colors.black.withOpacity(0.03),
+          borderRadius: BorderRadius.circular(12.r),
+          border: Border.all(
+            color: isSelected
+                ? _selectedColor
+                : Colors.transparent,
+            width: 2,
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Aa',
+              style: TextStyle(
+                fontSize: (20.sp * scale),
+                fontWeight: FontWeight.w700,
+                color: isSelected ? _selectedColor : textColor,
+              ),
+            ),
+            SizedBox(height: 8.h),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13.sp,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                color: isSelected ? _selectedColor : subtitleColor,
+              ),
+            ),
           ],
         ),
       ),
