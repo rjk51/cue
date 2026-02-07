@@ -8,6 +8,7 @@ import 'dart:io';
 import 'package:device_info_plus/device_info_plus.dart';
 import '../../../services/theme_service.dart';
 import '../../../services/auth_service.dart';
+import '../../../services/pro_status_service.dart';
 import '../../auth/presentation/welcome_screen.dart';
 import '../../onboarding/presentation/onboarding_screen.dart';
 import '../../subscription/presentation/cue_pro_paywall_screen.dart';
@@ -412,39 +413,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
-                                children: [
-                                  Text(
-                                    _userName,
-                                    style: TextStyle(
-                                      fontSize: 18.sp,
-                                      fontWeight: FontWeight.w600,
-                                      color: textColor,
-                                    ),
-                                  ),
-                                  SizedBox(width: 8.w),
-                                  Container(
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: 8.w,
-                                      vertical: 2.h,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: _accentColor,
-                                      borderRadius: BorderRadius.circular(
-                                        4.r,
+                              FutureBuilder<bool>(
+                                future: ProStatusService().hasProAccess(),
+                                builder: (context, snapshot) {
+                                  final hasPro = snapshot.data ?? false;
+                                  return Row(
+                                    children: [
+                                      Text(
+                                        _userName,
+                                        style: TextStyle(
+                                          fontSize: 18.sp,
+                                          fontWeight: FontWeight.w600,
+                                          color: textColor,
+                                        ),
                                       ),
-                                    ),
-                                    child: Text(
-                                      'PRO',
-                                      style: TextStyle(
-                                        fontSize: 10.sp,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.white,
-                                        letterSpacing: 0.5,
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                                      if (hasPro) ...[
+                                        SizedBox(width: 8.w),
+                                        Container(
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: 8.w,
+                                            vertical: 2.h,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: _accentColor,
+                                            borderRadius: BorderRadius.circular(
+                                              4.r,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            'PRO',
+                                            style: TextStyle(
+                                              fontSize: 10.sp,
+                                              fontWeight: FontWeight.w700,
+                                              color: Colors.white,
+                                              letterSpacing: 0.5,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  );
+                                },
                               ),
                               SizedBox(height: 4.h),
                               Text(

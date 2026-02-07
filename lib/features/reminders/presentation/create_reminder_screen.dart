@@ -14,11 +14,13 @@ import '../../notifications/notification_service.dart';
 import '../../../services/theme_service.dart';
 import '../../../services/theme_notifier.dart';
 import '../../../services/tutorial_service.dart';
+import '../../../services/pro_status_service.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
 import '../../../shared/widgets/cupertino_pickers.dart';
 import '../../../shared/widgets/edit_recurring_dialog.dart';
 import '../../../services/whisper_speech_service.dart';
 import '../../../services/chatgpt_service.dart';
+import '../../subscription/presentation/cue_pro_paywall_screen.dart';
 import '../../../shared/widgets/tutorial_overlay.dart';
 import 'widgets/icon_picker_sheet.dart';
 import 'widgets/sticky_save_button.dart';
@@ -38,6 +40,7 @@ class _NewReminderScreenState extends State<NewReminderScreen> with SingleTicker
   final ReminderService _reminderService = ReminderService();
   final NotificationService _notificationService = NotificationService();
   final TutorialService _tutorialService = TutorialService();
+  final ProStatusService _proStatusService = ProStatusService();
   final TextEditingController _reminderController = TextEditingController();
   final WhisperSpeechService _whisperService = WhisperSpeechService.instance;
   final ChatGPTService _chatGPTService = ChatGPTService.instance;
@@ -1057,6 +1060,62 @@ class _NewReminderScreenState extends State<NewReminderScreen> with SingleTicker
   }
 
   Future<void> _toggleVoiceRecording() async {
+    // Check pro access for voice feature
+    final hasPro = await _proStatusService.hasProAccess();
+    if (!hasPro) {
+      if (mounted) {
+        final shouldUpgrade = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: _isDarkMode ? const Color(0xFF2A2A2A) : Colors.white,
+            title: Row(
+              children: [
+                Icon(Icons.star_rounded, color: _accentColor, size: 24.sp),
+                SizedBox(width: 8.w),
+                Text(
+                  'Pro Feature',
+                  style: TextStyle(
+                    color: _isDarkMode ? Colors.white : const Color(0xFF2D2D2D),
+                  ),
+                ),
+              ],
+            ),
+            content: Text(
+              'Voice reminders are a Pro feature. Upgrade to unlock voice input and many other premium features!',
+              style: TextStyle(
+                color: _isDarkMode ? Colors.white70 : const Color(0xFF666666),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text('Not Now', style: TextStyle(color: _accentColor)),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _accentColor,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Upgrade to Pro'),
+              ),
+            ],
+          ),
+        );
+
+        if (shouldUpgrade == true && mounted) {
+          // Navigate to subscription screen
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const CueProPaywallScreen(),
+            ),
+          );
+        }
+      }
+      return;
+    }
+
     if (_isRecording) {
       await _stopVoiceRecording();
     } else {
@@ -1603,7 +1662,69 @@ class _NewReminderScreenState extends State<NewReminderScreen> with SingleTicker
                                     ),
                                     Switch(
                                       value: _repeatEnabled,
-                                      onChanged: (value) {
+                                      onChanged: (value) async {
+                                        // Check pro access for recurring reminders
+                                        if (value) {
+                                          final hasPro = await _proStatusService.hasProAccess();
+                                          if (!hasPro) {
+                                            final shouldUpgrade = await showDialog<bool>(
+                                              context: context,
+                                              builder: (context) => AlertDialog(
+                                                backgroundColor: _isDarkMode 
+                                                    ? const Color(0xFF2A2A2A) 
+                                                    : Colors.white,
+                                                title: Row(
+                                                  children: [
+                                                    Icon(Icons.star_rounded, color: _accentColor, size: 24.sp),
+                                                    SizedBox(width: 8.w),
+                                                    Text(
+                                                      'Pro Feature',
+                                                      style: TextStyle(
+                                                        color: _isDarkMode 
+                                                            ? Colors.white 
+                                                            : const Color(0xFF2D2D2D),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                content: Text(
+                                                  'Recurring reminders are a Pro feature. Upgrade to create reminders that repeat daily, weekly, monthly, or on a custom schedule!',
+                                                  style: TextStyle(
+                                                    color: _isDarkMode 
+                                                        ? Colors.white70 
+                                                        : const Color(0xFF666666),
+                                                  ),
+                                                ),
+                                                actions: [
+                                                  TextButton(
+                                                    onPressed: () => Navigator.pop(context, false),
+                                                    child: Text('Not Now', style: TextStyle(color: _accentColor)),
+                                                  ),
+                                                  ElevatedButton(
+                                                    onPressed: () => Navigator.pop(context, true),
+                                                    style: ElevatedButton.styleFrom(
+                                                      backgroundColor: _accentColor,
+                                                      foregroundColor: Colors.white,
+                                                    ),
+                                                    child: const Text('Upgrade to Pro'),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+
+                                            if (shouldUpgrade == true && mounted) {
+                                              // Navigate to subscription screen
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (context) => const CueProPaywallScreen(),
+                                                ),
+                                              );
+                                            }
+                                            return;
+                                          }
+                                        }
+                                        
                                         setState(() {
                                           _repeatEnabled = value;
                                         });
