@@ -305,6 +305,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return difference.inMinutes.abs() <= 20;
   }
 
+  bool _isDateWithinUpcomingRange(DateTime date, DateTime now) {
+    final difference = date.difference(now);
+    // Include reminders from today up to 7 days in the future
+    return difference.inDays >= 0 && difference.inDays <= 7;
+  }
+
   List<DateTime> _getHourlyOccurrencesForDay(Reminder reminder, DateTime date) {
     final recurrence = reminder.recurrence;
     if (recurrence == null) return [];
@@ -471,12 +477,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ).format(effectiveDate);
 
                       if (!reminder.isSkippedOnDate(dateKey)) {
-                        final isScheduledForToday =
-                            effectiveDate.year == now.year &&
-                            effectiveDate.month == now.month &&
-                            effectiveDate.day == now.day;
+                        final effectiveDate = reminder.effectiveNextDueAt;
+                        final isScheduledSoon = _isDateWithinUpcomingRange(effectiveDate, now);
 
-                        if (isScheduledForToday && !reminder.isCompletedToday) {
+                        if (isScheduledSoon && !reminder.isCompletedToday) {
                           expandedReminders.add({
                             'reminder': reminder,
                             'occurrenceTime': null,
@@ -487,12 +491,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   } else {
                     // Non-recurring reminder
                     final effectiveDate = reminder.effectiveNextDueAt;
-                    final isScheduledForToday =
-                        effectiveDate.year == now.year &&
-                        effectiveDate.month == now.month &&
-                        effectiveDate.day == now.day;
+                    final isScheduledSoon = _isDateWithinUpcomingRange(effectiveDate, now);
 
-                    if (isScheduledForToday && !reminder.isCompletedToday) {
+                    if (isScheduledSoon && !reminder.isCompletedToday) {
                       expandedReminders.add({
                         'reminder': reminder,
                         'occurrenceTime': null,
