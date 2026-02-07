@@ -48,6 +48,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   final GlobalKey _fabKey = GlobalKey();
   final GlobalKey _cueCardKey = GlobalKey();
 
+  // Progress bar state
+  int _completedTasksCount = 0;
+  int _totalTasksCount = 0;
+  bool _isRunnerAnimating = false;
+  late AnimationController _runnerController;
+  late Animation<double> _runnerAnimation;
+  final Set<String> _locallyCompletedIds = {}; // Track completed tasks locally so they persist
+
   @override
   void initState() {
     super.initState();
@@ -55,6 +63,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _checkTutorialState();
     // Listen for theme changes
     ThemeNotifier.instance.addListener(_onThemeChanged);
+
+    // Initialize runner animation controller
+    _runnerController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+    _runnerAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _runnerController, curve: Curves.easeInOut),
+    );
 
     // Start monitoring device status after a delay to ensure device is reactivated
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -68,6 +85,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _runnerController.dispose();
     ThemeNotifier.instance.removeListener(_onThemeChanged);
     _deviceMonitor.stopMonitoring();
     super.dispose();
@@ -248,16 +266,31 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     String reminderId, {
     DateTime? occurrenceTime,
   }) async {
-    // Show snackbar immediately (optimistic UI)
+    // Track this completion locally so it persists across stream rebuilds
+    final completionKey = occurrenceTime != null
+        ? '${reminderId}_${occurrenceTime.toIso8601String()}'
+        : reminderId;
+    
     if (mounted) {
-      context.showSuccessSnackbar('Marked as done!');
+      setState(() {
+        _locallyCompletedIds.add(completionKey);
+        _completedTasksCount = _locallyCompletedIds.length.clamp(0, _totalTasksCount > 0 ? _totalTasksCount : 1);
+        _isRunnerAnimating = true;
+      });
+      
+      _runnerController.forward(from: 0.0).then((_) {
+        if (mounted) {
+          setState(() {
+            _isRunnerAnimating = false;
+          });
+        }
+      });
     }
 
     // Execute in background without blocking UI
     _reminderService
         .markAsCompleted(reminderId, occurrenceTime: occurrenceTime)
         .catchError((e) {
-          // Only show error if it fails
           if (mounted) {
             context.showErrorSnackbar('Error: $e');
           }
@@ -433,6 +466,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 // Update widgets whenever reminders change (including empty state)
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   _updateWidgets(reminders);
+                  _updateProgressCounts(reminders);
                 });
 
                 // Sort reminders by time
@@ -849,6 +883,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
             ),
           ),
+
+          // Progress bar at bottom left (always visible if tasks exist today)
+          if (_totalTasksCount > 0)
+            Positioned(
+              left: 20.w,
+              bottom: MediaQuery.of(context).padding.bottom + 30.h,
+              child: _buildProgressBar(),
+            ),
 
           // Tutorial overlays
           if (_showFabTutorial)
@@ -1450,6 +1492,165 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           }
         }
       },
+    );
+  }
+
+  void _updateProgressCounts(List<Reminder> reminders) {
+    if (!mounted) return;
+    final now = DateTime.now();
+    
+    int todayTotal = 0;
+    int firestoreCompleted = 0;
+    
+    for (final reminder in reminders) {
+      if (reminder.recurrence != null) {
+        final recurrence = reminder.recurrence!;
+        final type = recurrence['type'] as String?;
+        final unit = recurrence['unit'] as String?;
+
+        if (type == 'interval' && (unit == 'hours' || unit == 'minutes')) {
+          final occurrences = _getHourlyOccurrencesForDay(reminder, now);
+          for (final occurrence in occurrences) {
+            final dateKey = DateFormat('yyyy-MM-dd').format(occurrence);
+            if (!reminder.isSkippedOnDate(dateKey)) {
+              todayTotal++;
+              if (reminder.isOccurrenceCompleted(occurrence)) {
+                firestoreCompleted++;
+                // Sync local set with Firestore state
+                _locallyCompletedIds.add('${reminder.id}_${occurrence.toIso8601String()}');
+              }
+            }
+          }
+        } else {
+          final effectiveDate = reminder.effectiveNextDueAt;
+          final isToday = effectiveDate.year == now.year &&
+              effectiveDate.month == now.month &&
+              effectiveDate.day == now.day;
+          
+          if (isToday) {
+            todayTotal++;
+            if (reminder.isCompletedToday) {
+              firestoreCompleted++;
+              _locallyCompletedIds.add(reminder.id);
+            }
+          }
+        }
+      } else {
+        // Non-recurring reminder — use original time to always count it today
+        final reminderTime = reminder.time;
+        final isToday = reminderTime.year == now.year &&
+            reminderTime.month == now.month &&
+            reminderTime.day == now.day;
+        
+        if (isToday) {
+          todayTotal++;
+          if (reminder.isCompletedToday) {
+            firestoreCompleted++;
+            _locallyCompletedIds.add(reminder.id);
+          }
+        }
+      }
+    }
+    
+    // Use the higher of Firestore count vs local count (local tracks optimistic completions)
+    final effectiveCompleted = _locallyCompletedIds.length.clamp(0, todayTotal);
+    final completedCount = effectiveCompleted > firestoreCompleted ? effectiveCompleted : firestoreCompleted;
+    
+    // Only update state if values actually changed
+    if (_totalTasksCount != todayTotal || 
+        (!_isRunnerAnimating && _completedTasksCount != completedCount)) {
+      setState(() {
+        _totalTasksCount = todayTotal;
+        if (!_isRunnerAnimating) {
+          _completedTasksCount = completedCount;
+        }
+      });
+    }
+  }
+
+  Widget _buildProgressBar() {
+    final progress = _totalTasksCount > 0 ? _completedTasksCount / _totalTasksCount : 0.0;
+    const barWidth = 150.0;
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Running character animation
+        AnimatedBuilder(
+          animation: _runnerAnimation,
+          builder: (context, child) {
+            // Calculate runner position based on progress
+            double targetPosition = progress;
+            if (_isRunnerAnimating) {
+              // During animation, interpolate from previous position to new position
+              final previousProgress = _totalTasksCount > 0 
+                  ? (_completedTasksCount - 1) / _totalTasksCount 
+                  : 0.0;
+              targetPosition = previousProgress + (progress - previousProgress) * _runnerAnimation.value;
+            }
+            final runnerOffset = barWidth * targetPosition;
+            
+            return Transform.translate(
+              offset: Offset(runnerOffset - 35.w, 0), // Center the runner
+              child: Lottie.asset(
+                'assets/runner.json',
+                width: 70.w,
+                height: 70.h,
+                fit: BoxFit.contain,
+                repeat: _isRunnerAnimating,
+                errorBuilder: (context, error, stackTrace) {
+                  // Fallback to emoji if Lottie fails
+                  return Text(
+                    '🏃',
+                    style: TextStyle(fontSize: 40.sp),
+                  );
+                },
+              ),
+            );
+          },
+        ),
+        SizedBox(height: 8.h),
+        
+        // Progress bar container
+        Container(
+          width: barWidth.w,
+          height: 8.h,
+          decoration: BoxDecoration(
+            color: _isDarkMode 
+                ? Colors.white.withOpacity(0.1) 
+                : Colors.black.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(4.r),
+          ),
+          child: Stack(
+            children: [
+              // Progress fill
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                width: (barWidth * progress).w,
+                height: 8.h,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF8E6E),
+                  borderRadius: BorderRadius.circular(4.r),
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: 4.h),
+        
+        // Task count text
+        Text(
+          '$_completedTasksCount/$_totalTasksCount tasks',
+          style: TextStyle(
+            fontSize: 11.sp,
+            fontWeight: FontWeight.w600,
+            color: _isDarkMode 
+                ? Colors.white.withOpacity(0.7) 
+                : Colors.black.withOpacity(0.6),
+          ),
+        ),
+      ],
     );
   }
 
