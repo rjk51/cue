@@ -591,16 +591,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             ),
                           ),
 
-                          // Show full-screen empty state if no reminders at all
-                          if (sortedReminders.isEmpty)
-                            SizedBox(
-                              height: screenHeight - 100.h,
-                              child: _buildFullScreenEmptyState(
-                                textColor,
-                                subtitleColor,
-                              ),
-                            )
-                          else ...[
+                          if (sortedReminders.isNotEmpty) ...[
                             SizedBox(height: 32.h),
 
                             // Today's Reminders Count Section
@@ -662,6 +653,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                 ],
                               ),
                             ),
+                          ] else ...[
+                            // Show empty cue card when no reminders
+                            SizedBox(height: 32.h),
+                            Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 32.w),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildEmptyCueCard(
+                                    cardColor,
+                                    textColor,
+                                    subtitleColor,
+                                  ),
+                                ],
+                              ),
+                            ),
                           ],
                         ] else ...[
                           // Date header - always shown
@@ -690,15 +697,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             ),
                           ),
 
-                          // Show full-screen empty state if no reminders at all
-                          if (sortedReminders.isEmpty)
-                            Expanded(
-                              child: _buildFullScreenEmptyState(
-                                textColor,
-                                subtitleColor,
-                              ),
-                            )
-                          else ...[
+                          if (sortedReminders.isNotEmpty) ...[
                             SizedBox(height: 22.h),
 
                             // Today's Reminders Count Section
@@ -755,6 +754,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                     
                                     // Bottom padding to prevent FAB overlap
                                     SizedBox(height: 120.h),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ] else ...[
+                            // Show empty cue card when no reminders
+                            SizedBox(height: 22.h),
+                            Expanded(
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 32.w),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _buildEmptyCueCard(
+                                      cardColor,
+                                      textColor,
+                                      subtitleColor,
+                                    ),
                                   ],
                                 ),
                               ),
@@ -1419,48 +1436,5 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildFullScreenEmptyState(Color textColor, Color subtitleColor) {
-    return Center(
-      child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 48.w),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.celebration_outlined,
-              size: 120.sp,
-              color: _accentColor.withOpacity(0.3),
-            ),
-            SizedBox(height: 48.h),
-            Text(
-              'No Reminders Yet',
-              style: TextStyle(
-                fontSize: 32.sp,
-                fontWeight: FontWeight.w700,
-                color: textColor,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            SizedBox(height: 16.h),
-            Text(
-              'Tap the + button to create your first reminder',
-              style: TextStyle(
-                fontSize: 16.sp,
-                color: subtitleColor,
-                height: 1.5,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            SizedBox(height: 64.h),
-            // Arrow pointing to FAB
-            Icon(
-              Icons.arrow_downward_rounded,
-              size: 32.sp,
-              color: _accentColor.withOpacity(0.5),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+
 }
