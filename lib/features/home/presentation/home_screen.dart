@@ -4,6 +4,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flip_card/flip_card.dart';
+import 'package:lottie/lottie.dart';
 import '../../reminders/domain/reminder_model.dart';
 import '../../reminders/data/reminder_service.dart';
 import '../../reminders/presentation/create_reminder_screen.dart';
@@ -943,10 +944,26 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       ),
       child: Column(
         children: [
-          Icon(
-            Icons.check_circle_outline_rounded,
-            size: 64.sp,
-            color: _accentColor,
+          ColorFiltered(
+            colorFilter: ColorFilter.mode(
+              const Color(0xFFFF8E6E),
+              BlendMode.srcIn,
+            ),
+            child: Lottie.asset(
+              'assets/success.json',
+              width: 120.w,
+              height: 120.h,
+              fit: BoxFit.contain,
+              repeat: true,
+              errorBuilder: (context, error, stackTrace) {
+                // Fallback to icon if Lottie fails to load
+                return Icon(
+                  Icons.check_circle_outline_rounded,
+                  size: 64.sp,
+                  color: _accentColor,
+                );
+              },
+            ),
           ),
           SizedBox(height: 32.h),
           Text(
