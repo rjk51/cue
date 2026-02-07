@@ -47,21 +47,13 @@ class _CurrentCueCardState extends State<CurrentCueCard>
   final ReminderService _reminderService = ReminderService();
   final FlipCardController _flipController = FlipCardController();
 
-  late AnimationController _swipeController;
   late AnimationController _bounceController;
   late Animation<double> _bounceAnimation;
-  double _dragOffset = 0;
 
   @override
   void initState() {
     super.initState();
     _notesController = TextEditingController(text: widget.reminder.notes ?? '');
-
-    // Initialize animation controller for swipe slider
-    _swipeController = AnimationController(
-      duration: const Duration(milliseconds: 300),
-      vsync: this,
-    );
 
     // Initialize bounce animation controller
     _bounceController = AnimationController(
@@ -94,15 +86,11 @@ class _CurrentCueCardState extends State<CurrentCueCard>
     // Update notes controller when reminder changes
     if (oldWidget.reminder.id != widget.reminder.id) {
       _notesController.text = widget.reminder.notes ?? '';
-      // Reset slider state
-      _dragOffset = 0;
-      _swipeController.reset();
     }
   }
 
   @override
   void dispose() {
-    _swipeController.dispose();
     _bounceController.dispose();
     _notesController.dispose();
     _notesFocusNode.dispose();
@@ -122,24 +110,53 @@ class _CurrentCueCardState extends State<CurrentCueCard>
     }
   }
 
-  void _navigateToSnooze() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => SnoozeScreen(
-          reminderId: widget.reminder.id,
-          reminderTitle: widget.reminder.name,
-        ),
-      ),
-    ).then((_) {
-      // Reset slider state when returning
+  Future<void> _skipCurrentReminder() async {
+    try {
+      final occurrenceDate = widget.occurrenceTime ?? widget.reminder.effectiveNextDueAt;
+      final dateKey = DateFormat('yyyy-MM-dd').format(occurrenceDate);
+
+      // Get existing overrides or create new map
+      final existingOverrides = widget.reminder.overrides ?? {};
+      final newOverrides = Map<String, Map<String, dynamic>>.from(
+        existingOverrides,
+      );
+
+      // Create or update override for this date with skipped flag
+      newOverrides[dateKey] = {
+        ...(newOverrides[dateKey] ?? {}),
+        'skipped': true,
+      };
+
+      await _reminderService.updateReminder(widget.reminder.id, {
+        'overrides': newOverrides,
+      });
+
       if (mounted) {
-        setState(() {
-          _dragOffset = 0;
-        });
-        _swipeController.reset();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Reminder skipped',
+              style: TextStyle(color: Colors.white),
+            ),
+            backgroundColor: widget.accentColor,
+            duration: const Duration(seconds: 2),
+          ),
+        );
       }
-    });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Error skipping reminder: $e',
+              style: TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -448,144 +465,16 @@ class _CurrentCueCardState extends State<CurrentCueCard>
   Widget _buildActionButtons() {
     return Row(
       children: [
-        Expanded(flex: 3, child: _buildSwipeToSnooze()),
-        SizedBox(width: 12.w),
-        Expanded(flex: 2, child: _buildDoneButton()),
+        Expanded(flex: 2, child: _buildSnoozeButton()),
+        SizedBox(width: 8.w),
+        Expanded(flex: 2, child: _buildSkipButton()),
+        SizedBox(width: 8.w),
+        Expanded(flex: 3, child: _buildDoneButton()),
       ],
     );
   }
 
-  Widget _buildSwipeToSnooze() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final maxWidth = constraints.maxWidth;
-        final thumbSize = 48.h;
-        final trackHeight = 64.h;
-        final maxSlide = maxWidth - thumbSize - 16.w; // Account for padding
-
-        return GestureDetector(
-          onHorizontalDragStart: (_) {
-            setState(() {
-              _dragOffset = 0;
-            });
-          },
-          onHorizontalDragUpdate: (details) {
-            setState(() {
-              _dragOffset += details.delta.dx;
-              _dragOffset = _dragOffset.clamp(0, maxSlide);
-
-              // Update animation based on progress
-              final progress = _dragOffset / maxSlide;
-              _swipeController.value = progress;
-            });
-          },
-          onHorizontalDragEnd: (_) {
-            final progress = _dragOffset / maxSlide;
-            if (progress > 0.85) {
-              // Swipe completed - navigate to snooze screen
-              _navigateToSnooze();
-            } else {
-              // Reset slider
-              setState(() {
-                _dragOffset = 0;
-              });
-              _swipeController.reverse();
-            }
-          },
-          child: Container(
-            height: trackHeight,
-            decoration: BoxDecoration(
-              color: widget.isDarkMode
-                  ? Colors.white.withOpacity(0.08)
-                  : Colors.black.withOpacity(0.04),
-              borderRadius: BorderRadius.circular(36.r),
-            ),
-            child: Stack(
-              children: [
-                // Background text "SWIPE TO SNOOZE"
-                Positioned.fill(
-                  child: Center(
-                    child: AnimatedBuilder(
-                      animation: _swipeController,
-                      builder: (context, child) {
-                        return Opacity(
-                          opacity: 1 - (_swipeController.value * 0.5),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.swipe_right_outlined,
-                                color: widget.accentColor,
-                                size: 18.sp,
-                              ),
-                              SizedBox(width: 8.w),
-                              Text(
-                                'SWIPE TO SNOOZE',
-                                style: TextStyle(
-                                  fontSize: 12.sp,
-                                  fontWeight: FontWeight.w600,
-                                  color: widget.subtitleColor,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-                // Sliding thumb with icon
-                AnimatedBuilder(
-                  animation: _swipeController,
-                  builder: (context, child) {
-                    // Calculate glow intensity based on drag progress
-                    final progress = _dragOffset / maxSlide;
-                    final glowIntensity = progress > 0
-                        ? 0.4 + (progress * 0.3)
-                        : 0.2;
-                    final blurRadius = progress > 0
-                        ? 12.0 + (progress * 8.0)
-                        : 8.0;
-
-                    return Positioned(
-                      left: 8.w + _dragOffset,
-                      top: 8.h,
-                      child: Container(
-                        width: thumbSize,
-                        height: thumbSize,
-                        decoration: BoxDecoration(
-                          color: widget.accentColor,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: widget.accentColor.withOpacity(
-                                glowIntensity,
-                              ),
-                              blurRadius: blurRadius,
-                              spreadRadius: progress > 0 ? 2 : 0,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Icon(
-                          Icons.snooze_rounded,
-                          color: Colors.white,
-                          size: 24.sp,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildDoneButton() {
+  Widget _buildSnoozeButton() {
     return StatefulBuilder(
       builder: (context, setState) {
         return GestureDetector(
@@ -596,7 +485,7 @@ class _CurrentCueCardState extends State<CurrentCueCard>
             } catch (e) {
               // Haptic feedback not available on all platforms
             }
-            widget.onMarkCompleted(widget.reminder.id);
+            _navigateToSnooze();
           },
           child: AnimatedScale(
             scale: 1.0,
@@ -604,34 +493,30 @@ class _CurrentCueCardState extends State<CurrentCueCard>
             child: Container(
               height: 64.h,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    widget.accentColor,
-                    widget.accentColor.withOpacity(0.9),
-                  ],
-                ),
+                color: widget.isDarkMode
+                    ? Colors.white.withOpacity(0.08)
+                    : Colors.black.withOpacity(0.04),
                 borderRadius: BorderRadius.circular(36.r),
-                boxShadow: [
-                  BoxShadow(
-                    color: widget.accentColor.withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
+                border: Border.all(
+                  color: widget.accentColor.withOpacity(0.3),
+                  width: 1.5,
+                ),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.check_rounded, color: Colors.white, size: 20.sp),
+                  Icon(
+                    Icons.snooze_rounded,
+                    color: widget.accentColor,
+                    size: 20.sp,
+                  ),
                   SizedBox(width: 8.w),
                   Text(
-                    'DONE',
+                    'SNOOZE',
                     style: TextStyle(
-                      fontSize: 14.sp,
+                      fontSize: 12.sp,
                       fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                      color: widget.accentColor,
                       letterSpacing: 0.5,
                     ),
                   ),
@@ -643,4 +528,119 @@ class _CurrentCueCardState extends State<CurrentCueCard>
       },
     );
   }
-}
+
+  Widget _buildSkipButton() {
+    return StatefulBuilder(
+      builder: (context, setState) {
+        return GestureDetector(
+          onTap: () async {
+            // Haptic feedback
+            try {
+              await HapticFeedback.mediumImpact();
+            } catch (e) {
+              // Haptic feedback not available on all platforms
+            }
+            await _skipCurrentReminder();
+          },
+          child: AnimatedScale(
+            scale: 1.0,
+            duration: const Duration(milliseconds: 100),
+            child: Container(
+              height: 64.h,
+              decoration: BoxDecoration(
+                color: widget.isDarkMode
+                    ? Colors.white.withOpacity(0.08)
+                    : Colors.black.withOpacity(0.04),
+                borderRadius: BorderRadius.circular(36.r),
+                border: Border.all(
+                  color: widget.subtitleColor.withOpacity(0.3),
+                  width: 1.5,
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.skip_next_rounded,
+                    color: widget.subtitleColor,
+                    size: 20.sp,
+                  ),
+                  SizedBox(width: 8.w),
+                  Text(
+                    'SKIP',
+                    style: TextStyle(
+                      fontSize: 12.sp,
+                      fontWeight: FontWeight.w600,
+                      color: widget.subtitleColor,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _navigateToSnooze() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SnoozeScreen(
+          reminderId: widget.reminder.id,
+          reminderTitle: widget.reminder.name,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _skipCurrentReminder() async {
+    try {
+      final occurrenceDate = widget.occurrenceTime ?? widget.reminder.effectiveNextDueAt;
+      final dateKey = DateFormat('yyyy-MM-dd').format(occurrenceDate);
+
+      // Get existing overrides or create new map
+      final existingOverrides = widget.reminder.overrides ?? {};
+      final newOverrides = Map<String, Map<String, dynamic>>.from(
+        existingOverrides,
+      );
+
+      // Create or update override for this date with skipped flag
+      newOverrides[dateKey] = {
+        ...(newOverrides[dateKey] ?? {}),
+        'skipped': true,
+      };
+
+      await _reminderService.updateReminder(widget.reminder.id, {
+        'overrides': newOverrides,
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Reminder skipped',
+              style: TextStyle(color: Colors.white),
+            ),
+            backgroundColor: widget.accentColor,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Error skipping reminder: $e',
+              style: TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
