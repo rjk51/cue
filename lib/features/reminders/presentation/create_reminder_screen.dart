@@ -29,13 +29,18 @@ class NewReminderScreen extends StatefulWidget {
   final Reminder? reminderToEdit;
   final bool openedForVoice;
 
-  const NewReminderScreen({super.key, this.reminderToEdit, this.openedForVoice = false});
+  const NewReminderScreen({
+    super.key,
+    this.reminderToEdit,
+    this.openedForVoice = false,
+  });
 
   @override
   State<NewReminderScreen> createState() => _NewReminderScreenState();
 }
 
-class _NewReminderScreenState extends State<NewReminderScreen> with SingleTickerProviderStateMixin {
+class _NewReminderScreenState extends State<NewReminderScreen>
+    with SingleTickerProviderStateMixin {
   final ThemeService _themeService = ThemeService();
   final ReminderService _reminderService = ReminderService();
   final NotificationService _notificationService = NotificationService();
@@ -84,6 +89,7 @@ class _NewReminderScreenState extends State<NewReminderScreen> with SingleTicker
   bool _autoSnoozeEnabled = false;
   int _autoSnoozeInterval = 10; // default 10 minutes
   int _autoSnoozeMaxCount = 3; // default 3 times
+  int _sliderMaxValue = 60; // dynamic max value for slider
 
   // Map day indices to abbreviated names
   final List<String> _dayAbbreviations = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -123,7 +129,7 @@ class _NewReminderScreenState extends State<NewReminderScreen> with SingleTicker
     _glowAnimation = Tween<double>(begin: 0.3, end: 1.0).animate(
       CurvedAnimation(parent: _glowController, curve: Curves.easeInOut),
     );
-    
+
     // Show voice hint if opened for voice
     if (widget.openedForVoice) {
       _showVoiceHint = true;
@@ -260,6 +266,11 @@ class _NewReminderScreenState extends State<NewReminderScreen> with SingleTicker
     _autoSnoozeEnabled = reminder.autoSnoozeEnabled;
     _autoSnoozeInterval = reminder.autoSnoozeInterval;
     _autoSnoozeMaxCount = reminder.autoSnoozeMaxCount;
+
+    // Adjust slider max value if auto-snooze interval is greater than 60
+    if (_autoSnoozeInterval > 60) {
+      _sliderMaxValue = ((_autoSnoozeInterval / 60).ceil()) * 60;
+    }
 
     // Handle recurrence
     if (reminder.recurrence != null) {
@@ -464,6 +475,16 @@ class _NewReminderScreenState extends State<NewReminderScreen> with SingleTicker
       _autoSnoozeEnabled = _initialAutoSnoozeEnabled;
       _autoSnoozeInterval = _initialAutoSnoozeInterval ?? _autoSnoozeInterval;
       _autoSnoozeMaxCount = _initialAutoSnoozeMaxCount ?? _autoSnoozeMaxCount;
+
+      // Reset slider max value based on initial auto-snooze interval
+      if ((_initialAutoSnoozeInterval ?? _autoSnoozeInterval) > 60) {
+        _sliderMaxValue =
+            (((_initialAutoSnoozeInterval ?? _autoSnoozeInterval) / 60)
+                .ceil()) *
+            60;
+      } else {
+        _sliderMaxValue = 60;
+      }
 
       _hourlyIntervalHours = _initialHourlyIntervalHours;
       _hourlyIntervalMinutes = _initialHourlyIntervalMinutes;
@@ -1155,7 +1176,9 @@ class _NewReminderScreenState extends State<NewReminderScreen> with SingleTicker
         return;
       }
 
-      final transcription = await _whisperService.transcribeWithWhisper(audioFile);
+      final transcription = await _whisperService.transcribeWithWhisper(
+        audioFile,
+      );
 
       if (transcription == null || transcription.isEmpty) {
         setState(() => _isProcessingVoice = false);
@@ -1165,7 +1188,9 @@ class _NewReminderScreenState extends State<NewReminderScreen> with SingleTicker
         return;
       }
 
-      final parseResult = await _chatGPTService.parseReminderFromVoice(transcription);
+      final parseResult = await _chatGPTService.parseReminderFromVoice(
+        transcription,
+      );
 
       if (parseResult == null) {
         setState(() => _isProcessingVoice = false);
@@ -1254,169 +1279,186 @@ class _NewReminderScreenState extends State<NewReminderScreen> with SingleTicker
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                    // Dynamic Summary Text
-                    RichText(
-                      text: TextSpan(
-                        style: TextStyle(
-                          fontSize: 22.sp,
-                          height: 1.4,
-                          color: textColor,
-                        ),
-                        children: _buildSummaryTextSpans(textColor),
+                  // Dynamic Summary Text
+                  RichText(
+                    text: TextSpan(
+                      style: TextStyle(
+                        fontSize: 22.sp,
+                        height: 1.4,
+                        color: textColor,
                       ),
+                      children: _buildSummaryTextSpans(textColor),
                     ),
+                  ),
 
-                    SizedBox(height: 32.h),
+                  SizedBox(height: 32.h),
 
-                    // Voice hint banner
-                    if (_showVoiceHint)
-                      Container(
-                        margin: EdgeInsets.only(bottom: 16.h),
-                        padding: EdgeInsets.all(16.r),
-                        decoration: BoxDecoration(
-                          color: _accentColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(16.r),
-                          border: Border.all(
-                            color: _accentColor.withOpacity(0.3),
-                            width: 1.5,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.mic,
-                              color: _accentColor,
-                              size: 20.sp,
-                            ),
-                            SizedBox(width: 12.w),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Try Voice Input!',
-                                    style: TextStyle(
-                                      color: _accentColor,
-                                      fontSize: 14.sp,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  SizedBox(height: 4.h),
-                                  Text(
-                                    'Tap the mic and say: "Remind me to call John at 3pm"',
-                                    style: TextStyle(
-                                      color: subtitleColor,
-                                      fontSize: 12.sp,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            IconButton(
-                              icon: Icon(Icons.close, color: subtitleColor, size: 18.sp),
-                              onPressed: () {
-                                setState(() => _showVoiceHint = false);
-                                _glowController.stop();
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-
-                    // Main container for all controls
+                  // Voice hint banner
+                  if (_showVoiceHint)
                     Container(
+                      margin: EdgeInsets.only(bottom: 16.h),
+                      padding: EdgeInsets.all(16.r),
                       decoration: BoxDecoration(
-                        color: cardColor,
-                        borderRadius: BorderRadius.circular(24.r),
+                        color: _accentColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(16.r),
+                        border: Border.all(
+                          color: _accentColor.withOpacity(0.3),
+                          width: 1.5,
+                        ),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Row(
                         children: [
-                          // Reminder Name with Mic Button
-                          Padding(
-                            padding: EdgeInsets.all(12.r),
-                            child: Row(
+                          Icon(Icons.mic, color: _accentColor, size: 20.sp),
+                          SizedBox(width: 12.w),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Expanded(
-                                  child: TextField(
-                                    cursorColor: _accentColor,
-                                    controller: _reminderController,
-                                    style: TextStyle(
-                                      color: textColor,
-                                      fontSize: 24.sp,
-                                    ),
-                                    decoration: InputDecoration(
-                                      hintText: 'What needs your attention?',
-                                      hintStyle: TextStyle(
-                                        color: subtitleColor.withOpacity(0.5),
-                                        fontStyle: FontStyle.italic,
-                                        fontSize: 20.sp,
-                                      ),
-                                      border: InputBorder.none,
-                                      contentPadding: EdgeInsets.zero,
-                                    ),
-                                    onChanged: (_) {
-                                      setState(
-                                        () {},
-                                      );
-                                    },
+                                Text(
+                                  'Try Voice Input!',
+                                  style: TextStyle(
+                                    color: _accentColor,
+                                    fontSize: 14.sp,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
-                                SizedBox(width: 12.w),
-                                // Mic Button with glow
-                                AnimatedBuilder(
-                                  animation: _glowAnimation,
-                                  builder: (context, child) {
-                                    return GestureDetector(
-                                      onTap: _isProcessingVoice ? null : _toggleVoiceRecording,
-                                      child: Container(
-                                        width: 44.w,
-                                        height: 44.h,
-                                        decoration: BoxDecoration(
-                                          color: _isRecording
-                                              ? _accentColor.withOpacity(0.2)
-                                              : inputBgColor,
-                                          shape: BoxShape.circle,
-                                          border: _isRecording
-                                              ? Border.all(color: _accentColor, width: 2)
-                                              : null,
-                                          boxShadow: _showVoiceHint && !_isRecording
-                                              ? [
-                                                  BoxShadow(
-                                                    color: _accentColor.withOpacity(_glowAnimation.value * 0.5),
-                                                    blurRadius: 12 * _glowAnimation.value,
-                                                    spreadRadius: 2 * _glowAnimation.value,
-                                                  ),
-                                                ]
-                                              : null,
-                                        ),
-                                        child: _isProcessingVoice
-                                            ? Padding(
-                                                padding: EdgeInsets.all(12.r),
-                                                child: CircularProgressIndicator(
-                                                  strokeWidth: 2,
-                                                  valueColor: AlwaysStoppedAnimation(_accentColor),
-                                                ),
-                                              )
-                                            : Icon(
-                                                _isRecording ? Icons.stop : Icons.mic,
-                                                color: _isRecording
-                                                    ? _accentColor
-                                                    : (_showVoiceHint ? _accentColor : textColor),
-                                                size: 22.sp,
-                                              ),
-                                      ),
-                                    );
-                                  },
+                                SizedBox(height: 4.h),
+                                Text(
+                                  'Tap the mic and say: "Remind me to call John at 3pm"',
+                                  style: TextStyle(
+                                    color: subtitleColor,
+                                    fontSize: 12.sp,
+                                  ),
                                 ),
                               ],
                             ),
                           ),
-                          Divider(color: dividerColor, height: 1.h),
+                          IconButton(
+                            icon: Icon(
+                              Icons.close,
+                              color: subtitleColor,
+                              size: 18.sp,
+                            ),
+                            onPressed: () {
+                              setState(() => _showVoiceHint = false);
+                              _glowController.stop();
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
 
-                          // Main container for all controls
-                          Container(
-                            decoration: BoxDecoration(
+                  // Main container for all controls
+                  Container(
+                    decoration: BoxDecoration(
+                      color: cardColor,
+                      borderRadius: BorderRadius.circular(24.r),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Reminder Name with Mic Button
+                        Padding(
+                          padding: EdgeInsets.all(12.r),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  cursorColor: _accentColor,
+                                  controller: _reminderController,
+                                  style: TextStyle(
+                                    color: textColor,
+                                    fontSize: 24.sp,
+                                  ),
+                                  decoration: InputDecoration(
+                                    hintText: 'What needs your attention?',
+                                    hintStyle: TextStyle(
+                                      color: subtitleColor.withOpacity(0.5),
+                                      fontStyle: FontStyle.italic,
+                                      fontSize: 20.sp,
+                                    ),
+                                    border: InputBorder.none,
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
+                                  onChanged: (_) {
+                                    setState(() {});
+                                  },
+                                ),
+                              ),
+                              SizedBox(width: 12.w),
+                              // Mic Button with glow
+                              AnimatedBuilder(
+                                animation: _glowAnimation,
+                                builder: (context, child) {
+                                  return GestureDetector(
+                                    onTap: _isProcessingVoice
+                                        ? null
+                                        : _toggleVoiceRecording,
+                                    child: Container(
+                                      width: 44.w,
+                                      height: 44.h,
+                                      decoration: BoxDecoration(
+                                        color: _isRecording
+                                            ? _accentColor.withOpacity(0.2)
+                                            : inputBgColor,
+                                        shape: BoxShape.circle,
+                                        border: _isRecording
+                                            ? Border.all(
+                                                color: _accentColor,
+                                                width: 2,
+                                              )
+                                            : null,
+                                        boxShadow:
+                                            _showVoiceHint && !_isRecording
+                                            ? [
+                                                BoxShadow(
+                                                  color: _accentColor
+                                                      .withOpacity(
+                                                        _glowAnimation.value *
+                                                            0.5,
+                                                      ),
+                                                  blurRadius:
+                                                      12 * _glowAnimation.value,
+                                                  spreadRadius:
+                                                      2 * _glowAnimation.value,
+                                                ),
+                                              ]
+                                            : null,
+                                      ),
+                                      child: _isProcessingVoice
+                                          ? Padding(
+                                              padding: EdgeInsets.all(12.r),
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                valueColor:
+                                                    AlwaysStoppedAnimation(
+                                                      _accentColor,
+                                                    ),
+                                              ),
+                                            )
+                                          : Icon(
+                                              _isRecording
+                                                  ? Icons.stop
+                                                  : Icons.mic,
+                                              color: _isRecording
+                                                  ? _accentColor
+                                                  : (_showVoiceHint
+                                                        ? _accentColor
+                                                        : textColor),
+                                              size: 22.sp,
+                                            ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        Divider(color: dividerColor, height: 1.h),
+
+                        // Main container for all controls
+                        Container(
+                          decoration: BoxDecoration(
                             color: cardColor,
                             borderRadius: BorderRadius.circular(24.r),
                           ),
@@ -1789,13 +1831,50 @@ class _NewReminderScreenState extends State<NewReminderScreen> with SingleTicker
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      Text(
-                                        'Snooze Interval',
-                                        style: TextStyle(
-                                          color: textColor,
-                                          fontSize: 14.sp,
-                                          fontWeight: FontWeight.w500,
-                                        ),
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            'Snooze Interval',
+                                            style: TextStyle(
+                                              color: textColor,
+                                              fontSize: 14.sp,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                          // Add button appears when slider is at max
+                                          if (_autoSnoozeInterval >=
+                                              _sliderMaxValue)
+                                            Container(
+                                              decoration: BoxDecoration(
+                                                color: _accentColor.withOpacity(
+                                                  0.1,
+                                                ),
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: IconButton(
+                                                icon: Icon(
+                                                  Icons.add,
+                                                  color: _accentColor,
+                                                  size: 20.sp,
+                                                ),
+                                                padding: EdgeInsets.all(4.r),
+                                                constraints: BoxConstraints(
+                                                  minWidth: 32.w,
+                                                  minHeight: 32.h,
+                                                ),
+                                                onPressed: () {
+                                                  setState(() {
+                                                    _sliderMaxValue += 60;
+                                                    // Ensure divisions are updated
+                                                  });
+                                                },
+                                                tooltip:
+                                                    'Extend range to $_sliderMaxValue-${_sliderMaxValue + 60} min',
+                                              ),
+                                            ),
+                                        ],
                                       ),
                                       SizedBox(height: 8.h),
                                       Row(
@@ -1805,8 +1884,8 @@ class _NewReminderScreenState extends State<NewReminderScreen> with SingleTicker
                                               value: _autoSnoozeInterval
                                                   .toDouble(),
                                               min: 1,
-                                              max: 60,
-                                              divisions: 59,
+                                              max: _sliderMaxValue.toDouble(),
+                                              divisions: _sliderMaxValue - 1,
                                               label: '$_autoSnoozeInterval min',
                                               activeColor: _accentColor,
                                               onChanged: (value) {
@@ -2297,36 +2376,36 @@ class _NewReminderScreenState extends State<NewReminderScreen> with SingleTicker
               ),
             ),
           // Tutorial overlays
-              if (_showRepeatTutorial && _repeatSwitchKey.currentContext != null)
-                TutorialOverlay(
-                  targetKey: _repeatSwitchKey,
-                  title: 'Repeat Reminders',
-                  description:
-                      'Enable repeat to make this reminder recur daily, weekly, or on a custom schedule. Perfect for habits and regular tasks!',
-                  onSkip: _onRepeatTutorialSkip,
-                  onNext: _onRepeatTutorialNext,
-                  isLastStep: false,
-                  accentColor: _accentColor,
-                  isDarkMode: _isDarkMode,
-                  highlightPadding: EdgeInsets.all(8.w),
-                ),
+          if (_showRepeatTutorial && _repeatSwitchKey.currentContext != null)
+            TutorialOverlay(
+              targetKey: _repeatSwitchKey,
+              title: 'Repeat Reminders',
+              description:
+                  'Enable repeat to make this reminder recur daily, weekly, or on a custom schedule. Perfect for habits and regular tasks!',
+              onSkip: _onRepeatTutorialSkip,
+              onNext: _onRepeatTutorialNext,
+              isLastStep: false,
+              accentColor: _accentColor,
+              isDarkMode: _isDarkMode,
+              highlightPadding: EdgeInsets.all(8.w),
+            ),
           if (_showAutoSnoozeTutorial &&
               _autoSnoozeSwitchKey.currentContext != null)
             TutorialOverlay(
-                  targetKey: _autoSnoozeSwitchKey,
-                  title: 'Auto-Snooze',
-                  description:
-                      'Enable auto-snooze to automatically remind you again if you don\'t respond to a notification. Great for important tasks!',
-                  onSkip: _onAutoSnoozeTutorialSkip,
-                  onNext: _onAutoSnoozeTutorialNext,
-                  isLastStep: true,
-                  accentColor: _accentColor,
-                  isDarkMode: _isDarkMode,
-                  highlightPadding: EdgeInsets.all(8.w),
-                ),
-            ],
-          ),
-        );
+              targetKey: _autoSnoozeSwitchKey,
+              title: 'Auto-Snooze',
+              description:
+                  'Enable auto-snooze to automatically remind you again if you don\'t respond to a notification. Great for important tasks!',
+              onSkip: _onAutoSnoozeTutorialSkip,
+              onNext: _onAutoSnoozeTutorialNext,
+              isLastStep: true,
+              accentColor: _accentColor,
+              isDarkMode: _isDarkMode,
+              highlightPadding: EdgeInsets.all(8.w),
+            ),
+        ],
+      ),
+    );
   }
 
   Widget _buildFrequencyChip(

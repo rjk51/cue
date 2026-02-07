@@ -11,11 +11,13 @@ import com.cuehq.app.widget.CueWidgetProvider
 
 class MainActivity : FlutterFragmentActivity() {
     private val WIDGET_CHANNEL = "widget_channel"
+    private val NAVIGATION_CHANNEL = "navigation_channel"
     private val TAG = "MainActivity"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
+        // Handle widget updates
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, WIDGET_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "updateAndroidWidget" -> {
@@ -65,6 +67,36 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                 }
                 else -> result.notImplemented()
+            }
+        }
+        
+        // Handle navigation to create reminder
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, NAVIGATION_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        intent?.let {
+            when (it.action) {
+                "CREATE_REMINDER" -> {
+                    Log.d(TAG, "📱 Navigating to create reminder from widget")
+                    flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
+                        MethodChannel(messenger, NAVIGATION_CHANNEL).invokeMethod("navigateToCreateReminder", null)
+                    }
+                }
             }
         }
     }

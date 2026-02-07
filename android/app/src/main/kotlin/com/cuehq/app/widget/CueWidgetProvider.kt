@@ -81,6 +81,17 @@ class CueWidgetProvider : AppWidgetProvider() {
             )
             views.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
 
+            // Add button to open create reminder screen
+            val addReminderIntent = Intent(context, MainActivity::class.java).apply {
+                action = "CREATE_REMINDER"
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            val addReminderPendingIntent = PendingIntent.getActivity(
+                context, 1, addReminderIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            views.setOnClickPendingIntent(R.id.add_reminder_button, addReminderPendingIntent)
+
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
 

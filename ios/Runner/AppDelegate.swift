@@ -54,6 +54,32 @@ import WidgetKit
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
   
+  // Handle custom URL schemes (deep links)
+  override func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
+    print("📱 iOS Deep link received: \(url)")
+    print("📱 URL Scheme: \(url.scheme ?? "none")")
+    print("📱 URL Host: \(url.host ?? "none")")
+    
+    // Handle widget deep link directly via MethodChannel (same as Android)
+    if url.scheme == "cue" && url.host == "create-reminder" {
+      print("📱 Handling create-reminder via MethodChannel")
+      
+      // Get Flutter view controller and call the navigation channel
+      if let controller = window?.rootViewController as? FlutterViewController {
+        let navigationChannel = FlutterMethodChannel(
+          name: "navigation_channel",
+          binaryMessenger: controller.binaryMessenger
+        )
+        navigationChannel.invokeMethod("navigateToCreateReminder", arguments: nil)
+      }
+      
+      return true
+    }
+    
+    // Let the app_links plugin handle other links
+    return super.application(app, open: url, options: options)
+  }
+  
   func registerNotificationCategories() {
     let doneAction = UNNotificationAction(
       identifier: "mark_done",

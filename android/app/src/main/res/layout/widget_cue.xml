@@ -178,4 +178,19 @@
                 android:alpha="0.5" />
         </LinearLayout>
     </LinearLayout>
+
+    <!-- Add Button -->
+    <Button
+        android:id="@+id/add_reminder_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="+ Add Reminder"
+        android:textColor="#FDFCF0"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:paddingVertical="10dp"
+        android:background="@drawable/add_button_bg"
+        android:textAllCaps="false"
+        style="?android:attr/borderlessButtonStyle" />
 </LinearLayout>

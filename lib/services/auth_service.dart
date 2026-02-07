@@ -132,7 +132,13 @@ class AuthService {
         await createUserDocument(
           email: userCredential.user?.email,
           displayName: userCredential.user?.displayName,
+          themePreference: 'light',
         );
+        // Set default accent color for new users
+        await _setDefaultAccentColorIfNeeded();
+      } else {
+        // For returning users, ensure they have onboarding data
+        await _ensureOnboardingDataExists();
       }
       
       _registerDevice();
@@ -192,7 +198,13 @@ class AuthService {
         await createUserDocument(
           email: userCredential.user?.email,
           displayName: userCredential.user?.displayName,
+          themePreference: 'light',
         );
+        // Set default accent color for new users
+        await _setDefaultAccentColorIfNeeded();
+      } else {
+        // For returning users, ensure they have onboarding data
+        await _ensureOnboardingDataExists();
       }
       
       return GoogleSignInResult(
@@ -290,7 +302,13 @@ class AuthService {
         await createUserDocument(
           email: userCredential.user?.email,
           displayName: userCredential.user?.displayName,
+          themePreference: 'light',
         );
+        // Set default accent color for new users
+        await _setDefaultAccentColorIfNeeded();
+      } else {
+        // For returning users, ensure they have onboarding data
+        await _ensureOnboardingDataExists();
       }
       
       _registerDevice();
@@ -358,7 +376,13 @@ class AuthService {
         await createUserDocument(
           email: userCredential.user?.email,
           displayName: userCredential.user?.displayName,
+          themePreference: 'light',
         );
+        // Set default accent color for new users
+        await _setDefaultAccentColorIfNeeded();
+      } else {
+        // For returning users, ensure they have onboarding data
+        await _ensureOnboardingDataExists();
       }
 
       return AppleSignInResult(
@@ -455,6 +479,74 @@ class AuthService {
         return 'An account already exists with this email using a different sign-in method.';
       default:
         return e.message ?? 'Authentication failed. Please try again.';
+    }
+  }
+  
+  /// Set default accent color if not already set.
+  /// Used for new users during Google/Apple sign-in.
+  Future<void> _setDefaultAccentColorIfNeeded() async {
+    try {
+      final userId = _auth.currentUser?.uid;
+      if (userId == null) return;
+
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      if (userDoc.exists && userDoc.data()?['accentColor'] == null) {
+        // Set default coral color (#FFB4A3) = 0xFFFFB4A3
+        await _firestore.collection('users').doc(userId).update({
+          'accentColor': 0xFFFFB4A3,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (e) {
+      print('Error setting default accent color: $e');
+      // Don't throw - this is optional
+    }
+  }
+
+  /// Ensure returning users have onboarding data.
+  /// For existing Google/Apple users who may have incomplete onboarding.
+  Future<void> _ensureOnboardingDataExists() async {
+    try {
+      final userId = _auth.currentUser?.uid;
+      if (userId == null) return;
+
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      
+      if (userDoc.exists) {
+        final data = userDoc.data();
+        final hasTheme = data?['themePreference'] != null;
+        final hasColor = data?['accentColor'] != null;
+        
+        // If user doesn't have complete onboarding data, set defaults
+        if (!hasTheme || !hasColor) {
+          final updates = <String, dynamic>{
+            'updatedAt': FieldValue.serverTimestamp(),
+          };
+          
+          if (!hasTheme) {
+            updates['themePreference'] = 'light';
+          }
+          
+          if (!hasColor) {
+            // Set default coral color (#FFB4A3) = 0xFFFFB4A3
+            updates['accentColor'] = 0xFFFFB4A3;
+          }
+          
+          await _firestore.collection('users').doc(userId).update(updates);
+          print('✅ Set default onboarding data for returning user');
+        }
+      } else {
+        // User document doesn't exist, create it with defaults
+        await createUserDocument(
+          email: _auth.currentUser?.email,
+          displayName: _auth.currentUser?.displayName,
+          themePreference: 'light',
+        );
+        await _setDefaultAccentColorIfNeeded();
+      }
+    } catch (e) {
+      print('Error ensuring onboarding data: $e');
+      // Don't throw - user can still use the app
     }
   }
   

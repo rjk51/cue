@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -12,6 +13,7 @@ import 'firebase_options.dart';
 import 'features/auth/presentation/welcome_screen.dart';
 import 'features/notifications/notification_service.dart';
 import 'features/reminders/data/reminder_service.dart';
+import 'features/reminders/presentation/create_reminder_screen.dart';
 import 'features/snooze/presentation/snooze_screen.dart';
 import 'services/local_storage_service.dart';
 import 'services/theme_service.dart';
@@ -21,6 +23,9 @@ import 'shared/widgets/onboarding_gate.dart';
 
 // Global navigator key for navigation from notification handlers
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+// Navigation channel for widget interactions
+const MethodChannel navigationChannel = MethodChannel('navigation_channel');
 
 // Device deletion listener subscription
 StreamSubscription<DocumentSnapshot>? _deviceListenerSubscription;
@@ -149,12 +154,30 @@ void main() async {
     await RevenueCatService().initialize();
   }
 
+  // Set up navigation channel handler for Android widgets
+  navigationChannel.setMethodCallHandler((call) async {
+    if (call.method == 'navigateToCreateReminder') {
+      print('📱 Received navigateToCreateReminder from widget');
+      final context = navigatorKey.currentContext;
+      if (context != null && FirebaseAuth.instance.currentUser != null) {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (context) => const NewReminderScreen()),
+        );
+      }
+    }
+  });
+
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     final themeNotifier = ThemeNotifier.instance;
