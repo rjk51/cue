@@ -28,11 +28,15 @@ import 'widgets/sticky_save_button.dart';
 class NewReminderScreen extends StatefulWidget {
   final Reminder? reminderToEdit;
   final bool openedForVoice;
+  final String? initialText;
+  final DateTime? initialDateTime;
 
   const NewReminderScreen({
     super.key,
     this.reminderToEdit,
     this.openedForVoice = false,
+    this.initialText,
+    this.initialDateTime,
   });
 
   @override
@@ -148,6 +152,23 @@ class _NewReminderScreenState extends State<NewReminderScreen>
       _initializeEditMode();
     } else {
       _selectedDays = {_selectedDate.weekday};
+      
+      // If data from Google Assistant, pre-fill fields
+      if (widget.initialText != null) {
+        _reminderController.text = widget.initialText!;
+      }
+      
+      if (widget.initialDateTime != null) {
+        _selectedDate = DateTime(
+          widget.initialDateTime!.year,
+          widget.initialDateTime!.month,
+          widget.initialDateTime!.day,
+        );
+        _selectedTime = TimeOfDay(
+          hour: widget.initialDateTime!.hour,
+          minute: widget.initialDateTime!.minute,
+        );
+      }
     }
   }
 

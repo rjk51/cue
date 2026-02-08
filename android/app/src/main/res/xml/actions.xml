@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- App Actions configuration for Google Assistant -->
+<actions>
+    <!-- Create reminder action -->
+    <action intentName="actions.intent.CREATE_REMINDER">
+        <fulfillment urlTemplate="cue://reminder/create{?text,time,date}">
+            <!-- Parameter mappings for reminder creation -->
+            <parameter name="reminder.text">
+                <entity-set-reference entitySetId="ReminderText"/>
+            </parameter>
+            <parameter name="reminder.dateTime">
+                <entity-set-reference entitySetId="ReminderDateTime"/>
+            </parameter>
+        </fulfillment>
+        
+        <!-- Inline inventory for quick testing (optional) -->
+        <entity-set-reference entitySetId="ReminderText"/>
+        <entity-set-reference entitySetId="ReminderDateTime"/>
+    </action>
+    
+    <!-- Schedule reminder action (alternative) -->
+    <action intentName="actions.intent.SCHEDULE_EVENT">
+        <fulfillment urlTemplate="cue://reminder/create{?text,time,date}"/>
+    </action>
+</actions>

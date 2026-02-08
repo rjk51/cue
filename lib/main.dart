@@ -27,6 +27,9 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 // Navigation channel for widget interactions
 const MethodChannel navigationChannel = MethodChannel('navigation_channel');
 
+// Assistant channel for Google Assistant integration
+const MethodChannel assistantChannel = MethodChannel('assistant_channel');
+
 // Device deletion listener subscription
 StreamSubscription<DocumentSnapshot>? _deviceListenerSubscription;
 
@@ -162,6 +165,60 @@ void main() async {
       if (context != null && FirebaseAuth.instance.currentUser != null) {
         Navigator.of(context).push(
           MaterialPageRoute(builder: (context) => const NewReminderScreen()),
+        );
+      }
+    }
+  });
+
+  // Set up assistant channel handler for Google Assistant
+  assistantChannel.setMethodCallHandler((call) async {
+    if (call.method == 'handleAssistantReminder') {
+      print('🎙️ Received handleAssistantReminder from Google Assistant');
+      print('Assistant data: ${call.arguments}');
+      
+      final context = navigatorKey.currentContext;
+      if (context != null && FirebaseAuth.instance.currentUser != null) {
+        final arguments = call.arguments as Map<dynamic, dynamic>?;
+        
+        // Parse the reminder data
+        String? reminderText;
+        DateTime? reminderDateTime;
+        
+        if (arguments != null) {
+          reminderText = arguments['text']?.toString();
+          
+          // Parse date and time
+          final dateStr = arguments['date']?.toString();
+          final timeStr = arguments['time']?.toString();
+          
+          if (dateStr != null && timeStr != null) {
+            try {
+              final dateParts = dateStr.split('-');
+              final timeParts = timeStr.split(':');
+              
+              if (dateParts.length == 3 && timeParts.length >= 2) {
+                reminderDateTime = DateTime(
+                  int.parse(dateParts[0]), // year
+                  int.parse(dateParts[1]), // month
+                  int.parse(dateParts[2]), // day
+                  int.parse(timeParts[0]), // hour
+                  int.parse(timeParts[1]), // minute
+                );
+              }
+            } catch (e) {
+              print('❌ Error parsing date/time: $e');
+            }
+          }
+        }
+        
+        // Navigate to create reminder screen with pre-filled data
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => NewReminderScreen(
+              initialText: reminderText,
+              initialDateTime: reminderDateTime,
+            ),
+          ),
         );
       }
     }

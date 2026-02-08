@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App Shortcuts -->
+    <string name="shortcut_create_short">New Reminder</string>
+    <string name="shortcut_create_long">Create a new reminder</string>
+    <string name="shortcut_today_short">Today</string>
+    <string name="shortcut_today_long">View today\'s reminders</string>
+    <string name="shortcut_disabled">Shortcut is currently disabled</string>
+</resources>
