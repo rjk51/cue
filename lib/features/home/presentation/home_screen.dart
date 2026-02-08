@@ -56,6 +56,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late AnimationController _runnerController;
   late Animation<double> _runnerAnimation;
   StreamSubscription<List<Reminder>>? _progressStreamSub;
+  int _previousCompletedTasksCount = 0;
 
   @override
   void initState() {
@@ -1545,6 +1546,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
       if (_totalTasksCount != todayTotal || _completedTasksCount != todayCompleted) {
         setState(() {
+          _previousCompletedTasksCount = _completedTasksCount;
           _totalTasksCount = todayTotal;
           _completedTasksCount = todayCompleted;
         });
@@ -1568,25 +1570,28 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             animation: _runnerAnimation,
             builder: (context, child) {
               // Calculate runner position based on progress
-              double targetPosition = progress;
+              double targetProgress = progress;
               if (_isRunnerAnimating) {
-                // During animation, interpolate from previous position to new position
-                final previousProgress = _totalTasksCount > 0 
-                    ? ((_completedTasksCount - 1).clamp(0, _totalTasksCount)) / _totalTasksCount 
+                // Interpolate from previous completed count to current for smooth animation
+                final prevTotal = _totalTasksCount > 0 ? _totalTasksCount : 1;
+                final previousProgress = prevTotal > 0
+                    ? (_previousCompletedTasksCount / prevTotal)
                     : 0.0;
-                targetPosition = previousProgress + (progress - previousProgress) * _runnerAnimation.value;
+                targetProgress = previousProgress + (progress - previousProgress) * _runnerAnimation.value;
               }
-              targetPosition = targetPosition.clamp(0.0, 1.0);
-              
+
+              targetProgress = targetProgress.clamp(0.0, 1.0);
+
               final runnerSize = 70.w;
               final effectiveBarWidth = barWidth.w;
-              // Position the runner so its CENTER aligns with the progress point on the bar.
-              // At 0%: center at bar left edge → left = -runnerSize/2
-              // At 100%: center at bar right edge → left = effectiveBarWidth - runnerSize/2
-              // But we clamp so the runner doesn't go off-screen to the left.
-              final centerOffset = targetPosition * effectiveBarWidth - runnerSize / 2;
-              final clampedOffset = centerOffset.clamp(-runnerSize * 0.15, effectiveBarWidth - runnerSize * 0.85);
-              
+              // Align runner CENTER with the end of the progress fill.
+              final fillWidth = (barWidth * targetProgress).w;
+              final desiredLeft = fillWidth - runnerSize / 2;
+              // Ensure the runner stays fully visible within the bar container
+              final minLeft = 0.0;
+              final maxLeft = effectiveBarWidth - runnerSize;
+              final clampedOffset = desiredLeft.clamp(minLeft, maxLeft);
+
               return Transform.translate(
                 offset: Offset(clampedOffset, 0),
                 child: Lottie.asset(
