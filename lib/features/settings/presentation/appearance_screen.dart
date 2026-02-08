@@ -469,278 +469,280 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
                             ),
                           ],
                         ),
-                      child: Column(
-                        children: [
-
-                          SizedBox(height: 20.h),
-
-                          Expanded(
-                            child: Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 20.r),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Current Cue Card
-                                  Container(
-                                    width: double.infinity,
-                                    padding: EdgeInsets.all(16.r),
-                                    decoration: BoxDecoration(
-                                      color: _isDarkMode
-                                          ? Color.lerp(
-                                              const Color(0xFF1E1E1E),
-                                              _selectedColor,
-                                              0.1,
-                                            )!
-                                          : Colors.white,
-                                      borderRadius: BorderRadius.circular(16.r),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(
-                                            _isDarkMode ? 0.3 : 0.08,
+                      child: SingleChildScrollView(
+                        child: Column(
+                          children: [
+                        
+                            SizedBox(height: 20.h),
+                        
+                            Expanded(
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 20.r),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Current Cue Card
+                                    Container(
+                                      width: double.infinity,
+                                      padding: EdgeInsets.all(16.r),
+                                      decoration: BoxDecoration(
+                                        color: _isDarkMode
+                                            ? Color.lerp(
+                                                const Color(0xFF1E1E1E),
+                                                _selectedColor,
+                                                0.1,
+                                              )!
+                                            : Colors.white,
+                                        borderRadius: BorderRadius.circular(16.r),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(
+                                              _isDarkMode ? 0.3 : 0.08,
+                                            ),
+                                            blurRadius: 20,
+                                            offset: const Offset(0, 4),
                                           ),
-                                          blurRadius: 20,
-                                          offset: const Offset(0, 4),
-                                        ),
-                                      ],
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Container(
-                                              padding: EdgeInsets.symmetric(
-                                                horizontal: 10.w,
-                                                vertical: 4.h,
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color: _selectedColor
-                                                    .withOpacity(0.15),
-                                                borderRadius:
-                                                    BorderRadius.circular(8.r),
-                                              ),
-                                              child: Text(
-                                                'CURRENT CUE',
-                                                style: TextStyle(
-                                                  fontSize: 10.sp,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: _selectedColor,
-                                                  letterSpacing: 1,
+                                        ],
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Container(
+                                                padding: EdgeInsets.symmetric(
+                                                  horizontal: 10.w,
+                                                  vertical: 4.h,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: _selectedColor
+                                                      .withOpacity(0.15),
+                                                  borderRadius:
+                                                      BorderRadius.circular(8.r),
+                                                ),
+                                                child: Text(
+                                                  'CURRENT CUE',
+                                                  style: TextStyle(
+                                                    fontSize: 10.sp,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: _selectedColor,
+                                                    letterSpacing: 1,
+                                                  ),
                                                 ),
                                               ),
-                                            ),
-                                            Container(
-                                              padding: EdgeInsets.symmetric(
-                                                horizontal: 8.w,
-                                                vertical: 4.h,
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color: _selectedColor
-                                                    .withOpacity(0.15),
-                                                borderRadius:
-                                                    BorderRadius.circular(12.r),
-                                              ),
-                                              child: Text(
-                                                'in 15 mins',
-                                                style: TextStyle(
-                                                  fontSize: 10.sp,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: _selectedColor,
+                                              Container(
+                                                padding: EdgeInsets.symmetric(
+                                                  horizontal: 8.w,
+                                                  vertical: 4.h,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: _selectedColor
+                                                      .withOpacity(0.15),
+                                                  borderRadius:
+                                                      BorderRadius.circular(12.r),
+                                                ),
+                                                child: Text(
+                                                  'in 15 mins',
+                                                  style: TextStyle(
+                                                    fontSize: 10.sp,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: _selectedColor,
+                                                  ),
                                                 ),
                                               ),
-                                            ),
-                                          ],
-                                        ),
-                                        SizedBox(height: 12.h),
-                                        Text(
-                                          'Team standup',
-                                          style: TextStyle(
-                                            fontSize: 18.sp,
-                                            fontWeight: FontWeight.w600,
-                                            color: _isDarkMode
-                                                ? Colors.white
-                                                : const Color(0xFF2D2D2D),
+                                            ],
                                           ),
-                                        ),
-                                        SizedBox(height: 6.h),
-                                        Row(
-                                          children: [
-                                            Icon(
-                                              Icons.access_time,
-                                              size: 14.sp,
+                                          SizedBox(height: 12.h),
+                                          Text(
+                                            'Team standup',
+                                            style: TextStyle(
+                                              fontSize: 18.sp,
+                                              fontWeight: FontWeight.w600,
                                               color: _isDarkMode
-                                                  ? Colors.white.withOpacity(
-                                                      0.6,
-                                                    )
-                                                  : const Color(0xFF8A8A8A),
+                                                  ? Colors.white
+                                                  : const Color(0xFF2D2D2D),
                                             ),
-                                            SizedBox(width: 4.w),
-                                            Text(
-                                              '10:00 AM',
-                                              style: TextStyle(
-                                                fontSize: 13.sp,
+                                          ),
+                                          SizedBox(height: 6.h),
+                                          Row(
+                                            children: [
+                                              Icon(
+                                                Icons.access_time,
+                                                size: 14.sp,
                                                 color: _isDarkMode
                                                     ? Colors.white.withOpacity(
                                                         0.6,
                                                       )
                                                     : const Color(0xFF8A8A8A),
                                               ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-
-                                  SizedBox(height: 16.h),
-
-                                  // Upcoming Section
-                                  Text(
-                                    'UPCOMING',
-                                    style: TextStyle(
-                                      fontSize: 10.sp,
-                                      fontWeight: FontWeight.w600,
-                                      color: _isDarkMode
-                                          ? Colors.white.withOpacity(0.6)
-                                          : const Color(0xFF8A8A8A),
-                                      letterSpacing: 1.2,
-                                    ),
-                                  ),
-                                  SizedBox(height: 8.h),
-
-                                  // Horizontal scrollable upcoming items
-                                  SizedBox(
-                                    height: 70.h,
-                                    child: ListView.separated(
-                                      scrollDirection: Axis.horizontal,
-                                      itemCount: 3,
-                                      separatorBuilder: (_, __) =>
-                                          SizedBox(width: 8.w),
-                                      itemBuilder: (context, index) {
-                                        final items = [
-                                          {'title': 'Lunch', 'time': '12:30'},
-                                          {'title': 'Meeting', 'time': '2:00'},
-                                          {'title': 'Gym', 'time': '6:00'},
-                                        ];
-                                        return Container(
-                                          width: 100.w,
-                                          padding: EdgeInsets.all(12.r),
-                                          decoration: BoxDecoration(
-                                            color: _isDarkMode
-                                                ? Color.lerp(
-                                                    const Color(0xFF1E1E1E),
-                                                    _selectedColor,
-                                                    0.1,
-                                                  )!
-                                                : Colors.white,
-                                            borderRadius: BorderRadius.circular(
-                                              12.r,
-                                            ),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withOpacity(
-                                                  _isDarkMode ? 0.2 : 0.05,
-                                                ),
-                                                blurRadius: 10,
-                                                offset: const Offset(0, 2),
-                                              ),
-                                            ],
-                                          ),
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              Row(
-                                                children: [
-                                                  Container(
-                                                    width: 6.w,
-                                                    height: 6.h,
-                                                    decoration: BoxDecoration(
-                                                      color: _selectedColor
-                                                          .withOpacity(0.5),
-                                                      shape: BoxShape.circle,
-                                                    ),
-                                                  ),
-                                                  SizedBox(width: 6.w),
-                                                  Expanded(
-                                                    child: Text(
-                                                      items[index]['title']!,
-                                                      style: TextStyle(
-                                                        fontSize: 12.sp,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                        color: _isDarkMode
-                                                            ? Colors.white
-                                                            : const Color(
-                                                                0xFF2D2D2D,
-                                                              ),
-                                                      ),
-                                                      maxLines: 1,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
+                                              SizedBox(width: 4.w),
                                               Text(
-                                                items[index]['time']!,
+                                                '10:00 AM',
                                                 style: TextStyle(
-                                                  fontSize: 16.sp,
-                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 13.sp,
                                                   color: _isDarkMode
-                                                      ? Colors.white
-                                                            .withOpacity(0.6)
+                                                      ? Colors.white.withOpacity(
+                                                          0.6,
+                                                        )
                                                       : const Color(0xFF8A8A8A),
                                                 ),
                                               ),
                                             ],
                                           ),
-                                        );
-                                      },
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-
-                          // Bottom with FAB preview
-                          Padding(
-                            padding: EdgeInsets.only(
-                              bottom: 8.h,
-                              right: 20.w,
-                              top: 8.h,
-                            ),
-                            child: Align(
-                              alignment: Alignment.bottomRight,
-                              child: Container(
-                                width: 44.w,
-                                height: 44.w,
-                                decoration: BoxDecoration(
-                                  color: _selectedColor,
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: _selectedColor.withOpacity(0.4),
-                                      blurRadius: 10,
-                                      spreadRadius: 2,
+                        
+                                    SizedBox(height: 16.h),
+                        
+                                    // Upcoming Section
+                                    Text(
+                                      'UPCOMING',
+                                      style: TextStyle(
+                                        fontSize: 10.sp,
+                                        fontWeight: FontWeight.w600,
+                                        color: _isDarkMode
+                                            ? Colors.white.withOpacity(0.6)
+                                            : const Color(0xFF8A8A8A),
+                                        letterSpacing: 1.2,
+                                      ),
+                                    ),
+                                    SizedBox(height: 8.h),
+                        
+                                    // Horizontal scrollable upcoming items
+                                    SizedBox(
+                                      height: 70.h,
+                                      child: ListView.separated(
+                                        scrollDirection: Axis.horizontal,
+                                        itemCount: 3,
+                                        separatorBuilder: (_, __) =>
+                                            SizedBox(width: 8.w),
+                                        itemBuilder: (context, index) {
+                                          final items = [
+                                            {'title': 'Lunch', 'time': '12:30'},
+                                            {'title': 'Meeting', 'time': '2:00'},
+                                            {'title': 'Gym', 'time': '6:00'},
+                                          ];
+                                          return Container(
+                                            width: 100.w,
+                                            padding: EdgeInsets.all(12.r),
+                                            decoration: BoxDecoration(
+                                              color: _isDarkMode
+                                                  ? Color.lerp(
+                                                      const Color(0xFF1E1E1E),
+                                                      _selectedColor,
+                                                      0.1,
+                                                    )!
+                                                  : Colors.white,
+                                              borderRadius: BorderRadius.circular(
+                                                12.r,
+                                              ),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.black.withOpacity(
+                                                    _isDarkMode ? 0.2 : 0.05,
+                                                  ),
+                                                  blurRadius: 10,
+                                                  offset: const Offset(0, 2),
+                                                ),
+                                              ],
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.spaceBetween,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    Container(
+                                                      width: 6.w,
+                                                      height: 6.h,
+                                                      decoration: BoxDecoration(
+                                                        color: _selectedColor
+                                                            .withOpacity(0.5),
+                                                        shape: BoxShape.circle,
+                                                      ),
+                                                    ),
+                                                    SizedBox(width: 6.w),
+                                                    Expanded(
+                                                      child: Text(
+                                                        items[index]['title']!,
+                                                        style: TextStyle(
+                                                          fontSize: 12.sp,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          color: _isDarkMode
+                                                              ? Colors.white
+                                                              : const Color(
+                                                                  0xFF2D2D2D,
+                                                                ),
+                                                        ),
+                                                        maxLines: 1,
+                                                        overflow:
+                                                            TextOverflow.ellipsis,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                Text(
+                                                  items[index]['time']!,
+                                                  style: TextStyle(
+                                                    fontSize: 16.sp,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: _isDarkMode
+                                                        ? Colors.white
+                                                              .withOpacity(0.6)
+                                                        : const Color(0xFF8A8A8A),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        },
+                                      ),
                                     ),
                                   ],
                                 ),
-                                child: Icon(
-                                  Icons.add,
-                                  color: Colors.white,
-                                  size: 20.sp,
+                              ),
+                            ),
+                        
+                            // Bottom with FAB preview
+                            Padding(
+                              padding: EdgeInsets.only(
+                                bottom: 8.h,
+                                right: 20.w,
+                                top: 8.h,
+                              ),
+                              child: Align(
+                                alignment: Alignment.bottomRight,
+                                child: Container(
+                                  width: 44.w,
+                                  height: 44.w,
+                                  decoration: BoxDecoration(
+                                    color: _selectedColor,
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: _selectedColor.withOpacity(0.4),
+                                        blurRadius: 10,
+                                        spreadRadius: 2,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Icon(
+                                    Icons.add,
+                                    color: Colors.white,
+                                    size: 20.sp,
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                     ),

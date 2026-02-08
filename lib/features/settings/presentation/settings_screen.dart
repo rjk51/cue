@@ -360,121 +360,106 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Profile Section
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const OnboardingScreen(),
+                    Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.all(20.r),
+                    decoration: BoxDecoration(
+                      color: cardColor,
+                      borderRadius: BorderRadius.circular(16.r),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(
+                            _isDarkMode ? 0.3 : 0.08,
                           ),
-                        );
-                      },
-                      child: Container(
-                      width: double.infinity,
-                      padding: EdgeInsets.all(20.r),
-                      decoration: BoxDecoration(
-                        color: cardColor,
-                        borderRadius: BorderRadius.circular(16.r),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(
-                              _isDarkMode ? 0.3 : 0.08,
-                            ),
-                            blurRadius: 20,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          // Avatar placeholder
-                          Container(
-                          width: 56.w,
-                          height: 56.h,
-                          decoration: BoxDecoration(
-                            color: _accentColor.withOpacity(0.2),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Center(
-                            child: Text(
-                              _userName.isNotEmpty
-                                  ? _userName[0].toUpperCase()
-                                  : 'U',
-                              style: TextStyle(
-                                fontSize: 24.sp,
-                                fontWeight: FontWeight.w600,
-                                color: _accentColor,
-                              ),
+                          blurRadius: 20,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        // Avatar placeholder
+                        Container(
+                        width: 56.w,
+                        height: 56.h,
+                        decoration: BoxDecoration(
+                          color: _accentColor.withOpacity(0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Text(
+                            _userName.isNotEmpty
+                                ? _userName[0].toUpperCase()
+                                : 'U',
+                            style: TextStyle(
+                              fontSize: 24.sp,
+                              fontWeight: FontWeight.w600,
+                              color: _accentColor,
                             ),
                           ),
                         ),
-                        SizedBox(width: 16.w),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              FutureBuilder<bool>(
-                                future: ProStatusService().hasProAccess(),
-                                builder: (context, snapshot) {
-                                  final hasPro = snapshot.data ?? false;
-                                  return Row(
-                                    children: [
-                                      Text(
-                                        _userName,
-                                        style: TextStyle(
-                                          fontSize: 18.sp,
-                                          fontWeight: FontWeight.w600,
-                                          color: textColor,
+                      ),
+                      SizedBox(width: 16.w),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            FutureBuilder<bool>(
+                              future: ProStatusService().hasProAccess(),
+                              builder: (context, snapshot) {
+                                final hasPro = snapshot.data ?? false;
+                                return Row(
+                                  children: [
+                                    Text(
+                                      _userName,
+                                      style: TextStyle(
+                                        fontSize: 18.sp,
+                                        fontWeight: FontWeight.w600,
+                                        color: textColor,
+                                      ),
+                                    ),
+                                    if (hasPro) ...[
+                                      SizedBox(width: 8.w),
+                                      Container(
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: 8.w,
+                                          vertical: 2.h,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: _accentColor,
+                                          borderRadius: BorderRadius.circular(
+                                            4.r,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          'PRO',
+                                          style: TextStyle(
+                                            fontSize: 10.sp,
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.white,
+                                            letterSpacing: 0.5,
+                                          ),
                                         ),
                                       ),
-                                      if (hasPro) ...[
-                                        SizedBox(width: 8.w),
-                                        Container(
-                                          padding: EdgeInsets.symmetric(
-                                            horizontal: 8.w,
-                                            vertical: 2.h,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: _accentColor,
-                                            borderRadius: BorderRadius.circular(
-                                              4.r,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            'PRO',
-                                            style: TextStyle(
-                                              fontSize: 10.sp,
-                                              fontWeight: FontWeight.w700,
-                                              color: Colors.white,
-                                              letterSpacing: 0.5,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
                                     ],
-                                  );
-                                },
+                                  ],
+                                );
+                              },
+                            ),
+                            SizedBox(height: 4.h),
+                            Text(
+                              _userEmail,
+                              style: TextStyle(
+                                fontSize: 14.sp,
+                                color: subtitleColor,
                               ),
-                              SizedBox(height: 4.h),
-                              Text(
-                                _userEmail,
-                                style: TextStyle(
-                                  fontSize: 14.sp,
-                                  color: subtitleColor,
-                                ),
-                              ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                        Icon(
-                          Icons.chevron_right,
-                          color: subtitleColor,
-                          size: 24.sp,
-                        ),
-                        ],
                       ),
+                      ],
                     ),
-                    ),
+                                        ),
 
                     SizedBox(height: 32.h),
 

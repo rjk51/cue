@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -662,7 +663,7 @@ class _CueProPaywallScreenState extends State<CueProPaywallScreen> {
                 if (_selectedPackage != null) ...[
                   SizedBox(height: 6.h),
                   Text(
-                    '${_getPackageLabel(_selectedPackage!.packageType)} — ${_selectedPackage!.storeProduct.priceString}\nSubscription automatically renews and will be charged to your Apple ID.',
+                    '${_getPackageLabel(_selectedPackage!.packageType)} — ${_selectedPackage!.storeProduct.priceString}\nSubscription automatically renews and will be charged to your ${Platform.isAndroid ? 'Google Play account' : 'Apple ID'}.',
                     style: TextStyle(
                       fontSize: 12.sp,
                       color: secondaryTextColor,

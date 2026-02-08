@@ -1594,19 +1594,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
               return Transform.translate(
                 offset: Offset(clampedOffset, 0),
-                child: Lottie.asset(
-                  'assets/runner.json',
-                  width: runnerSize,
-                  height: 70.h,
-                  fit: BoxFit.contain,
-                  repeat: _isRunnerAnimating,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Text(
-                      '🏃',
-                      style: TextStyle(fontSize: 40.sp),
-                    );
-                  },
-                ),
+                child: _isRunnerAnimating
+                    ? Image.asset(
+                        'assets/running_guy.gif',
+                        width: runnerSize,
+                        height: 70.h,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Text(
+                            '🏃',
+                            style: TextStyle(fontSize: 40.sp),
+                          );
+                        },
+                      )
+                    : SizedBox.shrink(),
               );
             },
           ),
