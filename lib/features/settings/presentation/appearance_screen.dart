@@ -217,6 +217,7 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
               child: SingleChildScrollView(
                 padding: EdgeInsets.symmetric(horizontal: 24.w),
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Theme Mode Section
@@ -471,17 +472,18 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
                         ),
                       child: SingleChildScrollView(
                         child: Column(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                         
                             SizedBox(height: 20.h),
                         
-                            Expanded(
-                              child: Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 20.r),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    // Current Cue Card
+                            Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 20.r),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Current Cue Card
                                     Container(
                                       width: double.infinity,
                                       padding: EdgeInsets.all(16.r),
@@ -708,7 +710,6 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
                                   ],
                                 ),
                               ),
-                            ),
                         
                             // Bottom with FAB preview
                             Padding(
