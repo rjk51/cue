@@ -605,7 +605,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             child: Row(
                               children: [
                                 Text(
-                                  '📆Today, ',
+                                  'Today, ',
                                   style: TextStyle(
                                     fontSize: 24.sp,
                                     fontWeight: FontWeight.w600,
