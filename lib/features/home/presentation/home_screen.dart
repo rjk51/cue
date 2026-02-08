@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cue/features/settings/presentation/settings_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -54,7 +55,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   bool _isRunnerAnimating = false;
   late AnimationController _runnerController;
   late Animation<double> _runnerAnimation;
-  final Set<String> _locallyCompletedIds = {}; // Track completed tasks locally so they persist
+  StreamSubscription<List<Reminder>>? _progressStreamSub;
 
   @override
   void initState() {
@@ -73,6 +74,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       CurvedAnimation(parent: _runnerController, curve: Curves.easeInOut),
     );
 
+    // Start a dedicated progress stream that includes completed reminders
+    _startProgressStream();
+
     // Start monitoring device status after a delay to ensure device is reactivated
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       // Wait for device to be reactivated in main.dart
@@ -85,6 +89,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _progressStreamSub?.cancel();
     _runnerController.dispose();
     ThemeNotifier.instance.removeListener(_onThemeChanged);
     _deviceMonitor.stopMonitoring();
@@ -266,14 +271,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     String reminderId, {
     DateTime? occurrenceTime,
   }) async {
-    // Track this completion locally so it persists across stream rebuilds
-    final completionKey = occurrenceTime != null
-        ? '${reminderId}_${occurrenceTime.toIso8601String()}'
-        : reminderId;
-    
     if (mounted) {
       setState(() {
-        _locallyCompletedIds.add(completionKey);
         _isRunnerAnimating = true;
       });
       
@@ -286,7 +285,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       });
     }
 
-    // Execute in background without blocking UI
+    // Execute in background — the progress stream will automatically pick up the change
     _reminderService
         .markAsCompleted(reminderId, occurrenceTime: occurrenceTime)
         .catchError((e) {
@@ -465,7 +464,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 // Update widgets whenever reminders change (including empty state)
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   _updateWidgets(reminders);
-                  _updateProgressCounts(reminders);
                 });
 
                 // Sort reminders by time
@@ -1494,75 +1492,64 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  void _updateProgressCounts(List<Reminder> reminders) {
-    if (!mounted) return;
-    final now = DateTime.now();
-    
-    int todayTotal = 0;
-    int firestoreCompleted = 0;
-    
-    for (final reminder in reminders) {
-      if (reminder.recurrence != null) {
-        final recurrence = reminder.recurrence!;
-        final type = recurrence['type'] as String?;
-        final unit = recurrence['unit'] as String?;
+  /// Subscribe to a dedicated stream that includes ALL today's reminders
+  /// (including completed non-recurring ones) for accurate progress counting.
+  void _startProgressStream() {
+    _progressStreamSub = _reminderService.getAllRemindersForTodayStream().listen((reminders) {
+      if (!mounted) return;
+      final now = DateTime.now();
 
-        if (type == 'interval' && (unit == 'hours' || unit == 'minutes')) {
-          final occurrences = _getHourlyOccurrencesForDay(reminder, now);
-          for (final occurrence in occurrences) {
-            final dateKey = DateFormat('yyyy-MM-dd').format(occurrence);
-            if (!reminder.isSkippedOnDate(dateKey)) {
+      int todayTotal = 0;
+      int todayCompleted = 0;
+
+      for (final reminder in reminders) {
+        if (reminder.recurrence != null) {
+          final recurrence = reminder.recurrence!;
+          final type = recurrence['type'] as String?;
+          final unit = recurrence['unit'] as String?;
+
+          if (type == 'interval' && (unit == 'hours' || unit == 'minutes')) {
+            // Hourly/minute-interval reminders: count each occurrence
+            final occurrences = _getHourlyOccurrencesForDay(reminder, now);
+            for (final occurrence in occurrences) {
+              final dateKey = DateFormat('yyyy-MM-dd').format(occurrence);
+              if (!reminder.isSkippedOnDate(dateKey)) {
+                todayTotal++;
+                if (reminder.isOccurrenceCompleted(occurrence)) {
+                  todayCompleted++;
+                }
+              }
+            }
+          } else {
+            // Daily/weekly/monthly recurring: check if due today
+            final effectiveDate = reminder.effectiveNextDueAt;
+            final isToday = effectiveDate.year == now.year &&
+                effectiveDate.month == now.month &&
+                effectiveDate.day == now.day;
+
+            if (isToday) {
               todayTotal++;
-              if (reminder.isOccurrenceCompleted(occurrence)) {
-                firestoreCompleted++;
-                // Sync local set with Firestore state
-                _locallyCompletedIds.add('${reminder.id}_${occurrence.toIso8601String()}');
+              if (reminder.isCompletedToday) {
+                todayCompleted++;
               }
             }
           }
         } else {
-          final effectiveDate = reminder.effectiveNextDueAt;
-          final isToday = effectiveDate.year == now.year &&
-              effectiveDate.month == now.month &&
-              effectiveDate.day == now.day;
-          
-          if (isToday) {
-            todayTotal++;
-            if (reminder.isCompletedToday) {
-              firestoreCompleted++;
-              _locallyCompletedIds.add(reminder.id);
-            }
-          }
-        }
-      } else {
-        // Non-recurring reminder — use original time to always count it today
-        final reminderTime = reminder.time;
-        final isToday = reminderTime.year == now.year &&
-            reminderTime.month == now.month &&
-            reminderTime.day == now.day;
-        
-        if (isToday) {
+          // Non-recurring reminder — time is always today (stream already filtered)
           todayTotal++;
-          if (reminder.isCompletedToday) {
-            firestoreCompleted++;
-            _locallyCompletedIds.add(reminder.id);
+          if (reminder.isCompleted) {
+            todayCompleted++;
           }
         }
       }
-    }
-    
-    // Use the higher of Firestore count vs local count (local tracks optimistic completions)
-    // Local set should never decrease unless we restart the app
-    final localCount = _locallyCompletedIds.length;
-    final completedCount = localCount > firestoreCompleted ? localCount : firestoreCompleted;
-    
-    // Always update state - both total and completed
-    if (_totalTasksCount != todayTotal || _completedTasksCount != completedCount) {
-      setState(() {
-        _totalTasksCount = todayTotal;
-        _completedTasksCount = completedCount;
-      });
-    }
+
+      if (_totalTasksCount != todayTotal || _completedTasksCount != todayCompleted) {
+        setState(() {
+          _totalTasksCount = todayTotal;
+          _completedTasksCount = todayCompleted;
+        });
+      }
+    });
   }
 
   Widget _buildProgressBar() {
@@ -1574,47 +1561,50 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       mainAxisSize: MainAxisSize.min,
       children: [
         // Running character animation
-        AnimatedBuilder(
-          animation: _runnerAnimation,
-          builder: (context, child) {
-            // Calculate runner position based on progress
-            double targetPosition = progress;
-            if (_isRunnerAnimating) {
-              // During animation, interpolate from previous position to new position
-              final previousProgress = _totalTasksCount > 0 
-                  ? (_completedTasksCount - 1) / _totalTasksCount 
-                  : 0.0;
-              targetPosition = previousProgress + (progress - previousProgress) * _runnerAnimation.value;
-            }
-            // Clamp target position to ensure runner stays within 0-100%
-            targetPosition = targetPosition.clamp(0.0, 1.0);
-            
-            // Position runner so it stays within bar: 0% = left edge, 100% = right edge
-            // Runner is 70w wide, so center it at the progress point but keep within bounds
-            final runnerWidth = 70.w;
-            final effectiveBarWidth = barWidth.w;
-            final runnerCenter = effectiveBarWidth * targetPosition;
-            // Clamp so runner doesn't go past edges
-            final runnerLeft = (runnerCenter - runnerWidth / 2).clamp(0.0, effectiveBarWidth - runnerWidth);
-            
-            return Transform.translate(
-              offset: Offset(runnerLeft, 0),
-              child: Lottie.asset(
-                'assets/runner.json',
-                width: 70.w,
-                height: 70.h,
-                fit: BoxFit.contain,
-                repeat: _isRunnerAnimating,
-                errorBuilder: (context, error, stackTrace) {
-                  // Fallback to emoji if Lottie fails
-                  return Text(
-                    '🏃',
-                    style: TextStyle(fontSize: 40.sp),
-                  );
-                },
-              ),
-            );
-          },
+        SizedBox(
+          width: barWidth.w,
+          height: 70.h,
+          child: AnimatedBuilder(
+            animation: _runnerAnimation,
+            builder: (context, child) {
+              // Calculate runner position based on progress
+              double targetPosition = progress;
+              if (_isRunnerAnimating) {
+                // During animation, interpolate from previous position to new position
+                final previousProgress = _totalTasksCount > 0 
+                    ? ((_completedTasksCount - 1).clamp(0, _totalTasksCount)) / _totalTasksCount 
+                    : 0.0;
+                targetPosition = previousProgress + (progress - previousProgress) * _runnerAnimation.value;
+              }
+              targetPosition = targetPosition.clamp(0.0, 1.0);
+              
+              final runnerSize = 70.w;
+              final effectiveBarWidth = barWidth.w;
+              // Position the runner so its CENTER aligns with the progress point on the bar.
+              // At 0%: center at bar left edge → left = -runnerSize/2
+              // At 100%: center at bar right edge → left = effectiveBarWidth - runnerSize/2
+              // But we clamp so the runner doesn't go off-screen to the left.
+              final centerOffset = targetPosition * effectiveBarWidth - runnerSize / 2;
+              final clampedOffset = centerOffset.clamp(-runnerSize * 0.15, effectiveBarWidth - runnerSize * 0.85);
+              
+              return Transform.translate(
+                offset: Offset(clampedOffset, 0),
+                child: Lottie.asset(
+                  'assets/runner.json',
+                  width: runnerSize,
+                  height: 70.h,
+                  fit: BoxFit.contain,
+                  repeat: _isRunnerAnimating,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Text(
+                      '🏃',
+                      style: TextStyle(fontSize: 40.sp),
+                    );
+                  },
+                ),
+              );
+            },
+          ),
         ),
         SizedBox(height: 8.h),
         

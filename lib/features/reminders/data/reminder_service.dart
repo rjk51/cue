@@ -16,7 +16,7 @@ class ReminderService {
   // Get current user ID from Firebase Auth
   String? get _userId => FirebaseAuth.instance.currentUser?.uid;
 
-  // Get reminders stream for real-time updates
+  // Get reminders stream for real-time updates (excludes completed non-recurring)
   Stream<List<Reminder>> getRemindersStream() {
     final userId = _userId;
     if (userId == null) {
@@ -39,6 +39,41 @@ class ReminderService {
 
           reminders.sort((a, b) => a.time.compareTo(b.time));
           return reminders;
+        });
+  }
+
+  /// Get ALL reminders for today (including completed non-recurring ones).
+  /// Used for progress bar counting so completed tasks don't vanish from the total.
+  Stream<List<Reminder>> getAllRemindersForTodayStream() {
+    final userId = _userId;
+    if (userId == null) {
+      return Stream.value([]);
+    }
+
+    // We need both completed and incomplete reminders.
+    // Firestore doesn't support OR queries on the same field easily,
+    // so we fetch all reminders for this user and filter in memory.
+    return _firestore
+        .collection(_collection)
+        .where('userId', isEqualTo: userId)
+        .snapshots()
+        .map((snapshot) {
+          final now = DateTime.now();
+          final todayStart = DateTime(now.year, now.month, now.day);
+          final tomorrowStart = todayStart.add(const Duration(days: 1));
+
+          return snapshot.docs
+              .map((doc) => Reminder.fromMap(doc.data(), doc.id))
+              .where((r) {
+                if (r.recurrence != null) {
+                  // Recurring reminders are always in the active stream,
+                  // just include them so we can count their occurrences
+                  return true;
+                }
+                // Non-recurring: include if its time is today (whether completed or not)
+                return !r.time.isBefore(todayStart) && r.time.isBefore(tomorrowStart);
+              })
+              .toList();
         });
   }
 
