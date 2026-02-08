@@ -1704,69 +1704,7 @@ class _NewReminderScreenState extends State<NewReminderScreen>
                                     ),
                                     Switch(
                                       value: _repeatEnabled,
-                                      onChanged: (value) async {
-                                        // Check pro access for recurring reminders
-                                        if (value) {
-                                          final hasPro = await _proStatusService.hasProAccess();
-                                          if (!hasPro) {
-                                            final shouldUpgrade = await showDialog<bool>(
-                                              context: context,
-                                              builder: (context) => AlertDialog(
-                                                backgroundColor: _isDarkMode 
-                                                    ? const Color(0xFF2A2A2A) 
-                                                    : Colors.white,
-                                                title: Row(
-                                                  children: [
-                                                    Icon(Icons.star_rounded, color: _accentColor, size: 24.sp),
-                                                    SizedBox(width: 8.w),
-                                                    Text(
-                                                      'Pro Feature',
-                                                      style: TextStyle(
-                                                        color: _isDarkMode 
-                                                            ? Colors.white 
-                                                            : const Color(0xFF2D2D2D),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                                content: Text(
-                                                  'Recurring reminders are a Pro feature. Upgrade to create reminders that repeat daily, weekly, monthly, or on a custom schedule!',
-                                                  style: TextStyle(
-                                                    color: _isDarkMode 
-                                                        ? Colors.white70 
-                                                        : const Color(0xFF666666),
-                                                  ),
-                                                ),
-                                                actions: [
-                                                  TextButton(
-                                                    onPressed: () => Navigator.pop(context, false),
-                                                    child: Text('Not Now', style: TextStyle(color: _accentColor)),
-                                                  ),
-                                                  ElevatedButton(
-                                                    onPressed: () => Navigator.pop(context, true),
-                                                    style: ElevatedButton.styleFrom(
-                                                      backgroundColor: _accentColor,
-                                                      foregroundColor: Colors.white,
-                                                    ),
-                                                    child: const Text('Upgrade to Pro'),
-                                                  ),
-                                                ],
-                                              ),
-                                            );
-
-                                            if (shouldUpgrade == true && mounted) {
-                                              // Navigate to subscription screen
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (context) => const CueProPaywallScreen(),
-                                                ),
-                                              );
-                                            }
-                                            return;
-                                          }
-                                        }
-                                        
+                                      onChanged: (value) {
                                         setState(() {
                                           _repeatEnabled = value;
                                         });
@@ -1811,7 +1749,69 @@ class _NewReminderScreenState extends State<NewReminderScreen>
                                     ),
                                     Switch(
                                       value: _autoSnoozeEnabled,
-                                      onChanged: (value) {
+                                      onChanged: (value) async {
+                                        // Check pro access for auto-snooze
+                                        if (value) {
+                                          final hasPro = await _proStatusService.hasProAccess();
+                                          if (!hasPro) {
+                                            final shouldUpgrade = await showDialog<bool>(
+                                              context: context,
+                                              builder: (context) => AlertDialog(
+                                                backgroundColor: _isDarkMode 
+                                                    ? const Color(0xFF2A2A2A) 
+                                                    : Colors.white,
+                                                title: Row(
+                                                  children: [
+                                                    Icon(Icons.star_rounded, color: _accentColor, size: 24.sp),
+                                                    SizedBox(width: 8.w),
+                                                    Text(
+                                                      'Pro Feature',
+                                                      style: TextStyle(
+                                                        color: _isDarkMode 
+                                                            ? Colors.white 
+                                                            : const Color(0xFF2D2D2D),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                content: Text(
+                                                  'Auto-snooze is a Pro feature. Upgrade to automatically re-notify yourself if you don\'t respond to a reminder!',
+                                                  style: TextStyle(
+                                                    color: _isDarkMode 
+                                                        ? Colors.white70 
+                                                        : const Color(0xFF666666),
+                                                  ),
+                                                ),
+                                                actions: [
+                                                  TextButton(
+                                                    onPressed: () => Navigator.pop(context, false),
+                                                    child: Text('Not Now', style: TextStyle(color: _accentColor)),
+                                                  ),
+                                                  ElevatedButton(
+                                                    onPressed: () => Navigator.pop(context, true),
+                                                    style: ElevatedButton.styleFrom(
+                                                      backgroundColor: _accentColor,
+                                                      foregroundColor: Colors.white,
+                                                    ),
+                                                    child: const Text('Upgrade to Pro'),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+
+                                            if (shouldUpgrade == true && mounted) {
+                                              // Navigate to subscription screen
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (context) => const CueProPaywallScreen(),
+                                                ),
+                                              );
+                                            }
+                                            return;
+                                          }
+                                        }
+                                        
                                         setState(() {
                                           _autoSnoozeEnabled = value;
                                         });
