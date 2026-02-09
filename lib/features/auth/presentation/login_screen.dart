@@ -124,6 +124,19 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
+      if (result.status == GoogleSignInStatus.needsSignup) {
+        // No account exists for this email - send user to Signup flow with email prefilled
+        setState(() => _isLoading = false);
+        if (!mounted) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => SignupScreen(initialEmail: result.email),
+          ),
+        );
+        return;
+      }
+
       // Successfully signed in with Google
       if (mounted) {
         await _navigateAfterLogin();

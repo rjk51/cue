@@ -7,13 +7,19 @@ import '../../../services/auth_service.dart';
 import '../../../services/local_storage_service.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
 import '../../home/presentation/home_screen.dart';
-import '../../onboarding/presentation/theme_preference_screen.dart';
 import '../../onboarding/presentation/onboarding_screen.dart';
 import 'login_screen.dart';
 import 'link_account_dialog.dart';
 
 class SignupScreen extends StatefulWidget {
-  const SignupScreen({super.key});
+  final String? initialEmail;
+  final String? initialFullName;
+
+  const SignupScreen({
+    super.key,
+    this.initialEmail,
+    this.initialFullName,
+  });
 
   @override
   State<SignupScreen> createState() => _SignupScreenState();
@@ -28,6 +34,17 @@ class _SignupScreenState extends State<SignupScreen> {
   final _storage = LocalStorageService.instance;
   bool _isLoading = false;
   bool _obscurePassword = true;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialEmail != null) {
+      _emailController.text = widget.initialEmail!;
+    }
+    if (widget.initialFullName != null) {
+      _fullNameController.text = widget.initialFullName!;
+    }
+  }
 
   @override
   void dispose() {
@@ -105,6 +122,24 @@ class _SignupScreenState extends State<SignupScreen> {
               },
             ),
           );
+        }
+        return;
+      }
+
+      if (result.status == GoogleSignInStatus.needsSignup) {
+        // User initiated sign up via Google - complete sign up by creating the account
+        try {
+          final userCredential = await _authService.signInWithGoogle();
+          if (userCredential != null && mounted) {
+            await _storage.set('device_sync_onboarding_shown', true);
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (context) => const OnboardingScreen()),
+              (route) => false,
+            );
+          }
+        } catch (e) {
+          if (mounted) context.showErrorSnackbar(e.toString());
         }
         return;
       }

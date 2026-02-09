@@ -181,6 +181,16 @@ class AuthService {
         );
       }
 
+      // If no account exists for this email, ask the app to go to sign up flow
+      if (signInMethods.isEmpty) {
+        // Sign out to avoid leaving Google signed in
+        await _googleSignIn.signOut();
+        return GoogleSignInResult(
+          status: GoogleSignInStatus.needsSignup,
+          email: email,
+        );
+      }
+
       // Obtain the auth details from the request
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
 
@@ -568,6 +578,7 @@ enum GoogleSignInStatus {
   success,
   cancelled,
   needsLinking,
+  needsSignup,
 }
 
 // Result class for Google Sign-In
