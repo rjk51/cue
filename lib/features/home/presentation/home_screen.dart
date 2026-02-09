@@ -22,6 +22,7 @@ import '../../../shared/widgets/confirmation_dialog.dart';
 import '../../../shared/widgets/delete_recurring_dialog.dart';
 import '../../../shared/widgets/tutorial_overlay.dart';
 import 'widgets/current_cue_card.dart';
+import '../../pulse/presentation/pulse_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -822,36 +823,69 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
           ),
 
-          // Settings icon positioned at top right
+          // Pulse + Settings icons positioned at top right
           Positioned(
             top: MediaQuery.of(context).padding.top + 10.h,
             right: 20.w,
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () async {
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const SettingsScreen(),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Pulse button
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const PulseScreen(),
+                        ),
+                      );
+                      if (mounted) {
+                        await _loadThemeSettings();
+                      }
+                    },
+                    customBorder: const CircleBorder(),
+                    child: Container(
+                      padding: EdgeInsets.all(8.r),
+                      child: Icon(
+                        Icons.insights_rounded,
+                        color: _accentColor,
+                        size: 26.sp,
+                      ),
                     ),
-                  );
-                  // Reload theme settings when coming back
-                  if (mounted) {
-                    await _loadThemeSettings();
-                  }
-                },
-                customBorder: const CircleBorder(),
-                child: Container(
-                  padding: EdgeInsets.all(8.r),
-                  child: Image.asset(
-                    'assets/settings.png',
-                    width: 28.w,
-                    height: 28.h,
-                    fit: BoxFit.cover,
                   ),
                 ),
-              ),
+                SizedBox(width: 4.w),
+                // Settings button
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const SettingsScreen(),
+                        ),
+                      );
+                      // Reload theme settings when coming back
+                      if (mounted) {
+                        await _loadThemeSettings();
+                      }
+                    },
+                    customBorder: const CircleBorder(),
+                    child: Container(
+                      padding: EdgeInsets.all(8.r),
+                      child: Image.asset(
+                        'assets/settings.png',
+                        width: 28.w,
+                        height: 28.h,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
 

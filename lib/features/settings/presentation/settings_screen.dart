@@ -15,6 +15,7 @@ import '../../subscription/presentation/cue_pro_paywall_screen.dart';
 import 'appearance_screen.dart';
 import 'devices_screen.dart';
 import 'sync_devices_screen.dart';
+import '../../pulse/presentation/pulse_screen.dart';
 // import 'notification_settings_screen.dart'; // Used when Notifications card is enabled
 
 class SettingsScreen extends StatefulWidget {
@@ -659,6 +660,86 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                         fontWeight: FontWeight.w500,
                                         color: textColor,
                                       ),
+                                    ),
+                                  ),
+                                  Icon(
+                                    Icons.chevron_right,
+                                    color: subtitleColor,
+                                    size: 20.sp,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          Divider(
+                            height: 1,
+                            thickness: 1,
+                            color: subtitleColor.withOpacity(0.08),
+                          ),
+
+                          // Pulse row → navigates to PulseScreen
+                          GestureDetector(
+                            onTap: () async {
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const PulseScreen(),
+                                ),
+                              );
+                            },
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 20.w,
+                                vertical: 16.h,
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 40.w,
+                                    height: 40.h,
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue.withOpacity(0.15),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      Icons.insights_rounded,
+                                      color: Colors.blue,
+                                      size: 22.sp,
+                                    ),
+                                  ),
+                                  SizedBox(width: 16.w),
+                                  Expanded(
+                                    child: Row(
+                                      children: [
+                                        Text(
+                                          'Pulse',
+                                          style: TextStyle(
+                                            fontSize: 16.sp,
+                                            fontWeight: FontWeight.w500,
+                                            color: textColor,
+                                          ),
+                                        ),
+                                        SizedBox(width: 6.w),
+                                        Container(
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: 6.w,
+                                            vertical: 2.h,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.blue.withOpacity(0.15),
+                                            borderRadius: BorderRadius.circular(4.r),
+                                          ),
+                                          child: Text(
+                                            'BETA',
+                                            style: TextStyle(
+                                              fontSize: 9.sp,
+                                              fontWeight: FontWeight.w700,
+                                              color: Colors.blue,
+                                              letterSpacing: 0.5,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                   Icon(
