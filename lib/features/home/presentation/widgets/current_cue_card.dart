@@ -9,6 +9,7 @@ import '../../../reminders/data/reminder_service.dart';
 import '../../../reminders/presentation/reminder_details_screen.dart';
 import '../../../snooze/presentation/snooze_screen.dart';
 import '../../../../shared/widgets/card_back_side.dart';
+import 'completion_celebration_overlay.dart';
 
 class CurrentCueCard extends StatefulWidget {
   final Reminder reminder;
@@ -46,11 +47,13 @@ class _CurrentCueCardState extends State<CurrentCueCard>
   final FocusNode _notesFocusNode = FocusNode();
   final ReminderService _reminderService = ReminderService();
   final FlipCardController _flipController = FlipCardController();
+  final GlobalKey _iconKey = GlobalKey();
 
   late AnimationController _swipeController;
   late AnimationController _bounceController;
   late Animation<double> _bounceAnimation;
   double _dragOffset = 0;
+  bool _isCompleting = false;
 
   @override
   void initState() {
@@ -97,6 +100,7 @@ class _CurrentCueCardState extends State<CurrentCueCard>
       // Reset slider state
       _dragOffset = 0;
       _swipeController.reset();
+      _isCompleting = false;
     }
   }
 
@@ -202,6 +206,7 @@ class _CurrentCueCardState extends State<CurrentCueCard>
                             ),
                             // Dynamic icon from reminder with bounce animation
                             AnimatedBuilder(
+                              key: _iconKey,
                               animation: _bounceAnimation,
                               builder: (context, child) {
                                 return Transform.scale(
@@ -590,13 +595,43 @@ class _CurrentCueCardState extends State<CurrentCueCard>
       builder: (context, setState) {
         return GestureDetector(
           onTap: () async {
-            // Haptic feedback
-            try {
-              await HapticFeedback.mediumImpact();
-            } catch (e) {
-              // Haptic feedback not available on all platforms
+            // Trigger full-screen celebration
+            if (!_isCompleting) {
+              this.setState(() {
+                _isCompleting = true;
+              });
+              
+              // Get icon position for animation start point
+              final RenderBox? iconBox = _iconKey.currentContext?.findRenderObject() as RenderBox?;
+              final Offset iconPosition = iconBox != null
+                  ? iconBox.localToGlobal(Offset(
+                      iconBox.size.width / 2,
+                      iconBox.size.height / 2,
+                    ))
+                  : Offset(
+                      ScreenUtil().screenWidth / 2,
+                      ScreenUtil().screenHeight / 3,
+                    );
+
+              // Show full-screen celebration overlay
+              final overlay = Overlay.of(context);
+              late OverlayEntry overlayEntry;
+              
+              overlayEntry = OverlayEntry(
+                builder: (context) => CompletionCelebrationOverlay(
+                  icon: widget.reminder.icon,
+                  color: widget.reminder.color,
+                  customIconUrl: widget.reminder.customIconUrl,
+                  startPosition: iconPosition,
+                  onComplete: () {
+                    overlayEntry.remove();
+                    widget.onMarkCompleted(widget.reminder.id);
+                  },
+                ),
+              );
+              
+              overlay.insert(overlayEntry);
             }
-            widget.onMarkCompleted(widget.reminder.id);
           },
           child: AnimatedScale(
             scale: 1.0,
