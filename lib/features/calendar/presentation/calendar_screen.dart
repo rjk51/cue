@@ -14,6 +14,7 @@ class CalendarScreen extends StatefulWidget {
 class _CalendarScreenState extends State<CalendarScreen> {
   final ThemeService _themeService = ThemeService();
   Color _accentColor = const Color(0xFF2D7A78);
+  Color? _backgroundColor;
   bool _isDarkMode = false;
   int _currentIndex = 1;
 
@@ -26,9 +27,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
   Future<void> _loadTheme() async {
     final themePreference = await _themeService.getThemePreference();
     final accentColor = await _themeService.getAccentColor();
+    final bgColor = await _themeService.getBackgroundColor();
     if (mounted) {
       setState(() {
         _accentColor = accentColor;
+        _backgroundColor = bgColor;
         if (themePreference == 'system') {
           _isDarkMode =
               WidgetsBinding.instance.platformDispatcher.platformBrightness ==
@@ -42,9 +45,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final backgroundColor = _isDarkMode
+    final backgroundColor = _backgroundColor ?? (_isDarkMode
         ? Color.lerp(const Color(0xFF121212), _accentColor, 0.08)!
-        : Color.lerp(const Color(0xFFFAF5F3), _accentColor, 0.05)!;
+        : Color.lerp(const Color(0xFFFAF5F3), _accentColor, 0.05)!);
 
     final textColor = _isDarkMode ? Colors.white : const Color(0xFF2D2D2D);
 

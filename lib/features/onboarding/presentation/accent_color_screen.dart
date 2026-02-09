@@ -229,6 +229,7 @@ class _AccentColorScreenState extends State<AccentColorScreen> {
                     ),
                     child: SingleChildScrollView(
                       child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         // Date header
                         Padding(

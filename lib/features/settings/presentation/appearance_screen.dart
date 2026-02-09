@@ -13,6 +13,8 @@ class AppearanceScreen extends StatefulWidget {
 class _AppearanceScreenState extends State<AppearanceScreen> {
   final ThemeService _themeService = ThemeService();
   Color _selectedColor = const Color(0xFFFFB4A3);
+  Color? _backgroundColor;
+  Color? _textColor;
   String _themeMode = 'light';
   double _fontSizeScale = 1.0;
   bool _isLoading = false;
@@ -27,10 +29,14 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
     final color = await _themeService.getAccentColor();
     final theme = await _themeService.getThemePreference();
     final fontSize = await _themeService.getFontSizeScale();
+    final bgColor = await _themeService.getBackgroundColor();
+    final txtColor = await _themeService.getTextColor();
     setState(() {
       _selectedColor = color;
       _themeMode = theme;
       _fontSizeScale = fontSize;
+      _backgroundColor = bgColor;
+      _textColor = txtColor;
     });
   }
 
@@ -106,6 +112,230 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
     );
   }
 
+  Future<void> _showBackgroundColorPicker() async {
+    Color pickedColor = _backgroundColor ?? (_isDarkMode ? const Color(0xFF121212) : const Color(0xFFFAF5F3));
+
+    await showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Pick background color'),
+          content: SingleChildScrollView(
+            child: ColorPicker(
+              color: pickedColor,
+              onColorChanged: (Color color) {
+                pickedColor = color;
+              },
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              heading: Text(
+                'Select color',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              subheading: Text(
+                'Select color shade',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              wheelDiameter: 200,
+              enableShadesSelection: true,
+              pickersEnabled: const {ColorPickerType.wheel: true},
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            if (_backgroundColor != null)
+              TextButton(
+                onPressed: () async {
+                  setState(() {
+                    _backgroundColor = null;
+                    _isLoading = true;
+                  });
+                  await _themeService.setBackgroundColor(null);
+                  setState(() {
+                    _isLoading = false;
+                  });
+                  if (mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Background reset to default!'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                },
+                child: const Text('Reset'),
+              ),
+            TextButton(
+              onPressed: () async {
+                setState(() {
+                  _backgroundColor = pickedColor;
+                  _isLoading = true;
+                });
+                await _themeService.setBackgroundColor(pickedColor);
+                setState(() {
+                  _isLoading = false;
+                });
+                if (mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Background color updated!'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+              },
+              child: const Text('Select'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _showTextColorPicker() async {
+    Color pickedColor = _textColor ?? (_isDarkMode ? Colors.white : const Color(0xFF2D2D2D));
+
+    await showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Pick text color'),
+          content: SingleChildScrollView(
+            child: ColorPicker(
+              color: pickedColor,
+              onColorChanged: (Color color) {
+                pickedColor = color;
+              },
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              heading: Text(
+                'Select color',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              subheading: Text(
+                'Select color shade',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              wheelDiameter: 200,
+              enableShadesSelection: true,
+              pickersEnabled: const {ColorPickerType.wheel: true},
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            if (_textColor != null)
+              TextButton(
+                onPressed: () async {
+                  setState(() {
+                    _textColor = null;
+                    _isLoading = true;
+                  });
+                  await _themeService.setTextColor(null);
+                  setState(() {
+                    _isLoading = false;
+                  });
+                  if (mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Text color reset to default!'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                },
+                child: const Text('Reset'),
+              ),
+            TextButton(
+              onPressed: () async {
+                setState(() {
+                  _textColor = pickedColor;
+                  _isLoading = true;
+                });
+                await _themeService.setTextColor(pickedColor);
+                setState(() {
+                  _isLoading = false;
+                });
+                if (mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Text color updated!'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+              },
+              child: const Text('Select'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _resetToDefaults() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reset to Defaults'),
+        content: const Text('This will reset accent color, background color, text color, and font size to defaults. Continue?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Reset'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      setState(() => _isLoading = true);
+      try {
+        await _themeService.setAccentColor(const Color(0xFFFFB4A3));
+        await _themeService.setBackgroundColor(null);
+        await _themeService.setTextColor(null);
+        await _themeService.setFontSizeScale(1.0);
+        await _loadSettings();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Reset to defaults!'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error resetting: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+      }
+    }
+  }
+
   Future<void> _updateThemeMode(String mode) async {
     setState(() {
       _themeMode = mode;
@@ -173,9 +403,9 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final backgroundColor = _isDarkMode
+    final backgroundColor = _backgroundColor ?? (_isDarkMode
         ? Color.lerp(const Color(0xFF121212), _selectedColor, 0.08)!
-        : Color.lerp(const Color(0xFFFAF5F3), _selectedColor, 0.05)!;
+        : Color.lerp(const Color(0xFFFAF5F3), _selectedColor, 0.05)!);
 
     final cardColor = _isDarkMode
         ? Color.lerp(const Color(0xFF1E1E1E), _selectedColor, 0.1)!
@@ -414,6 +644,224 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
                             ),
                           ),
                         ],
+                      ),
+                    ),
+
+                    SizedBox(height: 32.h),
+
+                    // Background Color Section
+                    Text(
+                      'BACKGROUND COLOR',
+                      style: TextStyle(
+                        fontSize: 12.sp,
+                        fontWeight: FontWeight.w600,
+                        color: subtitleColor,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    SizedBox(height: 16.h),
+
+                    Container(
+                      padding: EdgeInsets.all(20.r),
+                      decoration: BoxDecoration(
+                        color: cardColor,
+                        borderRadius: BorderRadius.circular(16.r),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(
+                              _isDarkMode ? 0.3 : 0.08,
+                            ),
+                            blurRadius: 20,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          GestureDetector(
+                            onTap: _showBackgroundColorPicker,
+                            child: Container(
+                              width: 80.w,
+                              height: 80.w,
+                              decoration: BoxDecoration(
+                                color: _backgroundColor ?? (_isDarkMode 
+                                  ? Color.lerp(const Color(0xFF121212), _selectedColor, 0.08)! 
+                                  : Color.lerp(const Color(0xFFFAF5F3), _selectedColor, 0.05)!),
+                                shape: BoxShape.circle,
+                                border: _backgroundColor == null ? Border.all(
+                                  color: subtitleColor.withOpacity(0.2),
+                                  width: 2,
+                                ) : null,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: (_backgroundColor ?? _selectedColor).withOpacity(0.4),
+                                    blurRadius: 20,
+                                    spreadRadius: 5,
+                                  ),
+                                ],
+                              ),
+                              child: _backgroundColor == null
+                                  ? Icon(
+                                      Icons.gradient,
+                                      color: subtitleColor.withOpacity(0.5),
+                                      size: 32.sp,
+                                    )
+                                  : null,
+                            ),
+                          ),
+                          SizedBox(width: 20.w),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _backgroundColor == null ? 'Using default' : 'Tap to change',
+                                  style: TextStyle(
+                                    fontSize: 16.sp,
+                                    fontWeight: FontWeight.w600,
+                                    color: textColor,
+                                  ),
+                                ),
+                                SizedBox(height: 4.h),
+                                Text(
+                                  _backgroundColor == null 
+                                      ? 'Default gradient background' 
+                                      : 'Custom solid background',
+                                  style: TextStyle(
+                                    fontSize: 14.sp,
+                                    color: subtitleColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    SizedBox(height: 32.h),
+
+                    // Text Color Section
+                    Text(
+                      'TEXT COLOR',
+                      style: TextStyle(
+                        fontSize: 12.sp,
+                        fontWeight: FontWeight.w600,
+                        color: subtitleColor,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    SizedBox(height: 16.h),
+
+                    Container(
+                      padding: EdgeInsets.all(20.r),
+                      decoration: BoxDecoration(
+                        color: cardColor,
+                        borderRadius: BorderRadius.circular(16.r),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(
+                              _isDarkMode ? 0.3 : 0.08,
+                            ),
+                            blurRadius: 20,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          GestureDetector(
+                            onTap: _showTextColorPicker,
+                            child: Container(
+                              width: 80.w,
+                              height: 80.w,
+                              decoration: BoxDecoration(
+                                color: _textColor ?? (_isDarkMode 
+                                  ? Colors.white 
+                                  : const Color(0xFF2D2D2D)),
+                                shape: BoxShape.circle,
+                                border: _textColor == null ? Border.all(
+                                  color: subtitleColor.withOpacity(0.2),
+                                  width: 2,
+                                ) : null,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: (_textColor ?? (_isDarkMode ? Colors.white : const Color(0xFF2D2D2D))).withOpacity(0.4),
+                                    blurRadius: 20,
+                                    spreadRadius: 5,
+                                  ),
+                                ],
+                              ),
+                              child: Center(
+                                child: Text(
+                                  'A',
+                                  style: TextStyle(
+                                    fontSize: 32.sp,
+                                    fontWeight: FontWeight.bold,
+                                    color: backgroundColor,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 20.w),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _textColor == null ? 'Using default' : 'Tap to change',
+                                  style: TextStyle(
+                                    fontSize: 16.sp,
+                                    fontWeight: FontWeight.w600,
+                                    color: textColor,
+                                  ),
+                                ),
+                                SizedBox(height: 4.h),
+                                Text(
+                                  _textColor == null 
+                                      ? 'Default theme-based text' 
+                                      : 'Custom text color',
+                                  style: TextStyle(
+                                    fontSize: 14.sp,
+                                    color: subtitleColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    SizedBox(height: 32.h),
+
+                    // Reset to Defaults Button
+                    Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16.r),
+                        border: Border.all(
+                          color: Colors.red.withOpacity(0.5),
+                          width: 2,
+                        ),
+                      ),
+                      child: TextButton(
+                        onPressed: _resetToDefaults,
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.symmetric(vertical: 16.h),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16.r),
+                          ),
+                        ),
+                        child: Text(
+                          'Reset All to Defaults',
+                          style: TextStyle(
+                            fontSize: 16.sp,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.red,
+                          ),
+                        ),
                       ),
                     ),
 

@@ -29,6 +29,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final AuthService _authService = AuthService();
 
   Color _accentColor = const Color(0xFF2D7A78);
+  Color? _backgroundColor;
   bool _isDarkMode = false;
   String _themeMode = 'light';
   String _userName = 'User';
@@ -62,10 +63,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadThemeSettings() async {
     final themePreference = await _themeService.getThemePreference();
     final accentColor = await _themeService.getAccentColor();
+    final bgColor = await _themeService.getBackgroundColor();
 
     if (mounted) {
       setState(() {
         _accentColor = accentColor;
+        _backgroundColor = bgColor;
         _themeMode = themePreference;
         if (themePreference == 'system') {
           _isDarkMode =
@@ -307,9 +310,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final backgroundColor = _isDarkMode
+    final backgroundColor = _backgroundColor ?? (_isDarkMode
         ? Color.lerp(const Color(0xFF121212), _accentColor, 0.08)!
-        : Color.lerp(const Color(0xFFFAF5F3), _accentColor, 0.05)!;
+        : Color.lerp(const Color(0xFFFAF5F3), _accentColor, 0.05)!);
 
     final cardColor = _isDarkMode
         ? Color.lerp(const Color(0xFF1E1E1E), _accentColor, 0.1)!

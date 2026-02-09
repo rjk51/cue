@@ -14,10 +14,14 @@ class ThemeNotifier extends ChangeNotifier {
   Color _accentColor = const Color(0xFFFFB4A3);
   String _themeMode = 'light';
   double _fontSizeScale = 1.0;
+  Color? _backgroundColor;
+  Color? _textColor;
 
   Color get accentColor => _accentColor;
   String get themeMode => _themeMode;
   double get fontSizeScale => _fontSizeScale;
+  Color? get backgroundColor => _backgroundColor;
+  Color? get textColor => _textColor;
 
   bool get isDarkMode {
     if (_themeMode == 'dark') return true;
@@ -46,14 +50,30 @@ class ThemeNotifier extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Update the background color and notify listeners.
+  void updateBackgroundColor(Color? color) {
+    _backgroundColor = color;
+    notifyListeners();
+  }
+
+  /// Update the text color and notify listeners.
+  void updateTextColor(Color? color) {
+    _textColor = color;
+    notifyListeners();
+  }
+
   /// Initialize with stored values (call this at app startup).
   void initialize({
     required Color accentColor,
     required String themeMode,
     double fontSizeScale = 1.0,
+    Color? backgroundColor,
+    Color? textColor,
   }) {
     _accentColor = accentColor;
     _themeMode = themeMode;
     _fontSizeScale = fontSizeScale;
+    _backgroundColor = backgroundColor;
+    _textColor = textColor;
   }
 }

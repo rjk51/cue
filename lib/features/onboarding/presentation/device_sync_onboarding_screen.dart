@@ -16,6 +16,7 @@ class _DeviceSyncOnboardingScreenState
     extends State<DeviceSyncOnboardingScreen> {
   final ThemeService _themeService = ThemeService();
   Color _accentColor = const Color(0xFFFFB4A3);
+  Color? _backgroundColor;
   bool _isDarkMode = false;
 
   @override
@@ -42,10 +43,12 @@ class _DeviceSyncOnboardingScreenState
 
   Future<void> _loadTheme() async {
     final color = await _themeService.getAccentColor();
+    final backgroundColor = await _themeService.getBackgroundColor();
     final theme = await _themeService.getThemePreference();
     if (mounted) {
       setState(() {
         _accentColor = color;
+        _backgroundColor = backgroundColor;
         if (theme == 'dark') {
           _isDarkMode = true;
         } else if (theme == 'system') {
@@ -62,9 +65,9 @@ class _DeviceSyncOnboardingScreenState
   @override
   Widget build(BuildContext context) {
     // Background color with accent tint (same as home screen)
-    final backgroundColor = _isDarkMode
+    final backgroundColor = _backgroundColor ?? (_isDarkMode
         ? Color.lerp(const Color(0xFF121212), _accentColor, 0.08)!
-        : Color.lerp(const Color(0xFFFAF5F3), _accentColor, 0.05)!;
+        : Color.lerp(const Color(0xFFFAF5F3), _accentColor, 0.05)!);
 
     final textColor = _isDarkMode ? Colors.white : const Color(0xFF2A2A2A);
     final subtitleColor =

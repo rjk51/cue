@@ -30,6 +30,7 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
   final TextEditingController _notesController = TextEditingController();
   final FocusNode _notesFocusNode = FocusNode();
   Color _accentColor = const Color(0xFFFFB4A3);
+  Color? _backgroundColor;
   bool _isDarkMode = false;
   bool _isCompleting = false;
 
@@ -82,9 +83,11 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
   Future<void> _loadThemeSettings() async {
     final themePreference = await _themeService.getThemePreference();
     final accentColor = await _themeService.getAccentColor();
+    final backgroundColor = await _themeService.getBackgroundColor();
     if (mounted) {
       setState(() {
         _accentColor = accentColor;
+        _backgroundColor = backgroundColor;
         if (themePreference == 'system') {
           _isDarkMode =
               WidgetsBinding.instance.platformDispatcher.platformBrightness ==
@@ -235,9 +238,9 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     // Match home screen colors
-    final backgroundColor = _isDarkMode
+    final backgroundColor = _backgroundColor ?? (_isDarkMode
         ? Color.lerp(const Color(0xFF121212), _accentColor, 0.08)!
-        : Color.lerp(const Color(0xFFFAF5F3), _accentColor, 0.05)!;
+        : Color.lerp(const Color(0xFFFAF5F3), _accentColor, 0.05)!);
 
     final textColor = _isDarkMode ? Colors.white : const Color(0xFF2D2D2D);
     final subtitleColor = _isDarkMode

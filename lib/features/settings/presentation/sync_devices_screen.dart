@@ -16,6 +16,7 @@ class SyncDevicesScreen extends StatefulWidget {
 class _SyncDevicesScreenState extends State<SyncDevicesScreen> {
   final ThemeService _themeService = ThemeService();
   Color _accentColor = const Color(0xFF2D7A78);
+  Color? _backgroundColor;
   bool _isDarkMode = false;
   String _currentDeviceId = '';
 
@@ -29,10 +30,12 @@ class _SyncDevicesScreenState extends State<SyncDevicesScreen> {
   Future<void> _loadThemeSettings() async {
     final themePreference = await _themeService.getThemePreference();
     final accentColor = await _themeService.getAccentColor();
+    final backgroundColor = await _themeService.getBackgroundColor();
 
     if (mounted) {
       setState(() {
         _accentColor = accentColor;
+        _backgroundColor = backgroundColor;
         if (themePreference == 'system') {
           _isDarkMode =
               WidgetsBinding.instance.platformDispatcher.platformBrightness ==
@@ -151,9 +154,9 @@ class _SyncDevicesScreenState extends State<SyncDevicesScreen> {
   @override
   Widget build(BuildContext context) {
     final userId = FirebaseAuth.instance.currentUser?.uid;
-    final backgroundColor = _isDarkMode
+    final backgroundColor = _backgroundColor ?? (_isDarkMode
         ? Color.lerp(const Color(0xFF121212), _accentColor, 0.08)!
-        : Color.lerp(const Color(0xFFFAF5F3), _accentColor, 0.05)!;
+        : Color.lerp(const Color(0xFFFAF5F3), _accentColor, 0.05)!);
 
     final cardColor = _isDarkMode
         ? Color.lerp(const Color(0xFF1E1E1E), _accentColor, 0.1)!

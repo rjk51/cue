@@ -16,6 +16,8 @@ class ThemeService {
   static const String _themeKey = 'theme_preference';
   static const String _accentColorKey = 'accent_color';
   static const String _fontSizeKey = 'font_size_scale';
+  static const String _backgroundColorKey = 'background_color';
+  static const String _textColorKey = 'text_color';
 
   /// Get the current theme preference.
   ///
@@ -248,6 +250,142 @@ class ThemeService {
       }
     } catch (e) {
       print('Error saving font size scale to Firestore: $e');
+      // Don't throw - local storage is sufficient
+    }
+  }
+
+  /// Get the background color preference.
+  ///
+  /// Returns the user's chosen background color.
+  /// Defaults to null (uses default gradient) if not set.
+  Future<Color?> getBackgroundColor() async {
+    // Try to get from local storage first
+    final localColorValue = _localStorage.get<int>(_backgroundColorKey);
+    if (localColorValue != null) {
+      return Color(localColorValue);
+    }
+
+    // Try to get from Firestore if online
+    try {
+      final userId = _auth.currentUser?.uid;
+      if (userId != null) {
+        final userDoc = await _firestore.collection('users').doc(userId).get();
+        if (userDoc.exists) {
+          final firestoreColor = userDoc.data()?['backgroundColor'] as int?;
+          if (firestoreColor != null) {
+            // Cache it locally
+            await _localStorage.set(_backgroundColorKey, firestoreColor);
+            return Color(firestoreColor);
+          }
+        }
+      }
+    } catch (e) {
+      print('Error fetching background color from Firestore: $e');
+    }
+
+    // Default to null (uses default gradient)
+    return null;
+  }
+
+  /// Set the background color preference.
+  ///
+  /// Saves to both local storage (Hive) and Firestore.
+  /// Pass null to reset to default gradient.
+  Future<void> setBackgroundColor(Color? color) async {
+    final colorValue = color?.value;
+
+    // Save locally first
+    if (colorValue != null) {
+      await _localStorage.set(_backgroundColorKey, colorValue);
+    } else {
+      await _localStorage.remove(_backgroundColorKey);
+    }
+
+    // Notify all listeners of the color change
+    ThemeNotifier.instance.updateBackgroundColor(color);
+
+    // Try to sync with Firestore
+    try {
+      final userId = _auth.currentUser?.uid;
+      if (userId != null) {
+        await _firestore.collection('users').doc(userId).set(
+          {
+            'backgroundColor': colorValue,
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      }
+    } catch (e) {
+      print('Error saving background color to Firestore: $e');
+      // Don't throw - local storage is sufficient
+    }
+  }
+
+  /// Get the text color preference.
+  ///
+  /// Returns the user's chosen text color.
+  /// Defaults to null (uses default theme-based colors) if not set.
+  Future<Color?> getTextColor() async {
+    // Try to get from local storage first
+    final localColorValue = _localStorage.get<int>(_textColorKey);
+    if (localColorValue != null) {
+      return Color(localColorValue);
+    }
+
+    // Try to get from Firestore if online
+    try {
+      final userId = _auth.currentUser?.uid;
+      if (userId != null) {
+        final userDoc = await _firestore.collection('users').doc(userId).get();
+        if (userDoc.exists) {
+          final firestoreColor = userDoc.data()?['textColor'] as int?;
+          if (firestoreColor != null) {
+            // Cache it locally
+            await _localStorage.set(_textColorKey, firestoreColor);
+            return Color(firestoreColor);
+          }
+        }
+      }
+    } catch (e) {
+      print('Error fetching text color from Firestore: $e');
+    }
+
+    // Default to null (uses theme-based colors)
+    return null;
+  }
+
+  /// Set the text color preference.
+  ///
+  /// Saves to both local storage (Hive) and Firestore.
+  /// Pass null to reset to default theme-based colors.
+  Future<void> setTextColor(Color? color) async {
+    final colorValue = color?.value;
+
+    // Save locally first
+    if (colorValue != null) {
+      await _localStorage.set(_textColorKey, colorValue);
+    } else {
+      await _localStorage.remove(_textColorKey);
+    }
+
+    // Notify all listeners of the color change
+    ThemeNotifier.instance.updateTextColor(color);
+
+    // Try to sync with Firestore
+    try {
+      final userId = _auth.currentUser?.uid;
+      if (userId != null) {
+        await _firestore.collection('users').doc(userId).set(
+          {
+            'textColor': colorValue,
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      }
+    } catch (e) {
+      print('Error saving text color to Firestore: $e');
       // Don't throw - local storage is sufficient
     }
   }

@@ -51,6 +51,7 @@ class _NewReminderScreenState extends State<NewReminderScreen>
   final ChatGPTService _chatGPTService = ChatGPTService.instance;
 
   Color _accentColor = const Color(0xFFFFB4A3);
+  Color? _backgroundColor;
   bool _isDarkMode = false;
   bool _isSaving = false;
   bool _isRecording = false;
@@ -432,9 +433,11 @@ class _NewReminderScreenState extends State<NewReminderScreen>
   Future<void> _loadThemeSettings() async {
     final themePreference = await _themeService.getThemePreference();
     final accentColor = await _themeService.getAccentColor();
+    final backgroundColor = await _themeService.getBackgroundColor();
     if (mounted) {
       setState(() {
         _accentColor = accentColor;
+        _backgroundColor = backgroundColor;
         // Only default the reminder color to accent when creating.
         // In edit mode, keep the reminder's existing chosen color.
         if (widget.reminderToEdit == null) {
@@ -1226,9 +1229,9 @@ class _NewReminderScreenState extends State<NewReminderScreen>
   @override
   Widget build(BuildContext context) {
     // Match home screen colors
-    final backgroundColor = _isDarkMode
+    final backgroundColor = _backgroundColor ?? (_isDarkMode
         ? Color.lerp(const Color(0xFF121212), _accentColor, 0.08)!
-        : Color.lerp(const Color(0xFFFAF5F3), _accentColor, 0.05)!;
+        : Color.lerp(const Color(0xFFFAF5F3), _accentColor, 0.05)!);
 
     final cardColor = _isDarkMode
         ? Color.lerp(const Color(0xFF1E1E1E), _accentColor, 0.1)!
