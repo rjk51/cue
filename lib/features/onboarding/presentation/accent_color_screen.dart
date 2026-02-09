@@ -69,7 +69,15 @@ class _AccentColorScreenState extends State<AccentColorScreen> {
               ),
               wheelDiameter: 200,
               enableShadesSelection: true,
-              pickersEnabled: const {ColorPickerType.wheel: true},
+              pickersEnabled: const {
+                ColorPickerType.both: false,
+                ColorPickerType.primary: false,
+                ColorPickerType.accent: true,
+                ColorPickerType.wheel: true,
+              },
+              pickerTypeLabels: const {
+                ColorPickerType.accent: 'Pre-defined Colors',
+              },
             ),
           ),
           actions: [

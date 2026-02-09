@@ -625,9 +625,16 @@ class _NewReminderScreenState extends State<NewReminderScreen>
             ),
             pickersEnabled: const {
               ColorPickerType.both: false,
-              ColorPickerType.primary: true,
+              ColorPickerType.primary: false,
               ColorPickerType.accent: true,
               ColorPickerType.wheel: true,
+            },
+            // Rename the Accent tab to "Pre-defined Colors"
+            // FlexColorPicker supports overriding picker labels via
+            // `pickerTypeLabels` (map). If unsupported, this will be
+            // caught by compiler and we'll adjust accordingly.
+            pickerTypeLabels: const {
+              ColorPickerType.accent: 'Pre-defined Colors',
             },
           ),
         ),

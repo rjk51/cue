@@ -76,7 +76,15 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
               ),
               wheelDiameter: 200,
               enableShadesSelection: true,
-              pickersEnabled: const {ColorPickerType.wheel: true},
+              pickersEnabled: const {
+                ColorPickerType.both: false,
+                ColorPickerType.primary: false,
+                ColorPickerType.accent: true,
+                ColorPickerType.wheel: true,
+              },
+              pickerTypeLabels: const {
+                ColorPickerType.accent: 'Pre-defined Colors',
+              },
             ),
           ),
           actions: [
@@ -139,7 +147,15 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
               ),
               wheelDiameter: 200,
               enableShadesSelection: true,
-              pickersEnabled: const {ColorPickerType.wheel: true},
+              pickersEnabled: const {
+                ColorPickerType.both: false,
+                ColorPickerType.primary: false,
+                ColorPickerType.accent: true,
+                ColorPickerType.wheel: true,
+              },
+              pickerTypeLabels: const {
+                ColorPickerType.accent: 'Pre-defined Colors',
+              },
             ),
           ),
           actions: [
@@ -225,7 +241,15 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
               ),
               wheelDiameter: 200,
               enableShadesSelection: true,
-              pickersEnabled: const {ColorPickerType.wheel: true},
+              pickersEnabled: const {
+                ColorPickerType.both: false,
+                ColorPickerType.primary: false,
+                ColorPickerType.accent: true,
+                ColorPickerType.wheel: true,
+              },
+              pickerTypeLabels: const {
+                ColorPickerType.accent: 'Pre-defined Colors',
+              },
             ),
           ),
           actions: [
