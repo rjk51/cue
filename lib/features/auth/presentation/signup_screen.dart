@@ -126,26 +126,9 @@ class _SignupScreenState extends State<SignupScreen> {
         return;
       }
 
-      if (result.status == GoogleSignInStatus.needsSignup) {
-        // User initiated sign up via Google - complete sign up by creating the account
-        try {
-          final userCredential = await _authService.signInWithGoogle();
-          if (userCredential != null && mounted) {
-            await _storage.set('device_sync_onboarding_shown', true);
-            Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(builder: (context) => const OnboardingScreen()),
-              (route) => false,
-            );
-          }
-        } catch (e) {
-          if (mounted) context.showErrorSnackbar(e.toString());
-        }
-        return;
-      }
-
-      // Successfully signed in with Google
+      // Successfully signed in/up with Google
       if (mounted) {
+        await _storage.set('device_sync_onboarding_shown', true);
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const OnboardingScreen()),

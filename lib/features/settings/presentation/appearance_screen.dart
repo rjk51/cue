@@ -13,16 +13,23 @@ class AppearanceScreen extends StatefulWidget {
 
 class _AppearanceScreenState extends State<AppearanceScreen> {
   final ThemeService _themeService = ThemeService();
-  Color _selectedColor = const Color(0xFFFFB4A3);
-  Color? _backgroundColor;
-  Color? _textColor;
-  String _themeMode = 'light';
+  // Initialize from ThemeNotifier immediately to prevent white flash
+  late Color _selectedColor;
+  late Color? _backgroundColor;
+  late Color? _textColor;
+  late String _themeMode;
   double _fontSizeScale = 1.0;
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
+    // Get theme values synchronously from ThemeNotifier
+    _selectedColor = ThemeNotifier.instance.accentColor;
+    _backgroundColor = ThemeNotifier.instance.backgroundColor;
+    _textColor = ThemeNotifier.instance.textColor;
+    // Initialize theme mode from ThemeNotifier for immediate correct background
+    _themeMode = ThemeNotifier.instance.isDarkMode ? 'dark' : 'light';
     _loadSettings();
   }
 

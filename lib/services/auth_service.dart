@@ -181,16 +181,6 @@ class AuthService {
         );
       }
 
-      // If no account exists for this email, ask the app to go to sign up flow
-      if (signInMethods.isEmpty) {
-        // Sign out to avoid leaving Google signed in
-        await _googleSignIn.signOut();
-        return GoogleSignInResult(
-          status: GoogleSignInStatus.needsSignup,
-          email: email,
-        );
-      }
-
       // Obtain the auth details from the request
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
 
@@ -201,6 +191,7 @@ class AuthService {
       );
 
       // Sign in to Firebase with the Google credential
+      // This will either sign in existing user or create new account
       final userCredential = await _auth.signInWithCredential(credential);
       
       // Create user document if this is a new user
@@ -220,6 +211,7 @@ class AuthService {
       return GoogleSignInResult(
         status: GoogleSignInStatus.success,
         userCredential: userCredential,
+        isNewUser: userCredential.additionalUserInfo?.isNewUser ?? false,
       );
     } on FirebaseAuthException catch (e) {
       await _googleSignIn.signOut();
@@ -578,7 +570,6 @@ enum GoogleSignInStatus {
   success,
   cancelled,
   needsLinking,
-  needsSignup,
 }
 
 // Result class for Google Sign-In
@@ -587,12 +578,14 @@ class GoogleSignInResult {
   final UserCredential? userCredential;
   final String? email;
   final List<String>? existingProviders;
+  final bool isNewUser;
 
   GoogleSignInResult({
     required this.status,
     this.userCredential,
     this.email,
     this.existingProviders,
+    this.isNewUser = false,
   });
 }
 

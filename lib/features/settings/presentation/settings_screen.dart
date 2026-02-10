@@ -30,9 +30,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final ThemeService _themeService = ThemeService();
   final AuthService _authService = AuthService();
 
-  Color _accentColor = const Color(0xFF2D7A78);
-  Color? _backgroundColor;
-  bool _isDarkMode = false;
+  // Initialize from ThemeNotifier immediately to prevent white flash
+  late Color _accentColor;
+  late Color? _backgroundColor;
+  late bool _isDarkMode;
   String _themeMode = 'light';
   String _userName = 'User';
   String _userEmail = 'user@cue.app';
@@ -42,6 +43,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
+    // Get theme values synchronously from ThemeNotifier
+    _accentColor = ThemeNotifier.instance.accentColor;
+    _backgroundColor = ThemeNotifier.instance.backgroundColor;
+    _isDarkMode = ThemeNotifier.instance.isDarkMode;
     _loadThemeSettings();
     _loadUserInfo();
     _loadVersionInfo();
@@ -177,13 +182,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
         backgroundColor: _isDarkMode ? const Color(0xFF2A2A2A) : Colors.white,
-        title: Text(
-          'Delete Account',
-          style: TextStyle(
-            color: _isDarkMode ? Colors.white : const Color(0xFF2D2D2D),
-            fontWeight: FontWeight.w600,
-          ),
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red),
+            SizedBox(width: 12.w),
+            Expanded(
+              child: Text(
+                'Delete Account',
+                style: TextStyle(
+                  color: _isDarkMode ? Colors.white : const Color(0xFF2D2D2D),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
         ),
         content: Text(
           'Are you sure you want to delete your account? This action cannot be undone. All your data will be permanently deleted.',
@@ -196,17 +210,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onPressed: () => Navigator.pop(context, false),
             child: Text('Cancel', style: TextStyle(color: _accentColor)),
           ),
-          TextButton(
+          ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(
-              backgroundColor: Colors.red.withOpacity(0.1),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.r)),
             ),
-            child: const Text(
-              'Delete',
-              style: TextStyle(
-                color: Colors.red,
-                fontWeight: FontWeight.w600,
-              ),
+            child: Row(
+              children: const [
+                Icon(Icons.delete_outline, color: Colors.white),
+                SizedBox(width: 8),
+                Text('Delete Account'),
+              ],
             ),
           ),
         ],
@@ -217,28 +233,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
       try {
         // Show loading indicator
         if (mounted) {
+          final dialogTextColor = _isDarkMode ? Colors.white : const Color(0xFF2D2D2D);
           showDialog(
             context: context,
             barrierDismissible: false,
-            builder: (context) => Center(
-              child: Container(
-                padding: EdgeInsets.all(24.r),
-                decoration: BoxDecoration(
-                  color: _isDarkMode ? const Color(0xFF2A2A2A) : Colors.white,
-                  borderRadius: BorderRadius.circular(16.r),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircularProgressIndicator(color: _accentColor),
-                    SizedBox(height: 16.h),
-                    Text(
-                      'Deleting account...',
-                      style: TextStyle(
-                        color: _isDarkMode ? Colors.white : const Color(0xFF2D2D2D),
+            builder: (context) => WillPopScope(
+              onWillPop: () async => false,
+              child: Dialog(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                backgroundColor: _isDarkMode ? const Color(0xFF2A2A2A) : Colors.white,
+                child: Padding(
+                  padding: EdgeInsets.all(20.r),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 28.w,
+                        height: 28.w,
+                        child: CircularProgressIndicator(color: _accentColor),
                       ),
-                    ),
-                  ],
+                      SizedBox(width: 16.w),
+                      Flexible(
+                        child: Text(
+                          'Deleting account...',
+                          style: TextStyle(color: dialogTextColor, fontSize: 14.sp),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

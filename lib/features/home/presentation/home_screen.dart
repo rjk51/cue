@@ -893,7 +893,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           // Expandable FAB positioned in Stack
           Positioned(
             right: 34.w,
-            bottom: MediaQuery.of(context).padding.bottom + 30.h,
+            bottom: MediaQuery.of(context).padding.bottom + 2.h,
             child: Container(
               key: _fabKey,
               width: 64.w,
@@ -924,7 +924,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           if (_totalTasksCount > 0)
             Positioned(
               left: 20.w,
-              bottom: MediaQuery.of(context).padding.bottom + 30.h,
+              bottom: MediaQuery.of(context).padding.bottom + 15.h,
               child: _buildProgressBar(),
             ),
 

@@ -21,15 +21,20 @@ class _DevicesScreenState extends State<DevicesScreen> {
   final ThemeService _themeService = ThemeService();
   final NotificationService _notificationService = NotificationService();
   
-  Color _accentColor = const Color(0xFFFFB4A3);
-  Color? _backgroundColor;
-  bool _isDarkMode = false;
+  // Initialize from ThemeNotifier immediately to prevent white flash
+  late Color _accentColor;
+  late Color? _backgroundColor;
+  late bool _isDarkMode;
   String? _currentDeviceToken;
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
+    // Get theme values synchronously from ThemeNotifier
+    _accentColor = ThemeNotifier.instance.accentColor;
+    _backgroundColor = ThemeNotifier.instance.backgroundColor;
+    _isDarkMode = ThemeNotifier.instance.isDarkMode;
     _loadThemeSettings();
     _loadCurrentDeviceToken();
     ThemeNotifier.instance.addListener(_onThemeChanged);

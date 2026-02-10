@@ -21,9 +21,9 @@ class _PulseScreenState extends State<PulseScreen>
   final ThemeService _themeService = ThemeService();
   final PulseService _pulseService = PulseService();
 
-  Color _accentColor = const Color(0xFF2D7A78);
-  Color? _backgroundColor;
-  bool _isDarkMode = false;
+  late Color _accentColor;
+  late Color? _backgroundColor;
+  late bool _isDarkMode;
 
   PulseData? _data;
   bool _isLoading = true;
@@ -35,6 +35,11 @@ class _PulseScreenState extends State<PulseScreen>
   @override
   void initState() {
     super.initState();
+    // Initialize theme values synchronously from ThemeNotifier to prevent white flash
+    _accentColor = ThemeNotifier.instance.accentColor;
+    _backgroundColor = ThemeNotifier.instance.backgroundColor;
+    _isDarkMode = ThemeNotifier.instance.isDarkMode;
+    
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 600),
       vsync: this,

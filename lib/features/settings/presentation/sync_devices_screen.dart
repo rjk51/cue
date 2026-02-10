@@ -16,14 +16,19 @@ class SyncDevicesScreen extends StatefulWidget {
 
 class _SyncDevicesScreenState extends State<SyncDevicesScreen> {
   final ThemeService _themeService = ThemeService();
-  Color _accentColor = const Color(0xFF2D7A78);
-  Color? _backgroundColor;
-  bool _isDarkMode = false;
+  // Initialize from ThemeNotifier immediately to prevent white flash
+  late Color _accentColor;
+  late Color? _backgroundColor;
+  late bool _isDarkMode;
   String _currentDeviceId = '';
 
   @override
   void initState() {
     super.initState();
+    // Get theme values synchronously from ThemeNotifier
+    _accentColor = ThemeNotifier.instance.accentColor;
+    _backgroundColor = ThemeNotifier.instance.backgroundColor;
+    _isDarkMode = ThemeNotifier.instance.isDarkMode;
     _loadThemeSettings();
     _getCurrentDeviceId();
     ThemeNotifier.instance.addListener(_onThemeChanged);
