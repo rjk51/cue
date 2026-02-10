@@ -24,6 +24,7 @@ import '../../../shared/widgets/delete_recurring_dialog.dart';
 import '../../../shared/widgets/tutorial_overlay.dart';
 import 'widgets/current_cue_card.dart';
 import '../../pulse/presentation/pulse_screen.dart';
+import '../../buddy/presentation/buddy_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -837,6 +838,33 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Buddy button
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const BuddyScreen(),
+                        ),
+                      );
+                      if (mounted) {
+                        await _loadThemeSettings();
+                      }
+                    },
+                    customBorder: const CircleBorder(),
+                    child: Container(
+                      padding: EdgeInsets.all(8.r),
+                      child: Icon(
+                        Icons.people_rounded,
+                        color: _accentColor,
+                        size: 26.sp,
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 4.w),
                 // Pulse button
                 Material(
                   color: Colors.transparent,
