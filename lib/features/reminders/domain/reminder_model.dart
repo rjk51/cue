@@ -77,6 +77,10 @@ class Reminder {
 
   /// When the reminder will next fire (snooze time). Set when user snoozes, cleared when completed.
   final DateTime? snoozedUntil;
+  
+  /// List of attachments (files/photos) attached to this reminder
+  /// Each attachment contains: url, name, type, size
+  final List<Map<String, dynamic>>? attachments;
 
   Reminder({
     required this.id,
@@ -100,6 +104,7 @@ class Reminder {
     this.overrides,
     this.scheduledTimeAtSnooze,
     this.snoozedUntil,
+    this.attachments,
   });
 
   // Convert Reminder to Map for Firestore
@@ -130,6 +135,8 @@ class Reminder {
         'scheduledTimeAtSnooze': Timestamp.fromDate(scheduledTimeAtSnooze!),
       if (snoozedUntil != null)
         'snoozedUntil': Timestamp.fromDate(snoozedUntil!),
+      if (attachments != null && attachments!.isNotEmpty)
+        'attachments': attachments,
     };
   }
 
@@ -176,6 +183,13 @@ class Reminder {
       snoozedUntil: map['snoozedUntil'] != null
           ? (map['snoozedUntil'] as Timestamp).toDate()
           : null,
+      attachments: map['attachments'] != null
+          ? List<Map<String, dynamic>>.from(
+              (map['attachments'] as List).map(
+                (item) => Map<String, dynamic>.from(item as Map),
+              ),
+            )
+          : null,
     );
   }
 
@@ -220,6 +234,7 @@ class Reminder {
     Map<String, Map<String, dynamic>>? overrides,
     DateTime? scheduledTimeAtSnooze,
     DateTime? snoozedUntil,
+    List<Map<String, dynamic>>? attachments,
   }) {
     return Reminder(
       id: id ?? this.id,
@@ -244,6 +259,7 @@ class Reminder {
       scheduledTimeAtSnooze:
           scheduledTimeAtSnooze ?? this.scheduledTimeAtSnooze,
       snoozedUntil: snoozedUntil ?? this.snoozedUntil,
+      attachments: attachments ?? this.attachments,
     );
   }
 

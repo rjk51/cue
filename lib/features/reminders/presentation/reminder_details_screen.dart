@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../domain/reminder_model.dart';
 import '../data/reminder_service.dart';
 import '../../../services/theme_service.dart';
 import '../../../services/theme_notifier.dart';
+import '../../../services/file_storage_service.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
 import '../../../shared/widgets/confirmation_dialog.dart';
 import '../../../shared/widgets/delete_recurring_dialog.dart';
@@ -233,6 +235,38 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
         }
       },
     );
+  }
+
+  Future<void> _openAttachment(String url) async {
+    try {
+      final uri = Uri.parse(url);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          context.showErrorSnackbar('Cannot open attachment');
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        context.showErrorSnackbar('Error opening attachment: $e');
+      }
+    }
+  }
+
+  IconData _getFileIcon(String fileType) {
+    switch (fileType) {
+      case 'image':
+        return Icons.image;
+      case 'document':
+        return Icons.description;
+      case 'video':
+        return Icons.video_library;
+      case 'audio':
+        return Icons.audio_file;
+      default:
+        return Icons.insert_drive_file;
+    }
   }
 
   @override
@@ -487,6 +521,160 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
                         ],
                       ),
                     ),
+
+                    // Attachments Section
+                    if (widget.reminder.attachments != null &&
+                        widget.reminder.attachments!.isNotEmpty) ...[                    SizedBox(height: 24.h),
+                      Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(20.r),
+                        decoration: BoxDecoration(
+                          color: cardColor,
+                          borderRadius: BorderRadius.circular(20.r),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.attach_file,
+                                  size: 16.sp,
+                                  color: subtitleColor,
+                                ),
+                                SizedBox(width: 8.w),
+                                Text(
+                                  'ATTACHMENTS',
+                                  style: TextStyle(
+                                    color: subtitleColor,
+                                    fontSize: 11.sp,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 1.2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: 12.h),
+                            ...List.generate(
+                              widget.reminder.attachments!.length,
+                              (index) {
+                                final attachment =
+                                    widget.reminder.attachments![index];
+                                final fileType = attachment['type'] ?? 'file';
+                                final fileName =
+                                    attachment['name'] ?? 'Unknown';
+                                final fileSize = attachment['size'] ?? 0;
+                                final fileUrl = attachment['url'] ?? '';
+
+                                return InkWell(
+                                  onTap: () {
+                                    _openAttachment(fileUrl);
+                                  },
+                                  borderRadius: BorderRadius.circular(12.r),
+                                  child: Container(
+                                    margin: EdgeInsets.only(bottom: 8.h),
+                                    padding: EdgeInsets.all(12.r),
+                                    decoration: BoxDecoration(
+                                      color: _isDarkMode
+                                          ? Colors.white.withOpacity(0.05)
+                                          : Colors.grey.shade100,
+                                      borderRadius:
+                                          BorderRadius.circular(12.r),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        // File type icon or image preview
+                                        if (fileType == 'image')
+                                          ClipRRect(
+                                            borderRadius:
+                                                BorderRadius.circular(8.r),
+                                            child: Image.network(
+                                              fileUrl,
+                                              width: 48.w,
+                                              height: 48.h,
+                                              fit: BoxFit.cover,
+                                              errorBuilder:
+                                                  (context, error, stackTrace) {
+                                                return Container(
+                                                  width: 48.w,
+                                                  height: 48.h,
+                                                  decoration: BoxDecoration(
+                                                    color: _accentColor
+                                                        .withOpacity(0.1),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8.r),
+                                                  ),
+                                                  child: Icon(
+                                                    Icons.image,
+                                                    color: _accentColor,
+                                                    size: 24.sp,
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                          )
+                                        else
+                                          Container(
+                                            width: 48.w,
+                                            height: 48.h,
+                                            decoration: BoxDecoration(
+                                              color: _accentColor
+                                                  .withOpacity(0.1),
+                                              borderRadius:
+                                                  BorderRadius.circular(8.r),
+                                            ),
+                                            child: Icon(
+                                              _getFileIcon(fileType),
+                                              color: _accentColor,
+                                              size: 24.sp,
+                                            ),
+                                          ),
+                                        SizedBox(width: 12.w),
+                                        // File info
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                fileName,
+                                                style: TextStyle(
+                                                  color: textColor,
+                                                  fontSize: 14.sp,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                              SizedBox(height: 2.h),
+                                              Text(
+                                                FileStorageService
+                                                    .formatFileSize(fileSize),
+                                                style: TextStyle(
+                                                  color: subtitleColor,
+                                                  fontSize: 12.sp,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        // Open icon
+                                        Icon(
+                                          Icons.open_in_new,
+                                          color: _accentColor,
+                                          size: 20.sp,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
 
                     SizedBox(height: 40.h),
                   ],
