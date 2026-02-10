@@ -946,12 +946,88 @@ export const processPendingNotifications = functions.pubsub
       for (const doc of snapshot.docs) {
         const notification = doc.data();
         const reminderId = notification.reminderId;
+        const notificationType = notification.type;
 
         try {
           // Delete the pending notification FIRST to ensure only one process handles it
           await doc.ref.delete();
-          console.log(`🔒 Processing reminder [${reminderId}]: "${notification.reminderName}"`);
+          console.log(`🔒 Processing notification [${reminderId}]: "${notification.reminderName}"`);
 
+          // Special handling for buddy nudges - these don't have a reminder document
+          if (notificationType === "buddy_nudge" || (reminderId && reminderId.startsWith("buddy_nudge_"))) {
+            console.log("👋 Processing buddy nudge notification");
+            const userId = notification.userId;
+
+            if (!userId) {
+              console.log("⚠️  No userId in buddy nudge, skipping");
+              continue;
+            }
+
+            console.log(`📱 Querying for active devices for user: ${userId}...`);
+            const devicesSnapshot = await db
+              .collection("devices")
+              .where("userId", "==", userId)
+              .where("active", "==", true)
+              .get();
+
+            if (devicesSnapshot.empty) {
+              console.log("⚠️  No active devices found for buddy nudge, skipping");
+              continue;
+            }
+            console.log(`✅ Found ${devicesSnapshot.size} active device(s)`);
+
+            // Send buddy nudge notifications
+            const sendPromises = devicesSnapshot.docs.map(async (deviceDoc) => {
+              const deviceId = deviceDoc.id;
+              const fcmToken = deviceDoc.data().fcmToken;
+              const platform = deviceDoc.data().platform || "unknown";
+
+              if (!fcmToken) {
+                console.log(`⏭️  Skipping device [${deviceId}] - no FCM token`);
+                return;
+              }
+
+              console.log(`📱 Sending buddy nudge to [${platform.toUpperCase()}] device [${deviceId}]`);
+
+              const message = {
+                token: fcmToken,
+                data: {
+                  type: "buddy_nudge",
+                  title: notification.reminderName || "Buddy Nudge",
+                  body: notification.reminderDescription || "Your buddy sent you a nudge!",
+                  click_action: "FLUTTER_NOTIFICATION_CLICK",
+                },
+                notification: {
+                  title: notification.reminderName || "Buddy Nudge",
+                  body: notification.reminderDescription || "Your buddy sent you a nudge!",
+                },
+                android: {
+                  priority: "high" as const,
+                },
+                apns: {
+                  payload: {
+                    aps: {
+                      "alert": {
+                        title: notification.reminderName || "Buddy Nudge",
+                        body: notification.reminderDescription || "Your buddy sent you a nudge!",
+                      },
+                      "sound": "default",
+                      "badge": 1,
+                    },
+                  },
+                },
+              };
+
+              await messaging.send(message);
+              console.log(`✅ [${platform.toUpperCase()}] Buddy nudge delivered!`);
+            });
+
+            await Promise.all(sendPromises);
+            console.log("✅ Buddy nudge processed successfully");
+            continue;
+          }
+
+          // Regular reminder notification handling
           // Check if reminder still exists and isn't completed
           const reminderDoc = await db.collection("reminders").doc(reminderId).get();
 

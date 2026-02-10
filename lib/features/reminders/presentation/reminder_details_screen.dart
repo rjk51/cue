@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../domain/reminder_model.dart';
 import '../data/reminder_service.dart';
 import '../../../services/theme_service.dart';
 import '../../../services/theme_notifier.dart';
+import '../../../services/file_storage_service.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
 import '../../../shared/widgets/confirmation_dialog.dart';
 import '../../../shared/widgets/delete_recurring_dialog.dart';
@@ -41,9 +43,12 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
     _loadThemeSettings();
     ThemeNotifier.instance.addListener(_onThemeChanged);
     
-    // Update UI when focus changes
+    // Update UI when focus changes and auto-save notes on blur
     _notesFocusNode.addListener(() {
       setState(() {});
+      if (!_notesFocusNode.hasFocus) {
+        _saveNotes();
+      }
     });
   }
 
@@ -235,6 +240,38 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
     );
   }
 
+  Future<void> _openAttachment(String url) async {
+    try {
+      final uri = Uri.parse(url);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          context.showErrorSnackbar('Cannot open attachment');
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        context.showErrorSnackbar('Error opening attachment: $e');
+      }
+    }
+  }
+
+  IconData _getFileIcon(String fileType) {
+    switch (fileType) {
+      case 'image':
+        return Icons.image;
+      case 'document':
+        return Icons.description;
+      case 'video':
+        return Icons.video_library;
+      case 'audio':
+        return Icons.audio_file;
+      default:
+        return Icons.insert_drive_file;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // Match home screen colors
@@ -252,30 +289,53 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
         ? Color.lerp(const Color(0xFF1E1E1E), _accentColor, 0.1)!
         : Colors.white;
 
-    // Get reminder icon and color
-    final reminderIcon = widget.reminder.icon;
-    final reminderColor = widget.reminder.color;
+    return StreamBuilder<Reminder?>(
+      stream: _reminderService.getReminderStream(widget.reminder.id),
+      initialData: widget.reminder,
+      builder: (context, snapshot) {
+        // Use stream data if available, otherwise fallback to widget.reminder
+        final reminder = snapshot.data ?? widget.reminder;
+        
+        // Update notes controller if reminder notes changed from stream
+        if (snapshot.hasData && 
+            !_notesFocusNode.hasFocus && 
+            _notesController.text != (reminder.notes ?? '')) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _notesController.text = reminder.notes ?? '';
+          });
+        }
 
-    return Scaffold(
-      backgroundColor: backgroundColor,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: textColor, size: 24.sp),
-          onPressed: () => Navigator.pop(context),
-        ),
-        centerTitle: true,
-        title: Text(
-          'REMINDER DETAILS',
-          style: TextStyle(
-            color: subtitleColor,
-            fontSize: 14.sp,
-            fontWeight: FontWeight.w500,
+        // Get reminder icon and color
+        final reminderIcon = reminder.icon;
+        final reminderColor = reminder.color;
+
+        return Scaffold(
+          backgroundColor: backgroundColor,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back, color: textColor, size: 24.sp),
+              onPressed: () => Navigator.pop(context),
+            ),
+            centerTitle: true,
+            title: Text(
+              'REMINDER DETAILS',
+              style: TextStyle(
+                color: subtitleColor,
+                fontSize: 14.sp,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
-        ),
-      ),
-      body: SafeArea(
+          body: _buildBody(context, reminder, backgroundColor, textColor, subtitleColor, cardColor, reminderIcon, reminderColor),
+        );
+      },
+    );
+  }
+
+  Widget _buildBody(BuildContext context, Reminder reminder, Color backgroundColor, Color textColor, Color subtitleColor, Color cardColor, IconData reminderIcon, Color reminderColor) {
+    return SafeArea(
         child: Column(
           children: [
             Expanded(
@@ -314,11 +374,11 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
                                 ? const Color(0xFF2A2A2A)
                                 : Colors.white,
                           ),
-                          child: widget.reminder.customIconUrl != null
+                          child: reminder.customIconUrl != null
                               ? ClipRRect(
                                   borderRadius: BorderRadius.circular(32.r),
                                   child: Image.network(
-                                    widget.reminder.customIconUrl!,
+                                    reminder.customIconUrl!,
                                     width: 100.w,
                                     height: 100.h,
                                     fit: BoxFit.cover,
@@ -344,7 +404,7 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
 
                     // Reminder Title
                     Text(
-                      widget.reminder.name,
+                      reminder.name,
                       style: TextStyle(
                         color: textColor,
                         fontSize: 28.sp,
@@ -366,14 +426,14 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
                         ),
                         SizedBox(width: 6.w),
                         Text(
-                          DateFormat('h:mm a').format(widget.reminder.time),
+                          DateFormat('h:mm a').format(reminder.time),
                           style: TextStyle(
                             color: subtitleColor,
                             fontSize: 16.sp,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
-                        if (widget.reminder.recurrence == null) ...[ // If reminder is not recurring, show date
+                        if (reminder.recurrence == null) ...[ // If reminder is not recurring, show date
                           SizedBox(width: 12.w),
                           Icon(
                             Icons.calendar_today,
@@ -382,7 +442,7 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
                           ),
                           SizedBox(width: 6.w),
                           Text(
-                            DateFormat('MMM dd, yyyy').format(widget.reminder.time),
+                            DateFormat('MMM dd, yyyy').format(reminder.time),
                             style: TextStyle(
                               color: subtitleColor,
                               fontSize: 16.sp,
@@ -394,9 +454,9 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
                     ),
 
                     // Recurrence Date Range (for recurring reminders)
-                    if (widget.reminder.recurrence != null) ...[
+                    if (reminder.recurrence != null) ...[
                       SizedBox(height: 8.h),
-                      _buildRecurrenceDateRange(subtitleColor),
+                      _buildRecurrenceDateRange(reminder, subtitleColor),
                     ],
 
                     SizedBox(height: 32.h),
@@ -488,6 +548,160 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
                         ],
                       ),
                     ),
+
+                    // Attachments Section
+                    if (reminder.attachments != null &&
+                        reminder.attachments!.isNotEmpty) ...[                    SizedBox(height: 24.h),
+                      Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(20.r),
+                        decoration: BoxDecoration(
+                          color: cardColor,
+                          borderRadius: BorderRadius.circular(20.r),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.attach_file,
+                                  size: 16.sp,
+                                  color: subtitleColor,
+                                ),
+                                SizedBox(width: 8.w),
+                                Text(
+                                  'ATTACHMENTS',
+                                  style: TextStyle(
+                                    color: subtitleColor,
+                                    fontSize: 11.sp,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 1.2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: 12.h),
+                            ...List.generate(
+                              reminder.attachments!.length,
+                              (index) {
+                                final attachment =
+                                    reminder.attachments![index];
+                                final fileType = attachment['type'] ?? 'file';
+                                final fileName =
+                                    attachment['name'] ?? 'Unknown';
+                                final fileSize = attachment['size'] ?? 0;
+                                final fileUrl = attachment['url'] ?? '';
+
+                                return InkWell(
+                                  onTap: () {
+                                    _openAttachment(fileUrl);
+                                  },
+                                  borderRadius: BorderRadius.circular(12.r),
+                                  child: Container(
+                                    margin: EdgeInsets.only(bottom: 8.h),
+                                    padding: EdgeInsets.all(12.r),
+                                    decoration: BoxDecoration(
+                                      color: _isDarkMode
+                                          ? Colors.white.withOpacity(0.05)
+                                          : Colors.grey.shade100,
+                                      borderRadius:
+                                          BorderRadius.circular(12.r),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        // File type icon or image preview
+                                        if (fileType == 'image')
+                                          ClipRRect(
+                                            borderRadius:
+                                                BorderRadius.circular(8.r),
+                                            child: Image.network(
+                                              fileUrl,
+                                              width: 48.w,
+                                              height: 48.h,
+                                              fit: BoxFit.cover,
+                                              errorBuilder:
+                                                  (context, error, stackTrace) {
+                                                return Container(
+                                                  width: 48.w,
+                                                  height: 48.h,
+                                                  decoration: BoxDecoration(
+                                                    color: _accentColor
+                                                        .withOpacity(0.1),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8.r),
+                                                  ),
+                                                  child: Icon(
+                                                    Icons.image,
+                                                    color: _accentColor,
+                                                    size: 24.sp,
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                          )
+                                        else
+                                          Container(
+                                            width: 48.w,
+                                            height: 48.h,
+                                            decoration: BoxDecoration(
+                                              color: _accentColor
+                                                  .withOpacity(0.1),
+                                              borderRadius:
+                                                  BorderRadius.circular(8.r),
+                                            ),
+                                            child: Icon(
+                                              _getFileIcon(fileType),
+                                              color: _accentColor,
+                                              size: 24.sp,
+                                            ),
+                                          ),
+                                        SizedBox(width: 12.w),
+                                        // File info
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                fileName,
+                                                style: TextStyle(
+                                                  color: textColor,
+                                                  fontSize: 14.sp,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                              SizedBox(height: 2.h),
+                                              Text(
+                                                FileStorageService
+                                                    .formatFileSize(fileSize),
+                                                style: TextStyle(
+                                                  color: subtitleColor,
+                                                  fontSize: 12.sp,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        // Open icon
+                                        Icon(
+                                          Icons.open_in_new,
+                                          color: _accentColor,
+                                          size: 20.sp,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
 
                     SizedBox(height: 40.h),
                   ],
@@ -662,12 +876,11 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
             ),
           ],
         ),
-      ),
     );
   }
 
-  Widget _buildRecurrenceDateRange(Color subtitleColor) {
-    final recurrence = widget.reminder.recurrence;
+  Widget _buildRecurrenceDateRange(Reminder reminder, Color subtitleColor) {
+    final recurrence = reminder.recurrence;
     if (recurrence == null) return const SizedBox.shrink();
 
     DateTime? startDate;

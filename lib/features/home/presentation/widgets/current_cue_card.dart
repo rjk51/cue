@@ -95,12 +95,19 @@ class _CurrentCueCardState extends State<CurrentCueCard>
   void didUpdateWidget(CurrentCueCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     // Update notes controller when reminder changes
-    if (oldWidget.reminder.id != widget.reminder.id) {
+    if (oldWidget.reminder.id != widget.reminder.id ||
+        oldWidget.occurrenceTime != widget.occurrenceTime) {
       _notesController.text = widget.reminder.notes ?? '';
       // Reset slider state
       _dragOffset = 0;
       _swipeController.reset();
       _isCompleting = false;
+    } else if (oldWidget.reminder.notes != widget.reminder.notes) {
+      // Update notes if they changed but it's the same reminder
+      // Only update if the notes field is not currently focused to avoid overwriting user input
+      if (!_notesFocusNode.hasFocus) {
+        _notesController.text = widget.reminder.notes ?? '';
+      }
     }
   }
 
@@ -626,6 +633,12 @@ class _CurrentCueCardState extends State<CurrentCueCard>
                   onComplete: () {
                     overlayEntry.remove();
                     widget.onMarkCompleted(widget.reminder.id);
+                    // Reset completing flag after callback
+                    if (mounted) {
+                      setState(() {
+                        _isCompleting = false;
+                      });
+                    }
                   },
                 ),
               );

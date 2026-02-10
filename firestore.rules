@@ -28,5 +28,15 @@ service cloud.firestore {
       allow read: if true;
       allow write: if true; // Only Cloud Functions should write, but allowing for testing
     }
+
+    // Buddy pairs - both participants can read/write
+    match /buddy_pairs/{pairId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Buddy nudges
+    match /buddy_nudges/{nudgeId} {
+      allow read, write: if request.auth != null;
+    }
   }
 }

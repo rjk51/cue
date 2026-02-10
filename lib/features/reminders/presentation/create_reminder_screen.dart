@@ -5,6 +5,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
 import 'package:flex_color_picker/flex_color_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 
 import '../domain/recurrence_rule.dart';
@@ -15,6 +17,7 @@ import '../../../services/theme_service.dart';
 import '../../../services/theme_notifier.dart';
 import '../../../services/tutorial_service.dart';
 import '../../../services/pro_status_service.dart';
+import '../../../services/file_storage_service.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
 import '../../../shared/widgets/cupertino_pickers.dart';
 import '../../../shared/widgets/edit_recurring_dialog.dart';
@@ -46,9 +49,11 @@ class _NewReminderScreenState extends State<NewReminderScreen>
   final NotificationService _notificationService = NotificationService();
   final TutorialService _tutorialService = TutorialService();
   final ProStatusService _proStatusService = ProStatusService();
+  final FileStorageService _fileStorageService = FileStorageService();
   final TextEditingController _reminderController = TextEditingController();
   final WhisperSpeechService _whisperService = WhisperSpeechService.instance;
   final ChatGPTService _chatGPTService = ChatGPTService.instance;
+  final ImagePicker _imagePicker = ImagePicker();
 
   Color _accentColor = const Color(0xFFFFB4A3);
   Color? _backgroundColor;
@@ -91,6 +96,10 @@ class _NewReminderScreenState extends State<NewReminderScreen>
   int _autoSnoozeInterval = 10; // default 10 minutes
   int _autoSnoozeMaxCount = 3; // default 3 times
   int _sliderMaxValue = 60; // dynamic max value for slider
+
+  // Attachments
+  List<Map<String, dynamic>> _attachments = [];
+  bool _isUploadingAttachment = false;
 
   // Map day indices to abbreviated names
   final List<String> _dayAbbreviations = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -267,6 +276,11 @@ class _NewReminderScreenState extends State<NewReminderScreen>
     _autoSnoozeEnabled = reminder.autoSnoozeEnabled;
     _autoSnoozeInterval = reminder.autoSnoozeInterval;
     _autoSnoozeMaxCount = reminder.autoSnoozeMaxCount;
+
+    // Load existing attachments
+    if (reminder.attachments != null) {
+      _attachments = List<Map<String, dynamic>>.from(reminder.attachments!);
+    }
 
     // Adjust slider max value if auto-snooze interval is greater than 60
     if (_autoSnoozeInterval > 60) {
@@ -666,6 +680,244 @@ class _NewReminderScreenState extends State<NewReminderScreen>
     );
   }
 
+  // Attachment handling methods
+  Future<void> _pickImageFromCamera() async {
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 70,
+      );
+      
+      if (image != null) {
+        await _uploadAttachment(File(image.path));
+      }
+    } catch (e) {
+      if (mounted) {
+        context.showErrorSnackbar('Failed to capture image: $e');
+      }
+    }
+  }
+
+  Future<void> _pickImageFromGallery() async {
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 70,
+      );
+      
+      if (image != null) {
+        await _uploadAttachment(File(image.path));
+      }
+    } catch (e) {
+      if (mounted) {
+        context.showErrorSnackbar('Failed to pick image: $e');
+      }
+    }
+  }
+
+  Future<void> _pickFile() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+        allowMultiple: false,
+      );
+
+      if (result != null && result.files.single.path != null) {
+        final file = File(result.files.single.path!);
+        await _uploadAttachment(file);
+      }
+    } catch (e) {
+      if (mounted) {
+        context.showErrorSnackbar('Failed to pick file: $e');
+      }
+    }
+  }
+
+  Future<void> _uploadAttachment(File file) async {
+    // Check file size (max 10MB)
+    final fileSize = await file.length();
+    if (fileSize > 10 * 1024 * 1024) {
+      if (mounted) {
+        context.showWarningSnackbar('File size must be less than 10MB');
+      }
+      return;
+    }
+
+    setState(() {
+      _isUploadingAttachment = true;
+    });
+
+    try {
+      final userId = 'demo_user';
+      final reminderId = widget.reminderToEdit?.id ?? 
+          DateTime.now().millisecondsSinceEpoch.toString();
+      
+      final attachmentData = await _fileStorageService.uploadFile(
+        file: file,
+        userId: userId,
+        reminderId: reminderId,
+      );
+
+      setState(() {
+        _attachments.add(attachmentData);
+        _isUploadingAttachment = false;
+      });
+
+      if (mounted) {
+        context.showSuccessSnackbar('Attachment added successfully');
+      }
+    } catch (e) {
+      setState(() {
+        _isUploadingAttachment = false;
+      });
+      
+      if (mounted) {
+        context.showErrorSnackbar('Failed to upload attachment: $e');
+      }
+    }
+  }
+
+  Future<void> _removeAttachment(int index) async {
+    final attachment = _attachments[index];
+    
+    try {
+      // Delete from storage if it has a storagePath
+      if (attachment['storagePath'] != null) {
+        await _fileStorageService.deleteFile(attachment['storagePath']);
+      }
+      
+      setState(() {
+        _attachments.removeAt(index);
+      });
+      
+      if (mounted) {
+        context.showSuccessSnackbar('Attachment removed');
+      }
+    } catch (e) {
+      if (mounted) {
+        context.showErrorSnackbar('Failed to remove attachment: $e');
+      }
+    }
+  }
+
+  void _showAttachmentOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        final cardColor = _isDarkMode 
+            ? const Color.fromARGB(255, 33, 36, 39) 
+            : Colors.white;
+        final textColor = _isDarkMode ? Colors.white : Colors.black87;
+        
+        return Container(
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(24.r),
+              topRight: Radius.circular(24.r),
+            ),
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(height: 12.h),
+                Container(
+                  width: 40.w,
+                  height: 4.h,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2.r),
+                  ),
+                ),
+                SizedBox(height: 16.h),
+                Text(
+                  'Add Attachment',
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 18.sp,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                SizedBox(height: 16.h),
+                _buildAttachmentOption(
+                  icon: Icons.camera_alt,
+                  label: 'Take Photo',
+                  onTap: () {
+                    Navigator.pop(context);
+                    _pickImageFromCamera();
+                  },
+                ),
+                _buildAttachmentOption(
+                  icon: Icons.photo_library,
+                  label: 'Choose from Gallery',
+                  onTap: () {
+                    Navigator.pop(context);
+                    _pickImageFromGallery();
+                  },
+                ),
+                _buildAttachmentOption(
+                  icon: Icons.attach_file,
+                  label: 'Choose File',
+                  onTap: () {
+                    Navigator.pop(context);
+                    _pickFile();
+                  },
+                ),
+                SizedBox(height: 16.h),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildAttachmentOption({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    final textColor = _isDarkMode ? Colors.white : Colors.black87;
+    
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 16.h),
+        child: Row(
+          children: [
+            Icon(icon, color: _accentColor, size: 24.sp),
+            SizedBox(width: 16.w),
+            Text(
+              label,
+              style: TextStyle(
+                color: textColor,
+                fontSize: 16.sp,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  IconData _getFileIcon(String fileType) {
+    switch (fileType) {
+      case 'image':
+        return Icons.image;
+      case 'document':
+        return Icons.description;
+      case 'video':
+        return Icons.video_library;
+      case 'audio':
+        return Icons.audio_file;
+      default:
+        return Icons.insert_drive_file;
+    }
+  }
+
   List<Map<String, String>> _generateNextOccurrences() {
     if (!_repeatEnabled) return [];
 
@@ -984,6 +1236,7 @@ class _NewReminderScreenState extends State<NewReminderScreen>
           'autoSnoozeEnabled': _autoSnoozeEnabled,
           'autoSnoozeInterval': _autoSnoozeInterval,
           'autoSnoozeMaxCount': _autoSnoozeMaxCount,
+          'attachments': _attachments.isNotEmpty ? _attachments : null,
         };
 
         if (isRecurring &&
@@ -1058,6 +1311,7 @@ class _NewReminderScreenState extends State<NewReminderScreen>
           autoSnoozeInterval: _autoSnoozeInterval,
           autoSnoozeMaxCount: _autoSnoozeMaxCount,
           autoSnoozeCount: 0,
+          attachments: _attachments.isNotEmpty ? _attachments : null,
         );
 
         final reminderId = await _reminderService.addReminder(
@@ -1691,6 +1945,217 @@ class _NewReminderScreenState extends State<NewReminderScreen>
                                           ),
                                       ],
                                     ),
+                                  ],
+                                ),
+                              ),
+
+                              Divider(color: dividerColor, height: 1.h),
+
+                              // Attachments Section
+                              Padding(
+                                padding: EdgeInsets.all(16.r),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          'Attachments',
+                                          style: TextStyle(
+                                            color: textColor,
+                                            fontSize: 16.sp,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        InkWell(
+                                          onTap: _showAttachmentOptions,
+                                          borderRadius:
+                                              BorderRadius.circular(20.r),
+                                          child: Container(
+                                            padding: EdgeInsets.symmetric(
+                                              horizontal: 12.w,
+                                              vertical: 6.h,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: _accentColor
+                                                  .withOpacity(0.1),
+                                              borderRadius:
+                                                  BorderRadius.circular(20.r),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  Icons.add,
+                                                  color: _accentColor,
+                                                  size: 18.sp,
+                                                ),
+                                                SizedBox(width: 4.w),
+                                                Text(
+                                                  'Add',
+                                                  style: TextStyle(
+                                                    color: _accentColor,
+                                                    fontSize: 14.sp,
+                                                    fontWeight:
+                                                        FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    if (_isUploadingAttachment) ...[
+                                      SizedBox(height: 12.h),
+                                      Row(
+                                        children: [
+                                          SizedBox(
+                                            width: 16.w,
+                                            height: 16.h,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                      _accentColor),
+                                            ),
+                                          ),
+                                          SizedBox(width: 12.w),
+                                          Text(
+                                            'Uploading...',
+                                            style: TextStyle(
+                                              color: subtitleColor,
+                                              fontSize: 14.sp,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                    if (_attachments.isNotEmpty) ...[
+                                      SizedBox(height: 12.h),
+                                      ...List.generate(_attachments.length,
+                                          (index) {
+                                        final attachment = _attachments[index];
+                                        final fileType =
+                                            attachment['type'] ?? 'file';
+                                        final fileName =
+                                            attachment['name'] ?? 'Unknown';
+                                        final fileSize =
+                                            attachment['size'] ?? 0;
+                                        
+                                        return Container(
+                                          margin: EdgeInsets.only(bottom: 8.h),
+                                          padding: EdgeInsets.all(12.r),
+                                          decoration: BoxDecoration(
+                                            color: inputBgColor,
+                                            borderRadius:
+                                                BorderRadius.circular(12.r),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              // File type icon or image preview
+                                              if (fileType == 'image')
+                                                ClipRRect(
+                                                  borderRadius:
+                                                      BorderRadius.circular(8.r),
+                                                  child: Image.network(
+                                                    attachment['url'],
+                                                    width: 48.w,
+                                                    height: 48.h,
+                                                    fit: BoxFit.cover,
+                                                    errorBuilder: (context, error,
+                                                        stackTrace) {
+                                                      return Container(
+                                                        width: 48.w,
+                                                        height: 48.h,
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          color: _accentColor
+                                                              .withOpacity(0.1),
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                  8.r),
+                                                        ),
+                                                        child: Icon(
+                                                          Icons.image,
+                                                          color: _accentColor,
+                                                          size: 24.sp,
+                                                        ),
+                                                      );
+                                                    },
+                                                  ),
+                                                )
+                                              else
+                                                Container(
+                                                  width: 48.w,
+                                                  height: 48.h,
+                                                  decoration: BoxDecoration(
+                                                    color: _accentColor
+                                                        .withOpacity(0.1),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8.r),
+                                                  ),
+                                                  child: Icon(
+                                                    _getFileIcon(fileType),
+                                                    color: _accentColor,
+                                                    size: 24.sp,
+                                                  ),
+                                                ),
+                                              SizedBox(width: 12.w),
+                                              // File info
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      fileName,
+                                                      style: TextStyle(
+                                                        color: textColor,
+                                                        fontSize: 14.sp,
+                                                        fontWeight:
+                                                            FontWeight.w500,
+                                                      ),
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
+                                                    SizedBox(height: 2.h),
+                                                    Text(
+                                                      FileStorageService
+                                                          .formatFileSize(
+                                                              fileSize),
+                                                      style: TextStyle(
+                                                        color: subtitleColor,
+                                                        fontSize: 12.sp,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              // Delete button
+                                              IconButton(
+                                                icon: Icon(
+                                                  Icons.close,
+                                                  color: Colors.red,
+                                                  size: 20.sp,
+                                                ),
+                                                onPressed: () =>
+                                                    _removeAttachment(index),
+                                                padding: EdgeInsets.zero,
+                                                constraints: BoxConstraints(
+                                                  minWidth: 32.w,
+                                                  minHeight: 32.h,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      }),
+                                    ],
                                   ],
                                 ),
                               ),

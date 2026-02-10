@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flip_card/flip_card.dart';
 import 'package:lottie/lottie.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../reminders/domain/reminder_model.dart';
 import '../../reminders/data/reminder_service.dart';
 import '../../reminders/presentation/create_reminder_screen.dart';
@@ -23,6 +24,7 @@ import '../../../shared/widgets/delete_recurring_dialog.dart';
 import '../../../shared/widgets/tutorial_overlay.dart';
 import 'widgets/current_cue_card.dart';
 import '../../pulse/presentation/pulse_screen.dart';
+import '../../buddy/presentation/buddy_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -760,12 +762,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                         key: _cueCardKey,
                                         child: CurrentCueCard(
                                           reminder: currentReminder,
+                                          occurrenceTime: currentOccurrenceTime,
                                           accentColor: _accentColor,
                                           isDarkMode: _isDarkMode,
                                           cardColor: cardColor,
                                           textColor: textColor,
                                           subtitleColor: subtitleColor,
-                                          onMarkCompleted: _markAsCompleted,
+                                          onMarkCompleted: (reminderId) =>
+                                              _markAsCompleted(
+                                                reminderId,
+                                                occurrenceTime:
+                                                    currentOccurrenceTime,
+                                              ),
                                           getTimeDisplayText:
                                               _getTimeDisplayText,
                                           isCurrentCue: _isCurrentCue,
@@ -831,6 +839,33 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Buddy button
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const BuddyScreen(),
+                        ),
+                      );
+                      if (mounted) {
+                        await _loadThemeSettings();
+                      }
+                    },
+                    customBorder: const CircleBorder(),
+                    child: Container(
+                      padding: EdgeInsets.all(8.r),
+                      child: Icon(
+                        Icons.people_rounded,
+                        color: _accentColor,
+                        size: 26.sp,
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 4.w),
                 // Pulse button
                 Material(
                   color: Colors.transparent,
@@ -1287,33 +1322,198 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               width: 1.5,
             ),
           ),
-          padding: EdgeInsets.all(8.w),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
+          padding: EdgeInsets.all(12.w),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Edit button
-              _buildSmallActionButton(
-                icon: Icons.edit_rounded,
-                label: 'EDIT',
-                color: _accentColor,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) =>
-                          NewReminderScreen(reminderToEdit: reminder),
-                    ),
-                  );
-                },
-              ),
-              SizedBox(width: 8.w),
-              // Delete button
-              _buildSmallActionButton(
-                icon: Icons.delete_rounded,
-                label: 'Skip/Delete',
-                color: Colors.red.shade400,
-                onTap: () => _handleUpcomingCardDelete(reminder),
+              // Attachments Preview (if any)
+              if (reminder.attachments != null &&
+                  reminder.attachments!.isNotEmpty) ...[                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.attach_file,
+                            size: 12.sp,
+                            color: subtitleColor,
+                          ),
+                          SizedBox(width: 4.w),
+                          Text(
+                            '${reminder.attachments!.length} file${reminder.attachments!.length == 1 ? '' : 's'}',
+                            style: TextStyle(
+                              fontSize: 10.sp,
+                              fontWeight: FontWeight.w600,
+                              color: subtitleColor,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 8.h),
+                      Expanded(
+                        child: ListView.builder(
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: reminder.attachments!.length > 2
+                              ? 2
+                              : reminder.attachments!.length,
+                          itemBuilder: (context, index) {
+                            final attachment =
+                                reminder.attachments![index];
+                            final fileType = attachment['type'] ?? 'file';
+                            final fileName =
+                                attachment['name'] ?? 'Unknown';
+                            final fileUrl = attachment['url'] ?? '';
+
+                            return GestureDetector(
+                              onTap: () => _openAttachment(fileUrl),
+                              child: Container(
+                                margin: EdgeInsets.only(bottom: 6.h),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 8.w,
+                                  vertical: 6.h,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _isDarkMode
+                                      ? Colors.white.withOpacity(0.05)
+                                      : Colors.grey.shade100,
+                                  borderRadius:
+                                      BorderRadius.circular(8.r),
+                                ),
+                                child: Row(
+                                  children: [
+                                    // File icon or image preview
+                                    if (fileType == 'image')
+                                      ClipRRect(
+                                        borderRadius:
+                                            BorderRadius.circular(4.r),
+                                        child: Image.network(
+                                          fileUrl,
+                                          width: 24.w,
+                                          height: 24.h,
+                                          fit: BoxFit.cover,
+                                          errorBuilder:
+                                              (context, error, stackTrace) {
+                                            return Container(
+                                              width: 24.w,
+                                              height: 24.h,
+                                              decoration: BoxDecoration(
+                                                color: reminder.color
+                                                    .withOpacity(0.2),
+                                                borderRadius:
+                                                    BorderRadius.circular(
+                                                        4.r),
+                                              ),
+                                              child: Icon(
+                                                Icons.image,
+                                                color: reminder.color,
+                                                size: 14.sp,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      )
+                                    else
+                                      Container(
+                                        width: 24.w,
+                                        height: 24.h,
+                                        decoration: BoxDecoration(
+                                          color: reminder.color
+                                              .withOpacity(0.15),
+                                          borderRadius:
+                                              BorderRadius.circular(4.r),
+                                        ),
+                                        child: Icon(
+                                          _getFileIcon(fileType),
+                                          color: reminder.color,
+                                          size: 14.sp,
+                                        ),
+                                      ),
+                                    SizedBox(width: 8.w),
+                                    // File name
+                                    Expanded(
+                                      child: Text(
+                                        fileName,
+                                        style: TextStyle(
+                                          fontSize: 11.sp,
+                                          fontWeight: FontWeight.w500,
+                                          color: textColor,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    Icon(
+                                      Icons.open_in_new,
+                                      color: reminder.color,
+                                      size: 12.sp,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      if (reminder.attachments!.length > 2)
+                        Padding(
+                          padding: EdgeInsets.only(top: 4.h),
+                          child: Text(
+                            '+${reminder.attachments!.length - 2} more',
+                            style: TextStyle(
+                              fontSize: 9.sp,
+                              color: subtitleColor,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 8.h),
+              ] else
+                Expanded(child: SizedBox()),
+              // Action Buttons at bottom
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  // Edit button
+                  _buildCompactActionButton(
+                    icon: Icons.edit_rounded,
+                    color: _accentColor,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              NewReminderScreen(reminderToEdit: reminder),
+                        ),
+                      );
+                    },
+                  ),
+                  // View details button
+                  _buildCompactActionButton(
+                    icon: Icons.visibility_rounded,
+                    color: Colors.blue.shade400,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              ReminderDetailsScreen(reminder: reminder),
+                        ),
+                      );
+                    },
+                  ),
+                  // Delete button
+                  _buildCompactActionButton(
+                    icon: Icons.delete_rounded,
+                    color: Colors.red.shade400,
+                    onTap: () => _handleUpcomingCardDelete(reminder),
+                  ),
+                ],
               ),
             ],
           ),
@@ -1439,6 +1639,68 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ),
       ),
     );
+  }
+
+  // Compact action button for card back (icon only)
+  Widget _buildCompactActionButton({
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 44.w,
+        height: 44.h,
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: color.withOpacity(0.3),
+            width: 1.5,
+          ),
+        ),
+        child: Icon(
+          icon,
+          color: color,
+          size: 20.sp,
+        ),
+      ),
+    );
+  }
+
+  // Open attachment URL
+  Future<void> _openAttachment(String url) async {
+    try {
+      final uri = Uri.parse(url);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          context.showErrorSnackbar('Cannot open attachment');
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        context.showErrorSnackbar('Error opening attachment: $e');
+      }
+    }
+  }
+
+  // Get icon for file type
+  IconData _getFileIcon(String fileType) {
+    switch (fileType) {
+      case 'image':
+        return Icons.image;
+      case 'document':
+        return Icons.description;
+      case 'video':
+        return Icons.video_library;
+      case 'audio':
+        return Icons.audio_file;
+      default:
+        return Icons.insert_drive_file;
+    }
   }
 
   // Handle delete action for upcoming cards

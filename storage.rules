@@ -1,0 +1,22 @@
+rules_version = '2';
+
+// Firebase Storage Security Rules
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Allow users to upload, read, and delete their own reminder attachments
+    match /users/{userId}/reminders/{reminderId}/{allPaths=**} {
+      // For prototype: allow all operations (read, write, delete)
+      // In production, you should verify: request.auth != null && request.auth.uid == userId
+      allow read, write, delete: if true;
+      
+      // File size limit: 10MB
+      allow write: if request.resource.size < 10 * 1024 * 1024;
+    }
+    
+    // Deny all other paths by default
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
