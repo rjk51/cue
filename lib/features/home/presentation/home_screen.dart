@@ -1154,12 +1154,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final flipKey = GlobalKey<FlipCardState>();
 
     return GestureDetector(
-      onHorizontalDragEnd: (details) {
-        if (details.primaryVelocity != null) {
-          if (details.primaryVelocity!.abs() > 300) {
-            flipKey.currentState?.toggleCard();
-          }
-        }
+      onLongPress: () {
+        flipKey.currentState?.toggleCard();
       },
       child: FlipCard(
         key: flipKey,
