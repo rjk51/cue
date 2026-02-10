@@ -43,9 +43,12 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
     _loadThemeSettings();
     ThemeNotifier.instance.addListener(_onThemeChanged);
     
-    // Update UI when focus changes
+    // Update UI when focus changes and auto-save notes on blur
     _notesFocusNode.addListener(() {
       setState(() {});
+      if (!_notesFocusNode.hasFocus) {
+        _saveNotes();
+      }
     });
   }
 
@@ -285,30 +288,53 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
         ? Color.lerp(const Color(0xFF1E1E1E), _accentColor, 0.1)!
         : Colors.white;
 
-    // Get reminder icon and color
-    final reminderIcon = widget.reminder.icon;
-    final reminderColor = widget.reminder.color;
+    return StreamBuilder<Reminder?>(
+      stream: _reminderService.getReminderStream(widget.reminder.id),
+      initialData: widget.reminder,
+      builder: (context, snapshot) {
+        // Use stream data if available, otherwise fallback to widget.reminder
+        final reminder = snapshot.data ?? widget.reminder;
+        
+        // Update notes controller if reminder notes changed from stream
+        if (snapshot.hasData && 
+            !_notesFocusNode.hasFocus && 
+            _notesController.text != (reminder.notes ?? '')) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _notesController.text = reminder.notes ?? '';
+          });
+        }
 
-    return Scaffold(
-      backgroundColor: backgroundColor,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: textColor, size: 24.sp),
-          onPressed: () => Navigator.pop(context),
-        ),
-        centerTitle: true,
-        title: Text(
-          'REMINDER DETAILS',
-          style: TextStyle(
-            color: subtitleColor,
-            fontSize: 14.sp,
-            fontWeight: FontWeight.w500,
+        // Get reminder icon and color
+        final reminderIcon = reminder.icon;
+        final reminderColor = reminder.color;
+
+        return Scaffold(
+          backgroundColor: backgroundColor,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back, color: textColor, size: 24.sp),
+              onPressed: () => Navigator.pop(context),
+            ),
+            centerTitle: true,
+            title: Text(
+              'REMINDER DETAILS',
+              style: TextStyle(
+                color: subtitleColor,
+                fontSize: 14.sp,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
-        ),
-      ),
-      body: SafeArea(
+          body: _buildBody(context, reminder, backgroundColor, textColor, subtitleColor, cardColor, reminderIcon, reminderColor),
+        );
+      },
+    );
+  }
+
+  Widget _buildBody(BuildContext context, Reminder reminder, Color backgroundColor, Color textColor, Color subtitleColor, Color cardColor, IconData reminderIcon, Color reminderColor) {
+    return SafeArea(
         child: Column(
           children: [
             Expanded(
@@ -347,11 +373,11 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
                                 ? const Color(0xFF2A2A2A)
                                 : Colors.white,
                           ),
-                          child: widget.reminder.customIconUrl != null
+                          child: reminder.customIconUrl != null
                               ? ClipRRect(
                                   borderRadius: BorderRadius.circular(32.r),
                                   child: Image.network(
-                                    widget.reminder.customIconUrl!,
+                                    reminder.customIconUrl!,
                                     width: 100.w,
                                     height: 100.h,
                                     fit: BoxFit.cover,
@@ -377,7 +403,7 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
 
                     // Reminder Title
                     Text(
-                      widget.reminder.name,
+                      reminder.name,
                       style: TextStyle(
                         color: textColor,
                         fontSize: 28.sp,
@@ -399,14 +425,14 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
                         ),
                         SizedBox(width: 6.w),
                         Text(
-                          DateFormat('h:mm a').format(widget.reminder.time),
+                          DateFormat('h:mm a').format(reminder.time),
                           style: TextStyle(
                             color: subtitleColor,
                             fontSize: 16.sp,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
-                        if (widget.reminder.recurrence == null) ...[ // If reminder is not recurring, show date
+                        if (reminder.recurrence == null) ...[ // If reminder is not recurring, show date
                           SizedBox(width: 12.w),
                           Icon(
                             Icons.calendar_today,
@@ -415,7 +441,7 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
                           ),
                           SizedBox(width: 6.w),
                           Text(
-                            DateFormat('MMM dd, yyyy').format(widget.reminder.time),
+                            DateFormat('MMM dd, yyyy').format(reminder.time),
                             style: TextStyle(
                               color: subtitleColor,
                               fontSize: 16.sp,
@@ -427,9 +453,9 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
                     ),
 
                     // Recurrence Date Range (for recurring reminders)
-                    if (widget.reminder.recurrence != null) ...[
+                    if (reminder.recurrence != null) ...[
                       SizedBox(height: 8.h),
-                      _buildRecurrenceDateRange(subtitleColor),
+                      _buildRecurrenceDateRange(reminder, subtitleColor),
                     ],
 
                     SizedBox(height: 32.h),
@@ -523,8 +549,8 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
                     ),
 
                     // Attachments Section
-                    if (widget.reminder.attachments != null &&
-                        widget.reminder.attachments!.isNotEmpty) ...[                    SizedBox(height: 24.h),
+                    if (reminder.attachments != null &&
+                        reminder.attachments!.isNotEmpty) ...[                    SizedBox(height: 24.h),
                       Container(
                         width: double.infinity,
                         padding: EdgeInsets.all(20.r),
@@ -556,10 +582,10 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
                             ),
                             SizedBox(height: 12.h),
                             ...List.generate(
-                              widget.reminder.attachments!.length,
+                              reminder.attachments!.length,
                               (index) {
                                 final attachment =
-                                    widget.reminder.attachments![index];
+                                    reminder.attachments![index];
                                 final fileType = attachment['type'] ?? 'file';
                                 final fileName =
                                     attachment['name'] ?? 'Unknown';
@@ -849,12 +875,11 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
             ),
           ],
         ),
-      ),
     );
   }
 
-  Widget _buildRecurrenceDateRange(Color subtitleColor) {
-    final recurrence = widget.reminder.recurrence;
+  Widget _buildRecurrenceDateRange(Reminder reminder, Color subtitleColor) {
+    final recurrence = reminder.recurrence;
     if (recurrence == null) return const SizedBox.shrink();
 
     DateTime? startDate;

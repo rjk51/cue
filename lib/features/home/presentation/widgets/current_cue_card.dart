@@ -102,6 +102,12 @@ class _CurrentCueCardState extends State<CurrentCueCard>
       _dragOffset = 0;
       _swipeController.reset();
       _isCompleting = false;
+    } else if (oldWidget.reminder.notes != widget.reminder.notes) {
+      // Update notes if they changed but it's the same reminder
+      // Only update if the notes field is not currently focused to avoid overwriting user input
+      if (!_notesFocusNode.hasFocus) {
+        _notesController.text = widget.reminder.notes ?? '';
+      }
     }
   }
 
