@@ -95,7 +95,8 @@ class _CurrentCueCardState extends State<CurrentCueCard>
   void didUpdateWidget(CurrentCueCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     // Update notes controller when reminder changes
-    if (oldWidget.reminder.id != widget.reminder.id) {
+    if (oldWidget.reminder.id != widget.reminder.id ||
+        oldWidget.occurrenceTime != widget.occurrenceTime) {
       _notesController.text = widget.reminder.notes ?? '';
       // Reset slider state
       _dragOffset = 0;
@@ -626,6 +627,12 @@ class _CurrentCueCardState extends State<CurrentCueCard>
                   onComplete: () {
                     overlayEntry.remove();
                     widget.onMarkCompleted(widget.reminder.id);
+                    // Reset completing flag after callback
+                    if (mounted) {
+                      setState(() {
+                        _isCompleting = false;
+                      });
+                    }
                   },
                 ),
               );

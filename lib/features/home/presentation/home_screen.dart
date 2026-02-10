@@ -760,12 +760,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                         key: _cueCardKey,
                                         child: CurrentCueCard(
                                           reminder: currentReminder,
+                                          occurrenceTime: currentOccurrenceTime,
                                           accentColor: _accentColor,
                                           isDarkMode: _isDarkMode,
                                           cardColor: cardColor,
                                           textColor: textColor,
                                           subtitleColor: subtitleColor,
-                                          onMarkCompleted: _markAsCompleted,
+                                          onMarkCompleted: (reminderId) =>
+                                              _markAsCompleted(
+                                                reminderId,
+                                                occurrenceTime:
+                                                    currentOccurrenceTime,
+                                              ),
                                           getTimeDisplayText:
                                               _getTimeDisplayText,
                                           isCurrentCue: _isCurrentCue,
