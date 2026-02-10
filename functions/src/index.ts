@@ -920,7 +920,7 @@ export const sendTestNotification = functions.https.onRequest(
  * Much more efficient: only reads documents that need processing
  */
 export const processPendingNotifications = functions.pubsub
-  .schedule("every 10 seconds")
+  .schedule("every 1 minutes")
   .onRun(async () => {
     console.log("⏰ [processPendingNotifications] Scheduled function triggered");
     console.log("🔍 Processing pending notifications...");

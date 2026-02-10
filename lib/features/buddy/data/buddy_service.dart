@@ -193,29 +193,59 @@ class BuddyService {
     return null;
   }
 
-  /// Get buddy's real-time progress (completed / total) - ALL reminders
+  /// Get buddy's today progress (completed / total) — tasks created today
   Future<Map<String, int>> getBuddyProgress(String buddyUserId) async {
-    // Force server query to get real-time data (no cache, no time filtering)
-    final query = await _firestore
-        .collection('reminders')
-        .where('userId', isEqualTo: buddyUserId)
-        .get(const GetOptions(source: Source.server));
+    try {
+      final now = DateTime.now();
+      final startOfDay = DateTime(now.year, now.month, now.day);
+      final endOfDay = startOfDay.add(const Duration(days: 1));
 
-    int total = 0;
-    int completed = 0;
+      // Try querying by createdAt first
+      var query = await _firestore
+          .collection('reminders')
+          .where('userId', isEqualTo: buddyUserId)
+          .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+          .where('createdAt', isLessThan: Timestamp.fromDate(endOfDay))
+          .get(const GetOptions(source: Source.server));
 
-    for (final doc in query.docs) {
-      final data = doc.data();
-      total++;
-      // Check multiple completion indicators for real-time accuracy
-      if (data['isCompleted'] == true ||
-          data['lastCompletedAt'] != null ||
-          data['completedAt'] != null) {
-        completed++;
+      int total = query.docs.length;
+      int completed = 0;
+
+      for (final doc in query.docs) {
+        final data = doc.data();
+        if (data['isCompleted'] == true ||
+            data['lastCompletedAt'] != null ||
+            data['completedAt'] != null) {
+          completed++;
+        }
       }
-    }
 
-    return {'total': total, 'completed': completed};
+      print('📊 Progress for $buddyUserId: $completed/$total');
+      return {'total': total, 'completed': completed};
+    } catch (e) {
+      // If createdAt query fails (missing index or field), fall back to all reminders
+      print('⚠️ createdAt query failed: $e, falling back to all reminders');
+      
+      final query = await _firestore
+          .collection('reminders')
+          .where('userId', isEqualTo: buddyUserId)
+          .get(const GetOptions(source: Source.server));
+
+      int total = query.docs.length;
+      int completed = 0;
+
+      for (final doc in query.docs) {
+        final data = doc.data();
+        if (data['isCompleted'] == true ||
+            data['lastCompletedAt'] != null ||
+            data['completedAt'] != null) {
+          completed++;
+        }
+      }
+
+      print('📊 Fallback progress for $buddyUserId: $completed/$total');
+      return {'total': total, 'completed': completed};
+    }
   }
 
   /// Get your own today progress

@@ -1149,11 +1149,21 @@ class _BuddyScreenState extends State<BuddyScreen>
                       color: textColor,
                     ),
                   ),
+                  SizedBox(height: 2.h),
                   Text(
                     '$completed/$total',
                     style: TextStyle(
-                      fontSize: 11.sp,
+                      fontSize: 12.sp,
+                      fontWeight: FontWeight.w600,
+                      color: textColor.withOpacity(0.8),
+                    ),
+                  ),
+                  Text(
+                    'completed',
+                    style: TextStyle(
+                      fontSize: 9.sp,
                       color: subtitleColor,
+                      letterSpacing: 0.5,
                     ),
                   ),
                 ],
