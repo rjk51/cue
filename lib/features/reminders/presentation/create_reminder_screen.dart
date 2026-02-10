@@ -55,9 +55,9 @@ class _NewReminderScreenState extends State<NewReminderScreen>
   final ChatGPTService _chatGPTService = ChatGPTService.instance;
   final ImagePicker _imagePicker = ImagePicker();
 
-  Color _accentColor = const Color(0xFFFFB4A3);
-  Color? _backgroundColor;
-  bool _isDarkMode = false;
+  late Color _accentColor;
+  late Color? _backgroundColor;
+  late bool _isDarkMode;
   bool _isSaving = false;
   bool _isRecording = false;
   bool _isProcessingVoice = false;
@@ -124,6 +124,11 @@ class _NewReminderScreenState extends State<NewReminderScreen>
   @override
   void initState() {
     super.initState();
+    // Initialize theme values synchronously from ThemeNotifier to prevent white flash
+    _accentColor = ThemeNotifier.instance.accentColor;
+    _backgroundColor = ThemeNotifier.instance.backgroundColor;
+    _isDarkMode = ThemeNotifier.instance.isDarkMode;
+    
     _loadThemeSettings();
     _checkTutorialState();
     ThemeNotifier.instance.addListener(_onThemeChanged);

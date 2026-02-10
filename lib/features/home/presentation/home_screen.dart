@@ -40,9 +40,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   final WidgetService _widgetService = WidgetService();
   final TutorialService _tutorialService = TutorialService();
 
-  Color _accentColor = const Color(0xFF2D7A78); // Default teal
-  Color? _backgroundColor;
-  bool _isDarkMode = false;
+  late Color _accentColor;
+  late Color? _backgroundColor;
+  late bool _isDarkMode;
 
   // Tutorial state
   bool _showFabTutorial = false;
@@ -65,6 +65,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    // Initialize theme values synchronously from ThemeNotifier to prevent white flash
+    _accentColor = ThemeNotifier.instance.accentColor;
+    _backgroundColor = ThemeNotifier.instance.backgroundColor;
+    _isDarkMode = ThemeNotifier.instance.isDarkMode;
+    
     _loadThemeSettings();
     _checkTutorialState();
     // Listen for theme changes
@@ -452,11 +457,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ? Color.lerp(const Color(0xFF1E1E1E), _accentColor, 0.1)!
         : Colors.white;
 
-    final tnText = ThemeNotifier.instance.textColor;
-    final textColor = tnText ?? (_isDarkMode ? Colors.white : const Color(0xFF2D2D2D));
-    final subtitleColor = tnText != null ? tnText.withOpacity(0.7) : (_isDarkMode
+    final textColor = _isDarkMode ? Colors.white : const Color(0xFF2D2D2D);
+    final subtitleColor = _isDarkMode
         ? Colors.white.withOpacity(0.6)
-        : const Color(0xFF8A8A8A));
+        : const Color(0xFF8A8A8A);
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -840,30 +844,36 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               mainAxisSize: MainAxisSize.min,
               children: [
                 // Buddy button
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const BuddyScreen(),
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const BuddyScreen(),
+                            ),
+                          );
+                          if (mounted) {
+                            await _loadThemeSettings();
+                          }
+                        },
+                        customBorder: const CircleBorder(),
+                        child: Container(
+                          padding: EdgeInsets.all(8.r),
+                          child: Icon(
+                            Icons.people_rounded,
+                            color: _accentColor,
+                            size: 26.sp,
+                          ),
                         ),
-                      );
-                      if (mounted) {
-                        await _loadThemeSettings();
-                      }
-                    },
-                    customBorder: const CircleBorder(),
-                    child: Container(
-                      padding: EdgeInsets.all(8.r),
-                      child: Icon(
-                        Icons.people_rounded,
-                        color: _accentColor,
-                        size: 26.sp,
                       ),
                     ),
-                  ),
+                    
+                  ],
                 ),
                 SizedBox(width: 4.w),
                 // Pulse button
@@ -928,7 +938,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           // Expandable FAB positioned in Stack
           Positioned(
             right: 34.w,
-            bottom: MediaQuery.of(context).padding.bottom + 2.h,
+            bottom: MediaQuery.of(context).padding.bottom + 30.h,
             child: Container(
               key: _fabKey,
               width: 64.w,
@@ -959,7 +969,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           if (_totalTasksCount > 0)
             Positioned(
               left: 20.w,
-              bottom: MediaQuery.of(context).padding.bottom + 15.h,
+              bottom: MediaQuery.of(context).padding.bottom + 30.h,
               child: _buildProgressBar(),
             ),
 
@@ -1190,8 +1200,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final flipKey = GlobalKey<FlipCardState>();
 
     return GestureDetector(
-      onLongPress: () {
-        flipKey.currentState?.toggleCard();
+      onHorizontalDragEnd: (details) {
+        if (details.primaryVelocity != null) {
+          if (details.primaryVelocity!.abs() > 300) {
+            flipKey.currentState?.toggleCard();
+          }
+        }
       },
       child: FlipCard(
         key: flipKey,

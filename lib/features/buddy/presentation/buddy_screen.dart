@@ -22,9 +22,9 @@ class _BuddyScreenState extends State<BuddyScreen>
   final ThemeService _themeService = ThemeService();
   final TextEditingController _codeController = TextEditingController();
 
-  Color _accentColor = const Color(0xFF2D7A78);
-  Color? _backgroundColor;
-  bool _isDarkMode = false;
+  late Color _accentColor;
+  late Color? _backgroundColor;
+  late bool _isDarkMode;
 
   bool _isLoading = true;
   bool _isGeneratingCode = false;
@@ -50,6 +50,11 @@ class _BuddyScreenState extends State<BuddyScreen>
   @override
   void initState() {
     super.initState();
+    // Initialize theme values synchronously from ThemeNotifier to prevent white flash
+    _accentColor = ThemeNotifier.instance.accentColor;
+    _backgroundColor = ThemeNotifier.instance.backgroundColor;
+    _isDarkMode = ThemeNotifier.instance.isDarkMode;
+    
     _loadTheme();
     ThemeNotifier.instance.addListener(_onThemeChanged);
     _initAnimations();

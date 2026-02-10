@@ -129,11 +129,21 @@ class _SignupScreenState extends State<SignupScreen> {
       // Successfully signed in/up with Google
       if (mounted) {
         await _storage.set('device_sync_onboarding_shown', true);
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const OnboardingScreen()),
-          (route) => false,
-        );
+        
+        // If existing user, go to home; if new user, go to onboarding
+        if (result.isNewUser) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => const OnboardingScreen()),
+            (route) => false,
+          );
+        } else {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => const HomeScreen()),
+            (route) => false,
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -186,12 +196,20 @@ class _SignupScreenState extends State<SignupScreen> {
 
       // Successfully signed in with Apple
       if (mounted) {
-        // Create user document for new Apple sign-in users
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const OnboardingScreen()),
-          (route) => false,
-        );
+        // If existing user, go to home; if new user, go to onboarding
+        if (result.isNewUser) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => const OnboardingScreen()),
+            (route) => false,
+          );
+        } else {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => const HomeScreen()),
+            (route) => false,
+          );
+        }
       }
     } catch (e) {
       if (mounted) {

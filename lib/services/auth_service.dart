@@ -390,6 +390,7 @@ class AuthService {
       return AppleSignInResult(
         status: AppleSignInStatus.success,
         userCredential: userCredential,
+        isNewUser: userCredential.additionalUserInfo?.isNewUser ?? false,
       );
     } on SignInWithAppleAuthorizationException catch (e) {
       if (e.code == AuthorizationErrorCode.canceled) {
@@ -603,6 +604,7 @@ class AppleSignInResult {
   final String? email;
   final List<String>? existingProviders;
   final AuthorizationCredentialAppleID? appleCredential;
+  final bool isNewUser;
 
   AppleSignInResult({
     required this.status,
@@ -610,5 +612,6 @@ class AppleSignInResult {
     this.email,
     this.existingProviders,
     this.appleCredential,
+    this.isNewUser = false,
   });
 }
