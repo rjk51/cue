@@ -319,6 +319,41 @@ class _CueProPaywallScreenState extends State<CueProPaywallScreen> {
                 },
               ),
             ],
+
+            // Show free trial info when applicable
+            if (_proSource == 'free_trial') ...[
+              SizedBox(height: 12.h),
+              FutureBuilder<dynamic>(
+                future: _proStatusService.getTrialInfo(),
+                builder: (context, snapshot) {
+                  if (snapshot.hasData) {
+                    final info = snapshot.data as dynamic;
+                    // Display days elapsed and remaining
+                    final elapsed = info.daysElapsed ?? 0;
+                    final remaining = info.daysRemaining ?? 0;
+
+                    return Container(
+                      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+                      decoration: BoxDecoration(
+                        color: _accentColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20.r),
+                        border: Border.all(color: _accentColor.withOpacity(0.3)),
+                      ),
+                      child: Text(
+                        'Free trial — $elapsed day${elapsed == 1 ? '' : 's'} used • $remaining day${remaining == 1 ? '' : 's'} remaining',
+                        style: TextStyle(
+                          fontSize: 14.sp,
+                          fontWeight: FontWeight.w500,
+                          color: _accentColor,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
+            ],
             SizedBox(height: 32.h),
             if (_proSource == 'revenuecat')
               SizedBox(
