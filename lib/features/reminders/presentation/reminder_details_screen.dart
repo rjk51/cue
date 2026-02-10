@@ -242,7 +242,8 @@ class _ReminderDetailsScreenState extends State<ReminderDetailsScreen> {
         ? Color.lerp(const Color(0xFF121212), _accentColor, 0.08)!
         : Color.lerp(const Color(0xFFFAF5F3), _accentColor, 0.05)!);
 
-    final textColor = _isDarkMode ? Colors.white : const Color(0xFF2D2D2D);
+    final tnText = ThemeNotifier.instance.textColor;
+    final textColor = tnText ?? (_isDarkMode ? Colors.white : const Color(0xFF2D2D2D));
     final subtitleColor = _isDarkMode
         ? Colors.white.withOpacity(0.6)
         : const Color(0xFF8A8A8A);

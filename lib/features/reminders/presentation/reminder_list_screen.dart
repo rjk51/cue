@@ -6,6 +6,7 @@ import '../../reminders/domain/reminder_model.dart';
 import '../../reminders/data/reminder_service.dart';
 import '../../reminders/presentation/reminder_details_screen.dart';
 import '../../../services/theme_service.dart';
+import '../../../services/theme_notifier.dart';
 import '../../../shared/widgets/cupertino_pickers.dart';
 
 class ReminderListScreen extends StatefulWidget {
@@ -38,13 +39,23 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
         _searchQuery = _searchController.text.toLowerCase();
       });
     });
+    ThemeNotifier.instance.addListener(_onThemeChanged);
   }
 
   @override
   void dispose() {
     _searchController.dispose();
     _searchFocusNode.dispose();
+    ThemeNotifier.instance.removeListener(_onThemeChanged);
     super.dispose();
+  }
+
+  void _onThemeChanged() {
+    if (!mounted) return;
+    setState(() {
+      _accentColor = ThemeNotifier.instance.accentColor;
+      _isDarkMode = ThemeNotifier.instance.isDarkMode;
+    });
   }
 
   Future<void> _loadThemeSettings() async {
@@ -350,10 +361,11 @@ class _ReminderListScreenState extends State<ReminderListScreen> {
         ? Color.lerp(const Color(0xFF1E1E1E), _accentColor, 0.1)!
         : Colors.white;
 
-    final textColor = _isDarkMode ? Colors.white : const Color(0xFF2D2D2D);
-    final subtitleColor = _isDarkMode
+    final tnText = ThemeNotifier.instance.textColor;
+    final textColor = tnText ?? (_isDarkMode ? Colors.white : const Color(0xFF2D2D2D));
+    final subtitleColor = tnText != null ? tnText.withOpacity(0.7) : (_isDarkMode
         ? Colors.white.withOpacity(0.6)
-        : const Color(0xFF8A8A8A);
+        : const Color(0xFF8A8A8A));
 
     final now = DateTime.now();
     final isToday = _isSameDay(_selectedDate, now);

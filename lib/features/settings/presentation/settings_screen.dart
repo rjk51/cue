@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'dart:io';
 import 'package:device_info_plus/device_info_plus.dart';
 import '../../../services/theme_service.dart';
+import '../../../services/theme_notifier.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/pro_status_service.dart';
 import '../../auth/presentation/welcome_screen.dart';
@@ -44,6 +45,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadThemeSettings();
     _loadUserInfo();
     _loadVersionInfo();
+    ThemeNotifier.instance.addListener(_onThemeChanged);
+  }
+
+  @override
+  void dispose() {
+    ThemeNotifier.instance.removeListener(_onThemeChanged);
+    super.dispose();
+  }
+
+  void _onThemeChanged() {
+    if (!mounted) return;
+    setState(() {
+      _accentColor = ThemeNotifier.instance.accentColor;
+      _isDarkMode = ThemeNotifier.instance.isDarkMode;
+    });
   }
 
   Future<void> _loadVersionInfo() async {
@@ -319,10 +335,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ? Color.lerp(const Color(0xFF1E1E1E), _accentColor, 0.1)!
         : Colors.white;
 
-    final textColor = _isDarkMode ? Colors.white : const Color(0xFF2D2D2D);
-    final subtitleColor = _isDarkMode
+    final tnText = ThemeNotifier.instance.textColor;
+    final textColor = tnText ?? (_isDarkMode ? Colors.white : const Color(0xFF2D2D2D));
+    final subtitleColor = tnText != null ? tnText.withOpacity(0.7) : (_isDarkMode
         ? Colors.white.withOpacity(0.6)
-        : const Color(0xFF8A8A8A);
+        : const Color(0xFF8A8A8A));
 
     return Scaffold(
       backgroundColor: backgroundColor,

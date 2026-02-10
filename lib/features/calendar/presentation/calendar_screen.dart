@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../../services/theme_service.dart';
+import '../../../services/theme_notifier.dart';
 import '../../home/presentation/widgets/bottom_nav_bar.dart';
 import '../../settings/presentation/settings_screen.dart';
 
@@ -22,6 +23,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
   void initState() {
     super.initState();
     _loadTheme();
+    ThemeNotifier.instance.addListener(_onThemeChanged);
   }
 
   Future<void> _loadTheme() async {
@@ -44,12 +46,27 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 
   @override
+  void dispose() {
+    ThemeNotifier.instance.removeListener(_onThemeChanged);
+    super.dispose();
+  }
+
+  void _onThemeChanged() {
+    if (!mounted) return;
+    setState(() {
+      _accentColor = ThemeNotifier.instance.accentColor;
+      _isDarkMode = ThemeNotifier.instance.isDarkMode;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final backgroundColor = _backgroundColor ?? (_isDarkMode
         ? Color.lerp(const Color(0xFF121212), _accentColor, 0.08)!
         : Color.lerp(const Color(0xFFFAF5F3), _accentColor, 0.05)!);
 
-    final textColor = _isDarkMode ? Colors.white : const Color(0xFF2D2D2D);
+    final tnText = ThemeNotifier.instance.textColor;
+    final textColor = tnText ?? (_isDarkMode ? Colors.white : const Color(0xFF2D2D2D));
 
     return Scaffold(
       backgroundColor: backgroundColor,

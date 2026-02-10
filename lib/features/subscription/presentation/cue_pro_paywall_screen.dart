@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../services/revenue_cat_service.dart';
 import '../../../services/pro_status_service.dart';
 import '../../../services/theme_service.dart';
+import '../../../services/theme_notifier.dart';
 
 class CueProPaywallScreen extends StatefulWidget {
   const CueProPaywallScreen({super.key});
@@ -35,6 +36,8 @@ class _CueProPaywallScreenState extends State<CueProPaywallScreen> {
     super.initState();
     _loadTheme();
     _initialize();
+    // Listen for theme changes so text/background/accent updates propagate live
+    ThemeNotifier.instance.addListener(_onThemeChanged);
   }
 
   Future<void> _loadTheme() async {
@@ -53,6 +56,16 @@ class _CueProPaywallScreenState extends State<CueProPaywallScreen> {
         }
       });
     }
+  }
+
+  void _onThemeChanged() {
+    // Rebuild with values from ThemeNotifier. Use getters instead of fetching from
+    // ThemeService for immediate responsiveness.
+    if (!mounted) return;
+    setState(() {
+      _accentColor = ThemeNotifier.instance.accentColor;
+      _isDarkMode = ThemeNotifier.instance.isDarkMode;
+    });
   }
 
   Future<void> _initialize() async {
@@ -219,9 +232,11 @@ class _CueProPaywallScreenState extends State<CueProPaywallScreen> {
   Widget build(BuildContext context) {
     final backgroundColor = _isDarkMode ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5);
     final cardColor = _isDarkMode ? const Color(0xFF2A2A2A) : Colors.white;
-    final textColor = _isDarkMode ? Colors.white : const Color(0xFF2D2D2D);
-    final secondaryTextColor = _isDarkMode ? Colors.white70 : const Color(0xFF666666);
-    
+    // Prefer user-set text color from ThemeNotifier if available
+    final tnText = ThemeNotifier.instance.textColor;
+    final textColor = tnText ?? (_isDarkMode ? Colors.white : const Color(0xFF2D2D2D));
+    final secondaryTextColor = tnText != null ? tnText.withOpacity(0.7) : (_isDarkMode ? Colors.white70 : const Color(0xFF666666));
+
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
@@ -782,6 +797,12 @@ class _CueProPaywallScreenState extends State<CueProPaywallScreen> {
         ),
       ],
     );
+  }
+
+  @override
+  void dispose() {
+    ThemeNotifier.instance.removeListener(_onThemeChanged);
+    super.dispose();
   }
 
   Widget _buildNoOfferingsView(Color cardColor, Color textColor, Color secondaryTextColor) {

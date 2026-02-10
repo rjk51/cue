@@ -1244,7 +1244,8 @@ class _NewReminderScreenState extends State<NewReminderScreen>
         ? Color.lerp(const Color(0xFF1E1E1E), _accentColor, 0.1)!
         : Colors.white;
 
-    final textColor = _isDarkMode ? Colors.white : const Color(0xFF2D2D2D);
+    final tnText = ThemeNotifier.instance.textColor;
+    final textColor = tnText ?? (_isDarkMode ? Colors.white : const Color(0xFF2D2D2D));
     final subtitleColor = _isDarkMode
         ? Colors.white.withOpacity(0.6)
         : const Color(0xFF8A8A8A);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flex_color_picker/flex_color_picker.dart';
 import '../../../services/theme_service.dart';
+import '../../../services/theme_notifier.dart';
 
 class AppearanceScreen extends StatefulWidget {
   const AppearanceScreen({super.key});
@@ -435,10 +436,11 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
         ? Color.lerp(const Color(0xFF1E1E1E), _selectedColor, 0.1)!
         : Colors.white;
 
-    final textColor = _isDarkMode ? Colors.white : const Color(0xFF2D2D2D);
-    final subtitleColor = _isDarkMode
+    final tnText = ThemeNotifier.instance.textColor;
+    final textColor = tnText ?? (_isDarkMode ? Colors.white : const Color(0xFF2D2D2D));
+    final subtitleColor = tnText != null ? tnText.withOpacity(0.7) : (_isDarkMode
         ? Colors.white.withOpacity(0.6)
-        : const Color(0xFF8A8A8A);
+        : const Color(0xFF8A8A8A));
 
     return Scaffold(
       backgroundColor: backgroundColor,

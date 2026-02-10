@@ -117,9 +117,10 @@ class _PulseScreenState extends State<PulseScreen>
         ? Color.lerp(const Color(0xFF1E1E1E), _accentColor, 0.1)!
         : Colors.white;
 
-    final textColor = _isDarkMode ? Colors.white : const Color(0xFF2D2D2D);
-    final subtitleColor =
-        _isDarkMode ? Colors.white.withOpacity(0.6) : const Color(0xFF8A8A8A);
+    final tnText = ThemeNotifier.instance.textColor;
+    final textColor = tnText ?? (_isDarkMode ? Colors.white : const Color(0xFF2D2D2D));
+    final subtitleColor = tnText != null ? tnText.withOpacity(0.7) : (_isDarkMode
+        ? Colors.white.withOpacity(0.6) : const Color(0xFF8A8A8A));
 
     return Scaffold(
       backgroundColor: backgroundColor,
