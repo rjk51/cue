@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import '../features/notifications/notification_service.dart';
+import 'local_storage_service.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -155,7 +156,8 @@ class AuthService {
   }
 
   // Attempt Google sign-in and check for account conflicts
-  Future<GoogleSignInResult> attemptGoogleSignIn() async {
+  // isSignUp: true for signup screen, false for login screen
+  Future<GoogleSignInResult> attemptGoogleSignIn({bool isSignUp = false}) async {
     try {
       // Trigger the Google Sign-In flow
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
@@ -169,6 +171,15 @@ class AuthService {
 
       // Check if an account already exists with this email
       final signInMethods = await _auth.fetchSignInMethodsForEmail(email);
+      
+      // If logging in (not signing up) and no account exists, return error
+      if (!isSignUp && signInMethods.isEmpty) {
+        await _googleSignIn.signOut();
+        return GoogleSignInResult(
+          status: GoogleSignInStatus.accountNotFound,
+          email: email,
+        );
+      }
       
       if (signInMethods.isNotEmpty && !signInMethods.contains('google.com')) {
         // Account exists with different provider (e.g., email/password)
@@ -194,6 +205,13 @@ class AuthService {
       // This will either sign in existing user or create new account
       final userCredential = await _auth.signInWithCredential(credential);
       
+      // Validate we have a proper email (prevent user@cue.app)
+      if (userCredential.user?.email == null || userCredential.user!.email!.isEmpty) {
+        await userCredential.user?.delete();
+        await _googleSignIn.signOut();
+        throw 'Invalid email from Google. Please try again.';
+      }
+      
       // Create user document if this is a new user
       if (userCredential.additionalUserInfo?.isNewUser == true) {
         await createUserDocument(
@@ -207,6 +225,9 @@ class AuthService {
         // For returning users, ensure they have onboarding data
         await _ensureOnboardingDataExists();
       }
+      
+      // Register device for notifications (critical for Google sign-in)
+      await _registerDeviceAsync();
       
       return GoogleSignInResult(
         status: GoogleSignInStatus.success,
@@ -330,7 +351,8 @@ class AuthService {
   }
 
   // Attempt Apple sign-in and check for account conflicts
-  Future<AppleSignInResult> attemptAppleSignIn() async {
+  // isSignUp: true for signup screen, false for login screen
+  Future<AppleSignInResult> attemptAppleSignIn({bool isSignUp = false}) async {
     try {
       // Request credential for the currently signed in Apple account
       final appleCredential = await SignInWithApple.getAppleIDCredential(
@@ -343,6 +365,14 @@ class AuthService {
       // Check if an account already exists with this email
       if (appleCredential.email != null) {
         final signInMethods = await _auth.fetchSignInMethodsForEmail(appleCredential.email!);
+        
+        // If logging in (not signing up) and no account exists, return error
+        if (!isSignUp && signInMethods.isEmpty) {
+          return AppleSignInResult(
+            status: AppleSignInStatus.accountNotFound,
+            email: appleCredential.email!,
+          );
+        }
         
         if (signInMethods.isNotEmpty && !signInMethods.contains('apple.com')) {
           // Account exists with different provider (e.g., email/password, Google)
@@ -363,6 +393,12 @@ class AuthService {
 
       // Sign in to Firebase with the Apple credential
       final userCredential = await _auth.signInWithCredential(oauthCredential);
+
+      // Validate we have a proper email (prevent user@cue.app)
+      if (userCredential.user?.email == null || userCredential.user!.email!.isEmpty) {
+        await userCredential.user?.delete();
+        throw 'Invalid email from Apple. Please try again.';
+      }
 
       // Update display name if available (only on first sign-in)
       if (userCredential.user != null && 
@@ -386,6 +422,9 @@ class AuthService {
         // For returning users, ensure they have onboarding data
         await _ensureOnboardingDataExists();
       }
+
+      // Register device for notifications (critical for Apple sign-in)
+      await _registerDeviceAsync();
 
       return AppleSignInResult(
         status: AppleSignInStatus.success,
@@ -448,12 +487,60 @@ class AuthService {
   // Sign out
   Future<void> signOut() async {
     try {
+      // Deactivate device before signing out
+      await _deactivateDevice();
+      
+      // Clear local storage/cache
+      await _clearLocalData();
+      
+      // Sign out from Firebase and Google
       await Future.wait([
         _auth.signOut(),
         _googleSignIn.signOut(),
       ]);
     } catch (e) {
       throw 'Failed to sign out. Please try again.';
+    }
+  }
+  
+  // Deactivate current device
+  Future<void> _deactivateDevice() async {
+    try {
+      final notificationService = NotificationService();
+      final token = notificationService.fcmToken;
+      
+      if (token != null) {
+        await _firestore.collection('devices').doc(token).update({
+          'active': false,
+          'deactivatedAt': FieldValue.serverTimestamp(),
+        });
+        print('✅ Device deactivated on sign out');
+      }
+    } catch (e) {
+      print('⚠️ Error deactivating device: $e');
+      // Don't throw - sign out should continue
+    }
+  }
+  
+  // Clear all local data on sign out or account deletion
+  Future<void> _clearLocalData() async {
+    try {
+      final localStorage = LocalStorageService.instance;
+      
+      // Clear all stored preferences
+      await localStorage.remove('theme_preference');
+      await localStorage.remove('accent_color');
+      await localStorage.remove('font_size_scale');
+      await localStorage.remove('background_color');
+      await localStorage.remove('text_color');
+      await localStorage.remove('device_sync_onboarding_shown');
+      await localStorage.remove('notification_sound');
+      await localStorage.remove('nudge_message');
+      
+      print('✅ Local storage cleared');
+    } catch (e) {
+      print('⚠️ Error clearing local storage: $e');
+      // Don't throw - sign out should continue
     }
   }
 
@@ -564,6 +651,18 @@ class AuthService {
       }
     });
   }
+  
+  // Properly awaited device registration
+  Future<void> _registerDeviceAsync() async {
+    try {
+      final notificationService = NotificationService();
+      await notificationService.ensureDeviceRegistered();
+      print('✅ Device registered after login');
+    } catch (e) {
+      print('❌ Error registering device: $e');
+      // Don't throw - user can still use the app
+    }
+  }
 }
 
 // Enum for Google Sign-In status
@@ -571,6 +670,7 @@ enum GoogleSignInStatus {
   success,
   cancelled,
   needsLinking,
+  accountNotFound,
 }
 
 // Result class for Google Sign-In
@@ -595,6 +695,7 @@ enum AppleSignInStatus {
   success,
   cancelled,
   needsLinking,
+  accountNotFound,
 }
 
 // Result class for Apple Sign-In

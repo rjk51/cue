@@ -96,11 +96,26 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final result = await _authService.attemptGoogleSignIn();
+      // Login screen: isSignUp = false (don't create new accounts)
+      final result = await _authService.attemptGoogleSignIn(isSignUp: false);
       
       if (result.status == GoogleSignInStatus.cancelled) {
         // User canceled
         setState(() => _isLoading = false);
+        return;
+      }
+      
+      if (result.status == GoogleSignInStatus.accountNotFound) {
+        // No account exists, redirect to signup
+        setState(() => _isLoading = false);
+        if (mounted) {
+          context.showErrorSnackbar('No account found. Please sign up first.');
+          await Future.delayed(const Duration(milliseconds: 500));
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const SignupScreen()),
+          );
+        }
         return;
       }
 
@@ -147,11 +162,26 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final result = await _authService.attemptAppleSignIn();
+      // Login screen: isSignUp = false (don't create new accounts)
+      final result = await _authService.attemptAppleSignIn(isSignUp: false);
       
       if (result.status == AppleSignInStatus.cancelled) {
         // User canceled
         setState(() => _isLoading = false);
+        return;
+      }
+      
+      if (result.status == AppleSignInStatus.accountNotFound) {
+        // No account exists, redirect to signup
+        setState(() => _isLoading = false);
+        if (mounted) {
+          context.showErrorSnackbar('No account found. Please sign up first.');
+          await Future.delayed(const Duration(milliseconds: 500));
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const SignupScreen()),
+          );
+        }
         return;
       }
 

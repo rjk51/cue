@@ -93,7 +93,8 @@ class _SignupScreenState extends State<SignupScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final result = await _authService.attemptGoogleSignIn();
+      // Signup screen: isSignUp = true (allow new account creation)
+      final result = await _authService.attemptGoogleSignIn(isSignUp: true);
       
       if (result.status == GoogleSignInStatus.cancelled) {
         // User canceled
@@ -160,7 +161,8 @@ class _SignupScreenState extends State<SignupScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final result = await _authService.attemptAppleSignIn();
+      // Signup screen: isSignUp = true (allow new account creation)
+      final result = await _authService.attemptAppleSignIn(isSignUp: true);
       
       if (result.status == AppleSignInStatus.cancelled) {
         // User canceled
