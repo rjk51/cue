@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../main.dart'; // Import for global navigator key
 import '../features/auth/presentation/welcome_screen.dart';
 import '../features/notifications/notification_service.dart';
+import 'local_storage_service.dart';
 
 class DeviceMonitorService {
   static final DeviceMonitorService _instance = DeviceMonitorService._internal();
@@ -137,6 +138,23 @@ class DeviceMonitorService {
       if (!isLoggedIn) {
         print('ℹ️ User already logged out, skipping');
         return;
+      }
+      
+      // Clear local storage/cache before signing out
+      try {
+        final localStorage = LocalStorageService();
+        await localStorage.remove('theme_preference');
+        await localStorage.remove('accent_color');
+        await localStorage.remove('font_size_scale');
+        await localStorage.remove('background_color');
+        await localStorage.remove('text_color');
+        await localStorage.remove('device_sync_onboarding_shown');
+        await localStorage.remove('notification_sound');
+        await localStorage.remove('nudge_message');
+        print('✅ Local storage cleared during device deactivation');
+      } catch (e) {
+        print('⚠️ Error clearing local storage: $e');
+        // Continue with logout even if clearing fails
       }
       
       // Get context before signing out

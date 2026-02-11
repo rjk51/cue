@@ -58,15 +58,20 @@ class ThemeService {
   /// Saves to both local storage (Hive) and Firestore.
   /// Valid values: 'light', 'dark', 'system'
   Future<void> setThemePreference(String theme) async {
+    await setThemePreferenceQuiet(theme);
+    // Notify all listeners of the theme change
+    ThemeNotifier.instance.updateThemeMode(theme);
+  }
+
+  /// Save theme preference without notifying listeners.
+  /// Used during onboarding to avoid rebuilding the widget tree mid-navigation.
+  Future<void> setThemePreferenceQuiet(String theme) async {
     if (!['light', 'dark', 'system'].contains(theme)) {
       throw ArgumentError('Invalid theme: $theme. Must be light, dark, or system.');
     }
 
     // Save locally first (fast, always works)
     await _localStorage.set(_themeKey, theme);
-
-    // Notify all listeners of the theme change
-    ThemeNotifier.instance.updateThemeMode(theme);
 
     // Try to sync with Firestore
     try {
@@ -81,9 +86,7 @@ class ThemeService {
         );
       }
     } catch (e) {
-      // Failed to sync with Firestore, but local save succeeded
       print('Error saving theme to Firestore: $e');
-      // Don't throw - local storage is sufficient
     }
   }
 

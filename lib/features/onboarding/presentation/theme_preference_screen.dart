@@ -4,7 +4,9 @@ import '../../../services/theme_service.dart';
 import 'accent_color_screen.dart';
 
 class ThemePreferenceScreen extends StatefulWidget {
-  const ThemePreferenceScreen({super.key});
+  final VoidCallback? onOnboardingComplete;
+
+  const ThemePreferenceScreen({super.key, this.onOnboardingComplete});
 
   @override
   State<ThemePreferenceScreen> createState() => _ThemePreferenceScreenState();
@@ -32,17 +34,21 @@ class _ThemePreferenceScreenState extends State<ThemePreferenceScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Save theme preference to both local and Firestore
-      await _themeService.setThemePreference(_selectedTheme);
+      // Save theme preference locally and to Firestore, but DON'T notify ThemeNotifier yet.
+      // If we notify now, the entire widget tree rebuilds and kills our navigation.
+      // The accent color screen (or HomeScreen) will apply the theme later.
+      await _themeService.setThemePreferenceQuiet(_selectedTheme);
 
       if (mounted) {
         // Navigate to accent color screen
-        Navigator.pushAndRemoveUntil(
+        Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => AccentColorScreen(themeMode: _selectedTheme),
+            builder: (context) => AccentColorScreen(
+              themeMode: _selectedTheme,
+              onComplete: widget.onOnboardingComplete,
+            ),
           ),
-          (route) => false,
         );
       }
     } catch (e) {
