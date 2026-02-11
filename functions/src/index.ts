@@ -956,6 +956,7 @@ export const processPendingNotifications = functions.pubsub
           // Special handling for buddy nudges - these don't have a reminder document
           if (notificationType === "buddy_nudge" || (reminderId && reminderId.startsWith("buddy_nudge_"))) {
             console.log("👋 Processing buddy nudge notification");
+            console.log("📋 Notification data:", JSON.stringify(notification, null, 2));
             const userId = notification.userId;
 
             if (!userId) {
@@ -1009,6 +1010,8 @@ export const processPendingNotifications = functions.pubsub
                   title: notification.reminderName || "Buddy Nudge",
                   body: notification.reminderDescription || "Your buddy sent you a nudge!",
                 };
+                console.log("📱 Android message body:", message.notification.body);
+                console.log("📱 From notification.reminderDescription:", notification.reminderDescription);
                 message.android = {
                   priority: "high" as const,
                   notification: {
