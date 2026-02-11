@@ -41,7 +41,7 @@ class StreakCard extends StatelessWidget {
         children: [
           // Streak flame + count
           Expanded(
-            flex: 3,
+            flex: 2,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

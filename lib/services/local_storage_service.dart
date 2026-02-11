@@ -99,6 +99,40 @@ class LocalStorageService {
 
   /// Get all keys stored in local storage.
   ///
+  /// Example:
+  /// ```dart
+  /// final allKeys = storage.getAllKeys();
+  /// print('Stored keys: $allKeys');
+  /// ```
+  Iterable<dynamic> getAllKeys() {
+    _ensureInitialized();
+    return _box!.keys;
+  }
+
+  // Notification sound preference
+  static const String _notificationSoundKey = 'notification_sound';
+  
+  Future<void> setNotificationSound(String soundName) async {
+    await set(_notificationSoundKey, soundName);
+  }
+  
+  String getNotificationSound() {
+    return get<String>(_notificationSoundKey) ?? 'notification_ringtone'; // Default sound
+  }
+
+  // Nudge message preference
+  static const String _nudgeMessageKey = 'nudge_message';
+  
+  Future<void> setNudgeMessage(String message) async {
+    await set(_nudgeMessageKey, message);
+  }
+  
+  String getNudgeMessage() {
+    return get<String>(_nudgeMessageKey) ?? 'Don\'t forget your reminders'; // Default message (4 words)
+  }
+
+  /// Get all keys stored in local storage.
+  ///
   /// Returns an iterable of all keys currently stored.
   Iterable<dynamic> get keys {
     _ensureInitialized();

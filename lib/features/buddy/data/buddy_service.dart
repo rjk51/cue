@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../domain/buddy_pair_model.dart';
+import '../../../services/local_storage_service.dart';
 
 class BuddyService {
   static final BuddyService _instance = BuddyService._internal();
@@ -319,10 +320,14 @@ class BuddyService {
       'lastNudgeBy': uid,
     });
 
+    // Get custom nudge message from preferences
+    final customMessage = LocalStorageService.instance.getNudgeMessage();
+    final nudgeMessage = '$myName: $customMessage 💪';
+
     // Create a nudge notification for the buddy
     await _createNudgeNotification(
       buddyId,
-      '$myName is nudging you! Don\'t forget your reminders 💪',
+      nudgeMessage,
     );
   }
 

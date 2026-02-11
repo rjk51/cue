@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../services/theme_service.dart';
 import '../../../services/theme_notifier.dart';
 import '../data/buddy_service.dart';
@@ -30,6 +31,7 @@ class _BuddyScreenState extends State<BuddyScreen>
   bool _isGeneratingCode = false;
   bool _isJoining = false;
   bool _isSendingNudge = false;
+  bool _soundExpanded = false;
   String? _myInviteCode;
   BuddyPair? _buddyPair;
   StreamSubscription? _buddySubscription;
@@ -47,6 +49,10 @@ class _BuddyScreenState extends State<BuddyScreen>
   late AnimationController _nudgeController;
   late Animation<double> _nudgeAnimation;
 
+  // Nudge settings
+  String _selectedSound = 'default';
+  String _customNudgeMessage = "Don't forget your reminders";
+
   @override
   void initState() {
     super.initState();
@@ -59,6 +65,7 @@ class _BuddyScreenState extends State<BuddyScreen>
     ThemeNotifier.instance.addListener(_onThemeChanged);
     _initAnimations();
     _loadBuddyData();
+    _loadNudgeSettings();
   }
 
   void _initAnimations() {
@@ -108,6 +115,20 @@ class _BuddyScreenState extends State<BuddyScreen>
                 platformBrightness == Brightness.dark);
       });
     }
+  }
+
+  Future<void> _loadNudgeSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _selectedSound = prefs.getString('nudge_sound') ?? 'default';
+      _customNudgeMessage = prefs.getString('custom_nudge_message') ?? "Don't forget your reminders";
+    });
+  }
+
+  Future<void> _saveNudgeSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('nudge_sound', _selectedSound);
+    await prefs.setString('custom_nudge_message', _customNudgeMessage);
   }
 
   Future<void> _loadBuddyData() async {
@@ -290,6 +311,8 @@ class _BuddyScreenState extends State<BuddyScreen>
 
     return Scaffold(
       backgroundColor: bgColor,
+      floatingActionButton: _buddyPair != null ? _buildFloatingNudgeButton(textColor, subtitleColor) : null,
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       body: SafeArea(
         child: _isLoading
             ? Center(
@@ -784,12 +807,17 @@ class _BuddyScreenState extends State<BuddyScreen>
         // Today's progress comparison
         _buildProgressComparison(buddyName, textColor, subtitleColor, cardColor),
 
-        SizedBox(height: 24.h),
+        SizedBox(height: 20.h),
 
-        // Nudge button
-        _buildNudgeButton(buddyName, textColor, subtitleColor),
+        // Nudge sound selection
+        _buildNudgeSoundCard(textColor, subtitleColor, cardColor),
 
-        SizedBox(height: 40.h),
+        SizedBox(height: 12.h),
+
+        // Custom nudge message
+        _buildCustomMessageCard(textColor, subtitleColor, cardColor),
+
+        SizedBox(height: 80.h), // Space for floating button
       ],
     );
   }
@@ -1191,10 +1219,214 @@ class _BuddyScreenState extends State<BuddyScreen>
     );
   }
 
-  Widget _buildNudgeButton(String buddyName, Color textColor, Color subtitleColor) {
+  Widget _buildNudgeSoundCard(Color textColor, Color subtitleColor, Color cardColor) {
+    return GestureDetector(
+      onTap: () {
+        setState(() => _soundExpanded = !_soundExpanded);
+        HapticFeedback.selectionClick();
+      },
+      child: Container(
+        width: double.infinity,
+        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(12.r),
+          border: Border.all(
+            color: subtitleColor.withOpacity(0.1),
+            width: 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Text('🔔', style: TextStyle(fontSize: 20.sp)),
+                SizedBox(width: 10.w),
+                Expanded(
+                  child: Text(
+                    'Notification Sound',
+                    style: TextStyle(
+                      fontSize: 14.sp,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                    ),
+                  ),
+                ),
+                Text(
+                  _getSoundLabel(_selectedSound),
+                  style: TextStyle(
+                    fontSize: 13.sp,
+                    color: subtitleColor,
+                  ),
+                ),
+                SizedBox(width: 8.w),
+                Icon(
+                  _soundExpanded ? Icons.expand_less : Icons.expand_more,
+                  color: subtitleColor,
+                  size: 20.sp,
+                ),
+              ],
+            ),
+            if (_soundExpanded) ...[
+              SizedBox(height: 12.h),
+              _buildSoundOption('🔔', 'Default', 'default', textColor, subtitleColor),
+              SizedBox(height: 6.h),
+              _buildSoundOption('🎵', 'Bell', 'gentle', textColor, subtitleColor),
+              SizedBox(height: 6.h),
+              _buildSoundOption('📢', 'Ding', 'urgent', textColor, subtitleColor),
+              SizedBox(height: 6.h),
+              _buildSoundOption('⚡', 'Alert', 'fun', textColor, subtitleColor),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _getSoundLabel(String soundId) {
+    switch (soundId) {
+      case 'default': return 'Default';
+      case 'gentle': return 'Bell';
+      case 'urgent': return 'Ding';
+      case 'fun': return 'Alert';
+      default: return 'Default';
+    }
+  }
+
+  Widget _buildSoundOption(String emoji, String label, String soundId, Color textColor, Color subtitleColor) {
+    final isSelected = _selectedSound == soundId;
+    return GestureDetector(
+      onTap: () {
+        setState(() => _selectedSound = soundId);
+        _saveNudgeSettings();
+        HapticFeedback.selectionClick();
+      },
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+        decoration: BoxDecoration(
+          color: isSelected ? _accentColor.withOpacity(0.12) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8.r),
+          border: Border.all(
+            color: isSelected ? _accentColor.withOpacity(0.4) : subtitleColor.withOpacity(0.1),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Text(emoji, style: TextStyle(fontSize: 18.sp)),
+            SizedBox(width: 10.w),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13.sp,
+                  fontWeight: FontWeight.w600,
+                  color: isSelected ? _accentColor : textColor,
+                ),
+              ),
+            ),
+            if (isSelected)
+              Icon(
+                Icons.check_circle,
+                color: _accentColor,
+                size: 18.sp,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCustomMessageCard(Color textColor, Color subtitleColor, Color cardColor) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(12.r),
+        border: Border.all(
+          color: subtitleColor.withOpacity(0.1),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text('👋', style: TextStyle(fontSize: 20.sp)),
+              SizedBox(width: 10.w),
+              Expanded(
+                child: Text(
+                  'Custom Message',
+                  style: TextStyle(
+                    fontSize: 14.sp,
+                    fontWeight: FontWeight.w600,
+                    color: textColor,
+                  ),
+                ),
+              ),
+              Text(
+                '${_customNudgeMessage.trim().split(RegExp(r'\s+')).length} words',
+                style: TextStyle(
+                  fontSize: 11.sp,
+                  fontWeight: FontWeight.w600,
+                  color: _customNudgeMessage.trim().split(RegExp(r'\s+')).length <= 6 
+                    ? _accentColor 
+                    : Colors.orange,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 10.h),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+            decoration: BoxDecoration(
+              color: _isDarkMode ? const Color(0xFF2A2A2A) : const Color(0xFFF5F5F5),
+              borderRadius: BorderRadius.circular(10.r),
+              border: Border.all(
+                color: _accentColor.withOpacity(0.15),
+                width: 1,
+              ),
+            ),
+            child: TextField(
+              controller: TextEditingController(text: _customNudgeMessage)
+                ..selection = TextSelection.collapsed(offset: _customNudgeMessage.length),
+              onChanged: (value) {
+                final words = value.trim().split(RegExp(r'\s+'));
+                if (words.length <= 6) {
+                  setState(() => _customNudgeMessage = value);
+                  _saveNudgeSettings();
+                }
+              },
+              style: TextStyle(
+                fontSize: 13.sp,
+                fontWeight: FontWeight.w500,
+                color: textColor,
+              ),
+              maxLines: 1,
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                hintText: 'e.g., "Drink water!"',
+                hintStyle: TextStyle(
+                  fontSize: 13.sp,
+                  color: subtitleColor.withOpacity(0.5),
+                ),
+                contentPadding: EdgeInsets.zero,
+                isDense: true,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFloatingNudgeButton(Color textColor, Color subtitleColor) {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
     final canNudge = _buddyPair?.canSendNudge(uid) ?? false;
     final cooldown = _buddyPair?.nudgeCooldownMinutes(uid) ?? 0;
+    final buddyName = _buddyPair?.getBuddyName(uid) ?? 'Buddy';
 
     return _BuddyAnimatedBuilder(
       animation: _nudgeAnimation,
@@ -1210,8 +1442,8 @@ class _BuddyScreenState extends State<BuddyScreen>
       child: GestureDetector(
         onTap: canNudge && !_isSendingNudge ? _sendNudge : null,
         child: Container(
-          width: double.infinity,
-          padding: EdgeInsets.symmetric(vertical: 20.h),
+          padding: EdgeInsets.symmetric(horizontal: 32.w, vertical: 18.h),
+          margin: EdgeInsets.symmetric(horizontal: 24.w),
           decoration: BoxDecoration(
             gradient: canNudge
                 ? LinearGradient(
@@ -1226,14 +1458,15 @@ class _BuddyScreenState extends State<BuddyScreen>
             boxShadow: canNudge
                 ? [
                     BoxShadow(
-                      color: Colors.orange.withOpacity(0.3),
-                      blurRadius: 16,
-                      offset: const Offset(0, 6),
+                      color: Colors.orange.withOpacity(0.4),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
                     ),
                   ]
                 : null,
           ),
           child: Row(
+            mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (_isSendingNudge)

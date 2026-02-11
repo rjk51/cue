@@ -7,6 +7,7 @@ import 'package:flex_color_picker/flex_color_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'dart:io';
 
 import '../domain/recurrence_rule.dart';
@@ -1414,16 +1415,50 @@ class _NewReminderScreenState extends State<NewReminderScreen>
   }
 
   Future<void> _startVoiceRecording() async {
+    print('🎙️ CreateReminder: _startVoiceRecording() called');
     try {
+      print('🎙️ CreateReminder: Calling whisperService.startRecording()...');
       await _whisperService.startRecording();
+      print('🎙️ CreateReminder: Recording started successfully');
       setState(() {
         _isRecording = true;
         _showVoiceHint = false;
       });
       _glowController.stop();
     } catch (e) {
+      print('🎙️ CreateReminder: ERROR in startRecording: $e');
+      print('🎙️ CreateReminder: Error type: ${e.runtimeType}');
+      final errorMsg = e.toString();
       if (mounted) {
-        context.showErrorSnackbar('Failed to start recording: $e');
+        // Check if error is permission-related
+        if (errorMsg.contains('permission') || errorMsg.contains('Settings')) {
+          print('🎙️ CreateReminder: Showing permission dialog');
+          // Show dialog for permission issues
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Microphone Access Required'),
+              content: Text(
+                errorMsg.replaceAll('Exception: ', ''),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    await openAppSettings();
+                  },
+                  child: const Text('Open Settings'),
+                ),
+              ],
+            ),
+          );
+        } else {
+          context.showErrorSnackbar('Failed to start recording: ${errorMsg.replaceAll('Exception: ', '')}');
+        }
       }
     }
   }

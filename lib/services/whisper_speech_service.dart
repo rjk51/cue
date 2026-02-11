@@ -18,24 +18,58 @@ class WhisperSpeechService {
   bool _initialised = false;
 
   Future<void> init() async {
+    print('🎤 WhisperService: init() called, _initialised = $_initialised');
     if (_initialised) return;
-    final status = await Permission.microphone.request();
-    if (!status.isGranted) throw Exception('Microphone permission not granted');
+    
+    // Check current permission status first
+    print('🎤 WhisperService: Checking current microphone permission status...');
+    var status = await Permission.microphone.status;
+    print('🎤 WhisperService: Current status = $status');
+    print('🎤 WhisperService: isGranted = ${status.isGranted}, isDenied = ${status.isDenied}, isPermanentlyDenied = ${status.isPermanentlyDenied}');
+    
+    // If denied or not determined, request permission
+    if (!status.isGranted) {
+      print('🎤 WhisperService: Permission not granted, requesting...');
+      status = await Permission.microphone.request();
+      print('🎤 WhisperService: Request result = $status');
+      print('🎤 WhisperService: After request - isGranted = ${status.isGranted}, isDenied = ${status.isDenied}, isPermanentlyDenied = ${status.isPermanentlyDenied}');
+    }
+    
+    // Handle different permission states
+    if (status.isDenied) {
+      print('🎤 WhisperService: Permission DENIED');
+      throw Exception('Microphone permission denied. Please allow microphone access in Settings.');
+    } else if (status.isPermanentlyDenied) {
+      print('🎤 WhisperService: Permission PERMANENTLY DENIED');
+      throw Exception('Microphone permission permanently denied. Please enable it in Settings > Cue > Microphone.');
+    } else if (!status.isGranted) {
+      print('🎤 WhisperService: Permission NOT GRANTED (unknown state)');
+      throw Exception('Microphone permission not granted');
+    }
+    
+    print('🎤 WhisperService: Permission granted! Opening recorder...');
     await _recorder.openRecorder();
     _initialised = true;
+    print('🎤 WhisperService: Recorder opened successfully');
   }
 
   Future<void> startRecording() async {
-    if (!_initialised) await init();
+    print('🎤 WhisperService: startRecording() called, _initialised = $_initialised');
+    if (!_initialised) {
+      print('🎤 WhisperService: Not initialized, calling init()...');
+      await init();
+    }
 
     final Directory tempDir = await getTemporaryDirectory();
     final String filePath = '${tempDir.path}/whisper_recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
     _currentFilePath = filePath;
+    print('🎤 WhisperService: Starting recording to: $filePath');
 
     await _recorder.startRecorder(
       toFile: filePath,
       codec: Codec.aacMP4,
     );
+    print('🎤 WhisperService: Recording started successfully');
   }
 
   Future<File?> stopRecording() async {

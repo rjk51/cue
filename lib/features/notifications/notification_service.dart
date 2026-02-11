@@ -16,6 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import '../../services/local_storage_service.dart';
 
 // Top-level function for handling background notification responses
 @pragma('vm:entry-point')
@@ -552,6 +553,9 @@ class NotificationService {
       }
     }
 
+    // Get user's preferred notification sound
+    final soundName = LocalStorageService.instance.getNotificationSound();
+    
     // Always use custom ringtone for reminder/snooze notifications
     final AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
@@ -560,7 +564,7 @@ class NotificationService {
       channelDescription: 'Notification channel for reminders',
       importance: Importance.high,
       priority: Priority.high,
-      sound: RawResourceAndroidNotificationSound('notification_ringtone'),
+      sound: RawResourceAndroidNotificationSound(soundName),
       playSound: true,
       largeIcon: largeIcon, // Show custom icon as large icon
       color: notificationColor, // Set notification accent color
@@ -573,13 +577,13 @@ class NotificationService {
         ),
         const AndroidNotificationAction(
           'snooze_5',
-          '5 min',
+          '5 min Snooze',
           showsUserInterface: true,
           cancelNotification: true,
         ),
         AndroidNotificationAction(
           'snooze_input',
-          'Custom',
+          'Custom Snooze',
           showsUserInterface: true,
           cancelNotification: false,
           inputs: <AndroidNotificationActionInput>[
@@ -598,7 +602,7 @@ class NotificationService {
       presentAlert: true,
       presentBadge: true,
       presentSound: true,
-      sound: 'notification_ringtone.wav',
+      sound: '$soundName.wav',
       interruptionLevel: InterruptionLevel.timeSensitive,
       attachments: iosAttachmentPath != null
           ? [DarwinNotificationAttachment(iosAttachmentPath)]
@@ -731,7 +735,7 @@ class NotificationService {
       importance: Importance.max,
       priority: Priority.high,
       icon: '@mipmap/ic_launcher',
-      sound: RawResourceAndroidNotificationSound('notification_ringtone'),
+      sound: RawResourceAndroidNotificationSound(LocalStorageService.instance.getNotificationSound()),
       playSound: true,
       actions: <AndroidNotificationAction>[
         AndroidNotificationAction(
@@ -749,12 +753,12 @@ class NotificationService {
       ],
     );
 
-    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+    final DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
       categoryIdentifier: 'reminder_category',
       presentAlert: true,
       presentBadge: true,
       presentSound: true,
-      sound: 'notification_ringtone.wav',
+      sound: '${LocalStorageService.instance.getNotificationSound()}.wav',
       interruptionLevel: InterruptionLevel.timeSensitive,
     );
 

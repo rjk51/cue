@@ -14,6 +14,7 @@ import '../../auth/presentation/welcome_screen.dart';
 import '../../onboarding/presentation/onboarding_screen.dart';
 import '../../subscription/presentation/cue_pro_paywall_screen.dart';
 import 'appearance_screen.dart';
+import 'notification_settings_screen.dart';
 import 'devices_screen.dart';
 import 'sync_devices_screen.dart';
 import '../../pulse/presentation/pulse_screen.dart';
@@ -644,6 +645,63 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     ),
                                   ),
                                   SizedBox(width: 8.w),
+                                  Icon(
+                                    Icons.chevron_right,
+                                    color: subtitleColor,
+                                    size: 20.sp,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          Divider(
+                            height: 1,
+                            thickness: 1,
+                            color: subtitleColor.withOpacity(0.08),
+                          ),
+
+                          // Notifications row
+                          GestureDetector(
+                            onTap: () async {
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const NotificationSettingsScreen(),
+                                ),
+                              );
+                            },
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 20.w,
+                                vertical: 16.h,
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 40.w,
+                                    height: 40.h,
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange.withOpacity(0.15),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      Icons.notifications_outlined,
+                                      color: Colors.orange,
+                                      size: 22.sp,
+                                    ),
+                                  ),
+                                  SizedBox(width: 16.w),
+                                  Expanded(
+                                    child: Text(
+                                      'Notifications',
+                                      style: TextStyle(
+                                        fontSize: 16.sp,
+                                        fontWeight: FontWeight.w500,
+                                        color: textColor,
+                                      ),
+                                    ),
+                                  ),
                                   Icon(
                                     Icons.chevron_right,
                                     color: subtitleColor,
