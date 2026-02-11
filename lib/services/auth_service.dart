@@ -87,13 +87,16 @@ class AuthService {
     if (userId == null) return;
 
     try {
-      final userData = {
+      final userData = <String, dynamic>{
         'email': email ?? _auth.currentUser?.email,
         'displayName': displayName ?? _auth.currentUser?.displayName,
-        'themePreference': themePreference ?? 'light',
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
+      // Only include themePreference if explicitly provided
+      if (themePreference != null) {
+        userData['themePreference'] = themePreference;
+      }
 
       await _firestore.collection('users').doc(userId).set(
             userData,
@@ -133,10 +136,8 @@ class AuthService {
         await createUserDocument(
           email: userCredential.user?.email,
           displayName: userCredential.user?.displayName,
-          themePreference: 'light',
+          // Don't set themePreference or accentColor - onboarding will handle it
         );
-        // Set default accent color for new users
-        await _setDefaultAccentColorIfNeeded();
       } else {
         // For returning users, ensure they have onboarding data
         await _ensureOnboardingDataExists();
@@ -159,6 +160,9 @@ class AuthService {
   // isSignUp: true for signup screen, false for login screen
   Future<GoogleSignInResult> attemptGoogleSignIn({bool isSignUp = false}) async {
     try {
+      // Sign out first to force account picker
+      await _googleSignIn.signOut();
+      
       // Trigger the Google Sign-In flow
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       
@@ -212,27 +216,27 @@ class AuthService {
         throw 'Invalid email from Google. Please try again.';
       }
       
-      // Create user document if this is a new user
-      if (userCredential.additionalUserInfo?.isNewUser == true) {
+      final isNewUser = userCredential.additionalUserInfo?.isNewUser == true;
+      
+      if (isNewUser) {
+        // New user: create basic doc WITHOUT onboarding data
+        // Onboarding screens will set theme/accent color
         await createUserDocument(
           email: userCredential.user?.email,
           displayName: userCredential.user?.displayName,
-          themePreference: 'light',
         );
-        // Set default accent color for new users
-        await _setDefaultAccentColorIfNeeded();
       } else {
-        // For returning users, ensure they have onboarding data
+        // Returning user: ensure they have onboarding data
         await _ensureOnboardingDataExists();
       }
       
-      // Register device for notifications (critical for Google sign-in)
-      await _registerDeviceAsync();
+      // Register device for notifications (don't block - do in background)
+      _registerDevice();
       
       return GoogleSignInResult(
         status: GoogleSignInStatus.success,
         userCredential: userCredential,
-        isNewUser: userCredential.additionalUserInfo?.isNewUser ?? false,
+        isNewUser: isNewUser,
       );
     } on FirebaseAuthException catch (e) {
       await _googleSignIn.signOut();
@@ -325,10 +329,8 @@ class AuthService {
         await createUserDocument(
           email: userCredential.user?.email,
           displayName: userCredential.user?.displayName,
-          themePreference: 'light',
+          // Don't set themePreference or accentColor - onboarding will handle it
         );
-        // Set default accent color for new users
-        await _setDefaultAccentColorIfNeeded();
       } else {
         // For returning users, ensure they have onboarding data
         await _ensureOnboardingDataExists();
@@ -409,27 +411,27 @@ class AuthService {
         );
       }
 
-      // Create user document if this is a new user
-      if (userCredential.additionalUserInfo?.isNewUser == true) {
+      final isNewUser = userCredential.additionalUserInfo?.isNewUser == true;
+      
+      if (isNewUser) {
+        // New user: create basic doc WITHOUT onboarding data
+        // Onboarding screens will set theme/accent color
         await createUserDocument(
           email: userCredential.user?.email,
           displayName: userCredential.user?.displayName,
-          themePreference: 'light',
         );
-        // Set default accent color for new users
-        await _setDefaultAccentColorIfNeeded();
       } else {
-        // For returning users, ensure they have onboarding data
+        // Returning user: ensure they have onboarding data
         await _ensureOnboardingDataExists();
       }
 
-      // Register device for notifications (critical for Apple sign-in)
-      await _registerDeviceAsync();
+      // Register device for notifications (don't block - do in background)
+      _registerDevice();
 
       return AppleSignInResult(
         status: AppleSignInStatus.success,
         userCredential: userCredential,
-        isNewUser: userCredential.additionalUserInfo?.isNewUser ?? false,
+        isNewUser: isNewUser,
       );
     } on SignInWithAppleAuthorizationException catch (e) {
       if (e.code == AuthorizationErrorCode.canceled) {
@@ -493,11 +495,19 @@ class AuthService {
       // Clear local storage/cache
       await _clearLocalData();
       
-      // Sign out from Firebase and Google
+      // Sign out from Firebase and Google (force disconnect)
       await Future.wait([
         _auth.signOut(),
         _googleSignIn.signOut(),
       ]);
+      
+      // Disconnect Google account to force account picker on next sign-in
+      try {
+        await _googleSignIn.disconnect();
+      } catch (e) {
+        // Ignore disconnect errors (user might not be signed in with Google)
+        print('Google disconnect: $e');
+      }
     } catch (e) {
       throw 'Failed to sign out. Please try again.';
     }
@@ -641,7 +651,8 @@ class AuthService {
   }
   
   void _registerDevice() {
-    Future.delayed(const Duration(milliseconds: 500), () async {
+    // Wait a bit longer for Firebase Auth session to be fully established
+    Future.delayed(const Duration(seconds: 1), () async {
       try {
         final notificationService = NotificationService();
         await notificationService.ensureDeviceRegistered();
@@ -650,18 +661,6 @@ class AuthService {
         print('❌ Error registering device: $e');
       }
     });
-  }
-  
-  // Properly awaited device registration
-  Future<void> _registerDeviceAsync() async {
-    try {
-      final notificationService = NotificationService();
-      await notificationService.ensureDeviceRegistered();
-      print('✅ Device registered after login');
-    } catch (e) {
-      print('❌ Error registering device: $e');
-      // Don't throw - user can still use the app
-    }
   }
 }
 

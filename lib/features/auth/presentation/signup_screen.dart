@@ -4,10 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../../services/auth_service.dart';
-import '../../../services/local_storage_service.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
-import '../../home/presentation/home_screen.dart';
-import '../../onboarding/presentation/onboarding_screen.dart';
 import 'login_screen.dart';
 import 'link_account_dialog.dart';
 
@@ -31,7 +28,6 @@ class _SignupScreenState extends State<SignupScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _authService = AuthService();
-  final _storage = LocalStorageService.instance;
   bool _isLoading = false;
   bool _obscurePassword = true;
 
@@ -67,11 +63,8 @@ class _SignupScreenState extends State<SignupScreen> {
       );
 
       if (mounted) {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const OnboardingScreen()),
-          (route) => false,
-        );
+        // Don't manually navigate - let authStateChanges in main.dart handle it
+        Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
@@ -113,13 +106,9 @@ class _SignupScreenState extends State<SignupScreen> {
             builder: (context) => LinkAccountDialog(
               email: result.email!,
               onSuccess: () async {
-                // Navigate to home after successful linking (treat as first device)
-                await _storage.set('device_sync_onboarding_shown', true);
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (context) => const HomeScreen()),
-                  (route) => false,
-                );
+                // Let authStateChanges StreamBuilder handle navigation
+                Navigator.of(context).pop(); // Close dialog
+                Navigator.of(context).pop(); // Close signup screen
               },
             ),
           );
@@ -129,22 +118,8 @@ class _SignupScreenState extends State<SignupScreen> {
 
       // Successfully signed in/up with Google
       if (mounted) {
-        await _storage.set('device_sync_onboarding_shown', true);
-        
-        // If existing user, go to home; if new user, go to onboarding
-        if (result.isNewUser) {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (context) => const OnboardingScreen()),
-            (route) => false,
-          );
-        } else {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (context) => const HomeScreen()),
-            (route) => false,
-          );
-        }
+        // Don't manually navigate - let authStateChanges StreamBuilder + OnboardingGate handle routing
+        Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
@@ -182,13 +157,9 @@ class _SignupScreenState extends State<SignupScreen> {
               email: result.email!,
               appleCredential: result.appleCredential,
               onSuccess: () async {
-                // Navigate to home after successful linking (treat as first device)
-                await _storage.set('device_sync_onboarding_shown', true);
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (context) => const HomeScreen()),
-                  (route) => false,
-                );
+                // Let authStateChanges StreamBuilder handle navigation
+                Navigator.of(context).pop(); // Close dialog
+                Navigator.of(context).pop(); // Close signup screen
               },
             ),
           );
@@ -198,20 +169,8 @@ class _SignupScreenState extends State<SignupScreen> {
 
       // Successfully signed in with Apple
       if (mounted) {
-        // If existing user, go to home; if new user, go to onboarding
-        if (result.isNewUser) {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (context) => const OnboardingScreen()),
-            (route) => false,
-          );
-        } else {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (context) => const HomeScreen()),
-            (route) => false,
-          );
-        }
+        // Don't manually navigate - let authStateChanges StreamBuilder + OnboardingGate handle routing
+        Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {

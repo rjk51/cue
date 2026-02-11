@@ -341,8 +341,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // Delete the Firebase Auth user - THIS MUST BE LAST
           await user.delete();
           
-          // Sign out to clear any cached credentials
-          await FirebaseAuth.instance.signOut();
+          // Sign out to clear any cached credentials (including Google)
+          final authService = AuthService();
+          await authService.signOut();
+          print('✅ Signed out from all providers');
         }
 
         if (mounted) {

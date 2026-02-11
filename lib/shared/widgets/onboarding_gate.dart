@@ -32,10 +32,17 @@ class _OnboardingGateState extends State<OnboardingGate> {
 
   @override
   Widget build(BuildContext context) {
-    // Use cached value to avoid flashing
-    final hasCompleted = _hasCompletedOnboarding ?? true; // Default to true to show home immediately
+    // Show loading while checking onboarding status
+    if (_hasCompletedOnboarding == null) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF4A4458),
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFFFFB4A3)),
+        ),
+      );
+    }
 
-    if (hasCompleted) {
+    if (_hasCompletedOnboarding!) {
       // User has completed onboarding, go to home
       return const HomeScreen();
     } else {

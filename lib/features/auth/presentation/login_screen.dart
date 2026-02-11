@@ -130,8 +130,9 @@ class _LoginScreenState extends State<LoginScreen> {
             builder: (context) => LinkAccountDialog(
               email: result.email!,
               onSuccess: () async {
-                // Navigate to home after successful linking
-                await _navigateAfterLogin();
+                // Let authStateChanges StreamBuilder handle navigation
+                Navigator.of(context).pop(); // Close dialog
+                Navigator.of(context).pop(); // Close login screen
               },
             ),
           );
@@ -139,12 +140,8 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      // Successfully signed in with Google
+      // Successfully signed in with Google (existing user)
       if (mounted) {
-        // Show message if this was a new account creation
-        if (result.isNewUser) {
-          context.showSuccessSnackbar('Welcome! Your account has been created.');
-        }
         await _navigateAfterLogin();
       }
     } catch (e) {
@@ -197,8 +194,9 @@ class _LoginScreenState extends State<LoginScreen> {
               email: result.email!,
               appleCredential: result.appleCredential,
               onSuccess: () async {
-                // Navigate to home after successful linking
-                await _navigateAfterLogin();
+                // Let authStateChanges StreamBuilder handle navigation
+                Navigator.of(context).pop(); // Close dialog
+                Navigator.of(context).pop(); // Close login screen
               },
             ),
           );
@@ -206,7 +204,7 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      // Successfully signed in with Apple
+      // Successfully signed in with Apple (existing user)
       if (mounted) {
         await _navigateAfterLogin();
       }
