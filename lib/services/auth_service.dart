@@ -16,15 +16,6 @@ class AuthService {
   // Auth state changes stream
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
-  // Check if email already exists and get auth methods
-  Future<List<String>> getAuthMethodsForEmail(String email) async {
-    try {
-      return await _auth.fetchSignInMethodsForEmail(email);
-    } catch (e) {
-      return [];
-    }
-  }
-
   // Sign in with email and password
   Future<UserCredential?> signInWithEmailAndPassword({
     required String email,
@@ -139,8 +130,8 @@ class AuthService {
           // Don't set themePreference or accentColor - onboarding will handle it
         );
       } else {
-        // For returning users, ensure they have onboarding data
-        await _ensureOnboardingDataExists();
+        // Returning user: just ensure doc exists
+        await _ensureUserDocExists();
       }
       
       _registerDevice();
@@ -156,9 +147,9 @@ class AuthService {
     }
   }
 
-  // Attempt Google sign-in and check for account conflicts
-  // isSignUp: true for signup screen, false for login screen
-  Future<GoogleSignInResult> attemptGoogleSignIn({bool isSignUp = false}) async {
+  // Sign in with Google — works for both login and signup.
+  // Firebase handles everything: returns existing user or creates new one.
+  Future<GoogleSignInResult> attemptGoogleSignIn() async {
     try {
       // Sign out first to force account picker
       await _googleSignIn.signOut();
@@ -167,49 +158,21 @@ class AuthService {
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       
       if (googleUser == null) {
-        // User canceled the sign-in
         return GoogleSignInResult(status: GoogleSignInStatus.cancelled);
       }
 
-      final email = googleUser.email;
-
-      // Check if an account already exists with this email
-      final signInMethods = await _auth.fetchSignInMethodsForEmail(email);
-      
-      // If logging in (not signing up) and no account exists, return error
-      if (!isSignUp && signInMethods.isEmpty) {
-        await _googleSignIn.signOut();
-        return GoogleSignInResult(
-          status: GoogleSignInStatus.accountNotFound,
-          email: email,
-        );
-      }
-      
-      if (signInMethods.isNotEmpty && !signInMethods.contains('google.com')) {
-        // Account exists with different provider (e.g., email/password)
-        // Sign out from Google for now
-        await _googleSignIn.signOut();
-        return GoogleSignInResult(
-          status: GoogleSignInStatus.needsLinking,
-          email: email,
-          existingProviders: signInMethods,
-        );
-      }
-
-      // Obtain the auth details from the request
+      // Obtain the auth details
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
 
-      // Create a new credential
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
-      // Sign in to Firebase with the Google credential
-      // This will either sign in existing user or create new account
+      // Sign in to Firebase — creates account if new, signs in if existing
       final userCredential = await _auth.signInWithCredential(credential);
       
-      // Validate we have a proper email (prevent user@cue.app)
+      // Validate email
       if (userCredential.user?.email == null || userCredential.user!.email!.isEmpty) {
         await userCredential.user?.delete();
         await _googleSignIn.signOut();
@@ -220,17 +183,15 @@ class AuthService {
       
       if (isNewUser) {
         // New user: create basic doc WITHOUT onboarding data
-        // Onboarding screens will set theme/accent color
+        // OnboardingGate will route them to onboarding screens
         await createUserDocument(
           email: userCredential.user?.email,
           displayName: userCredential.user?.displayName,
         );
-      } else {
-        // Returning user: ensure they have onboarding data
-        await _ensureOnboardingDataExists();
       }
+      // For returning users: don't touch their data, OnboardingGate checks it
       
-      // Register device for notifications (don't block - do in background)
+      // Register device in background
       _registerDevice();
       
       return GoogleSignInResult(
@@ -332,8 +293,8 @@ class AuthService {
           // Don't set themePreference or accentColor - onboarding will handle it
         );
       } else {
-        // For returning users, ensure they have onboarding data
-        await _ensureOnboardingDataExists();
+        // Returning user: just ensure doc exists
+        await _ensureUserDocExists();
       }
       
       _registerDevice();
@@ -354,7 +315,7 @@ class AuthService {
 
   // Attempt Apple sign-in and check for account conflicts
   // isSignUp: true for signup screen, false for login screen
-  Future<AppleSignInResult> attemptAppleSignIn({bool isSignUp = false}) async {
+  Future<AppleSignInResult> attemptAppleSignIn() async {
     try {
       // Request credential for the currently signed in Apple account
       final appleCredential = await SignInWithApple.getAppleIDCredential(
@@ -364,39 +325,16 @@ class AuthService {
         ],
       );
 
-      // Check if an account already exists with this email
-      if (appleCredential.email != null) {
-        final signInMethods = await _auth.fetchSignInMethodsForEmail(appleCredential.email!);
-        
-        // If logging in (not signing up) and no account exists, return error
-        if (!isSignUp && signInMethods.isEmpty) {
-          return AppleSignInResult(
-            status: AppleSignInStatus.accountNotFound,
-            email: appleCredential.email!,
-          );
-        }
-        
-        if (signInMethods.isNotEmpty && !signInMethods.contains('apple.com')) {
-          // Account exists with different provider (e.g., email/password, Google)
-          return AppleSignInResult(
-            status: AppleSignInStatus.needsLinking,
-            email: appleCredential.email!,
-            existingProviders: signInMethods,
-            appleCredential: appleCredential,
-          );
-        }
-      }
-
       // Create an OAuthCredential from the credential returned by Apple
       final oauthCredential = OAuthProvider('apple.com').credential(
         idToken: appleCredential.identityToken,
         accessToken: appleCredential.authorizationCode,
       );
 
-      // Sign in to Firebase with the Apple credential
+      // Sign in to Firebase — creates account if new, signs in if existing
       final userCredential = await _auth.signInWithCredential(oauthCredential);
 
-      // Validate we have a proper email (prevent user@cue.app)
+      // Validate email
       if (userCredential.user?.email == null || userCredential.user!.email!.isEmpty) {
         await userCredential.user?.delete();
         throw 'Invalid email from Apple. Please try again.';
@@ -414,18 +352,14 @@ class AuthService {
       final isNewUser = userCredential.additionalUserInfo?.isNewUser == true;
       
       if (isNewUser) {
-        // New user: create basic doc WITHOUT onboarding data
-        // Onboarding screens will set theme/accent color
         await createUserDocument(
           email: userCredential.user?.email,
           displayName: userCredential.user?.displayName,
         );
       } else {
-        // Returning user: ensure they have onboarding data
-        await _ensureOnboardingDataExists();
+        await _ensureUserDocExists();
       }
 
-      // Register device for notifications (don't block - do in background)
       _registerDevice();
 
       return AppleSignInResult(
@@ -582,71 +516,24 @@ class AuthService {
     }
   }
   
-  /// Set default accent color if not already set.
-  /// Used for new users during Google/Apple sign-in.
-  Future<void> _setDefaultAccentColorIfNeeded() async {
-    try {
-      final userId = _auth.currentUser?.uid;
-      if (userId == null) return;
-
-      final userDoc = await _firestore.collection('users').doc(userId).get();
-      if (userDoc.exists && userDoc.data()?['accentColor'] == null) {
-        // Set default coral color (#FFB4A3) = 0xFFFFB4A3
-        await _firestore.collection('users').doc(userId).update({
-          'accentColor': 0xFFFFB4A3,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      }
-    } catch (e) {
-      print('Error setting default accent color: $e');
-      // Don't throw - this is optional
-    }
-  }
-
-  /// Ensure returning users have onboarding data.
-  /// For existing Google/Apple users who may have incomplete onboarding.
-  Future<void> _ensureOnboardingDataExists() async {
+  /// Ensure user document exists for returning users.
+  /// Does NOT set onboarding data — OnboardingGate handles that.
+  Future<void> _ensureUserDocExists() async {
     try {
       final userId = _auth.currentUser?.uid;
       if (userId == null) return;
 
       final userDoc = await _firestore.collection('users').doc(userId).get();
       
-      if (userDoc.exists) {
-        final data = userDoc.data();
-        final hasTheme = data?['themePreference'] != null;
-        final hasColor = data?['accentColor'] != null;
-        
-        // If user doesn't have complete onboarding data, set defaults
-        if (!hasTheme || !hasColor) {
-          final updates = <String, dynamic>{
-            'updatedAt': FieldValue.serverTimestamp(),
-          };
-          
-          if (!hasTheme) {
-            updates['themePreference'] = 'light';
-          }
-          
-          if (!hasColor) {
-            // Set default coral color (#FFB4A3) = 0xFFFFB4A3
-            updates['accentColor'] = 0xFFFFB4A3;
-          }
-          
-          await _firestore.collection('users').doc(userId).update(updates);
-          print('✅ Set default onboarding data for returning user');
-        }
-      } else {
-        // User document doesn't exist, create it with defaults
+      if (!userDoc.exists) {
+        // User document somehow missing, recreate basic doc
         await createUserDocument(
           email: _auth.currentUser?.email,
           displayName: _auth.currentUser?.displayName,
-          themePreference: 'light',
         );
-        await _setDefaultAccentColorIfNeeded();
       }
     } catch (e) {
-      print('Error ensuring onboarding data: $e');
-      // Don't throw - user can still use the app
+      print('Error ensuring user doc exists: $e');
     }
   }
   
@@ -668,23 +555,17 @@ class AuthService {
 enum GoogleSignInStatus {
   success,
   cancelled,
-  needsLinking,
-  accountNotFound,
 }
 
 // Result class for Google Sign-In
 class GoogleSignInResult {
   final GoogleSignInStatus status;
   final UserCredential? userCredential;
-  final String? email;
-  final List<String>? existingProviders;
   final bool isNewUser;
 
   GoogleSignInResult({
     required this.status,
     this.userCredential,
-    this.email,
-    this.existingProviders,
     this.isNewUser = false,
   });
 }
@@ -693,25 +574,17 @@ class GoogleSignInResult {
 enum AppleSignInStatus {
   success,
   cancelled,
-  needsLinking,
-  accountNotFound,
 }
 
 // Result class for Apple Sign-In
 class AppleSignInResult {
   final AppleSignInStatus status;
   final UserCredential? userCredential;
-  final String? email;
-  final List<String>? existingProviders;
-  final AuthorizationCredentialAppleID? appleCredential;
   final bool isNewUser;
 
   AppleSignInResult({
     required this.status,
     this.userCredential,
-    this.email,
-    this.existingProviders,
-    this.appleCredential,
     this.isNewUser = false,
   });
 }

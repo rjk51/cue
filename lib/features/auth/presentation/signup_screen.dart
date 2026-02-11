@@ -6,7 +6,6 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../../services/auth_service.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
 import 'login_screen.dart';
-import 'link_account_dialog.dart';
 
 class SignupScreen extends StatefulWidget {
   final String? initialEmail;
@@ -86,39 +85,15 @@ class _SignupScreenState extends State<SignupScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Signup screen: isSignUp = true (allow new account creation)
-      final result = await _authService.attemptGoogleSignIn(isSignUp: true);
+      final result = await _authService.attemptGoogleSignIn();
       
       if (result.status == GoogleSignInStatus.cancelled) {
-        // User canceled
         setState(() => _isLoading = false);
         return;
       }
 
-      if (result.status == GoogleSignInStatus.needsLinking) {
-        // Account exists with email/password, need to link
-        setState(() => _isLoading = false);
-        
-        if (mounted) {
-          await showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => LinkAccountDialog(
-              email: result.email!,
-              onSuccess: () async {
-                // Let authStateChanges StreamBuilder handle navigation
-                Navigator.of(context).pop(); // Close dialog
-                Navigator.of(context).pop(); // Close signup screen
-              },
-            ),
-          );
-        }
-        return;
-      }
-
-      // Successfully signed in/up with Google
+      // Success — pop and let StreamBuilder + OnboardingGate handle routing
       if (mounted) {
-        // Don't manually navigate - let authStateChanges StreamBuilder + OnboardingGate handle routing
         Navigator.pop(context);
       }
     } catch (e) {
@@ -136,40 +111,15 @@ class _SignupScreenState extends State<SignupScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Signup screen: isSignUp = true (allow new account creation)
-      final result = await _authService.attemptAppleSignIn(isSignUp: true);
+      final result = await _authService.attemptAppleSignIn();
       
       if (result.status == AppleSignInStatus.cancelled) {
-        // User canceled
         setState(() => _isLoading = false);
         return;
       }
 
-      if (result.status == AppleSignInStatus.needsLinking) {
-        // Account exists with email/password, need to link
-        setState(() => _isLoading = false);
-        
-        if (mounted) {
-          await showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => LinkAccountDialog(
-              email: result.email!,
-              appleCredential: result.appleCredential,
-              onSuccess: () async {
-                // Let authStateChanges StreamBuilder handle navigation
-                Navigator.of(context).pop(); // Close dialog
-                Navigator.of(context).pop(); // Close signup screen
-              },
-            ),
-          );
-        }
-        return;
-      }
-
-      // Successfully signed in with Apple
+      // Success — pop and let StreamBuilder + OnboardingGate handle routing
       if (mounted) {
-        // Don't manually navigate - let authStateChanges StreamBuilder + OnboardingGate handle routing
         Navigator.pop(context);
       }
     } catch (e) {

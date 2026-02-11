@@ -4,12 +4,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../../services/auth_service.dart';
-import '../../../services/local_storage_service.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
-import '../../home/presentation/home_screen.dart';
-import '../../onboarding/presentation/device_sync_onboarding_screen.dart';
 import 'signup_screen.dart';
-import 'link_account_dialog.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -23,7 +19,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _authService = AuthService();
-  final _storage = LocalStorageService.instance;
   bool _isLoading = false;
   bool _obscurePassword = true;
 
@@ -32,34 +27,6 @@ class _LoginScreenState extends State<LoginScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
-  }
-
-  Future<void> _navigateAfterLogin() async {
-    if (!mounted) return;
-
-    // Check if device sync onboarding has been shown
-    final hasShownSync = _storage.get<bool>('device_sync_onboarding_shown') ?? false;
-
-    if (!hasShownSync) {
-      // Show device sync onboarding first
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const DeviceSyncOnboardingScreen(),
-        ),
-      );
-      // Mark as shown
-      await _storage.set('device_sync_onboarding_shown', true);
-    }
-
-    // Navigate to home
-    if (mounted) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
-        (route) => false,
-      );
-    }
   }
 
   Future<void> _handleSignIn() async {
@@ -74,7 +41,8 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (mounted) {
-        await _navigateAfterLogin();
+        // Pop and let StreamBuilder + OnboardingGate handle routing
+        Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
@@ -96,53 +64,16 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Login screen: isSignUp = false (don't create new accounts)
-      final result = await _authService.attemptGoogleSignIn(isSignUp: false);
+      final result = await _authService.attemptGoogleSignIn();
       
       if (result.status == GoogleSignInStatus.cancelled) {
-        // User canceled
         setState(() => _isLoading = false);
-        return;
-      }
-      
-      if (result.status == GoogleSignInStatus.accountNotFound) {
-        // No account exists, redirect to signup
-        setState(() => _isLoading = false);
-        if (mounted) {
-          context.showErrorSnackbar('No account found. Please sign up first.');
-          await Future.delayed(const Duration(milliseconds: 500));
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const SignupScreen()),
-          );
-        }
         return;
       }
 
-      if (result.status == GoogleSignInStatus.needsLinking) {
-        // Account exists with email/password, need to link
-        setState(() => _isLoading = false);
-        
-        if (mounted) {
-          await showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => LinkAccountDialog(
-              email: result.email!,
-              onSuccess: () async {
-                // Let authStateChanges StreamBuilder handle navigation
-                Navigator.of(context).pop(); // Close dialog
-                Navigator.of(context).pop(); // Close login screen
-              },
-            ),
-          );
-        }
-        return;
-      }
-
-      // Successfully signed in with Google (existing user)
+      // Successfully signed in — pop and let StreamBuilder + OnboardingGate handle routing
       if (mounted) {
-        await _navigateAfterLogin();
+        Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
@@ -159,54 +90,16 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Login screen: isSignUp = false (don't create new accounts)
-      final result = await _authService.attemptAppleSignIn(isSignUp: false);
+      final result = await _authService.attemptAppleSignIn();
       
       if (result.status == AppleSignInStatus.cancelled) {
-        // User canceled
         setState(() => _isLoading = false);
-        return;
-      }
-      
-      if (result.status == AppleSignInStatus.accountNotFound) {
-        // No account exists, redirect to signup
-        setState(() => _isLoading = false);
-        if (mounted) {
-          context.showErrorSnackbar('No account found. Please sign up first.');
-          await Future.delayed(const Duration(milliseconds: 500));
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const SignupScreen()),
-          );
-        }
         return;
       }
 
-      if (result.status == AppleSignInStatus.needsLinking) {
-        // Account exists with email/password, need to link
-        setState(() => _isLoading = false);
-        
-        if (mounted) {
-          await showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => LinkAccountDialog(
-              email: result.email!,
-              appleCredential: result.appleCredential,
-              onSuccess: () async {
-                // Let authStateChanges StreamBuilder handle navigation
-                Navigator.of(context).pop(); // Close dialog
-                Navigator.of(context).pop(); // Close login screen
-              },
-            ),
-          );
-        }
-        return;
-      }
-
-      // Successfully signed in with Apple (existing user)
+      // Successfully signed in — pop and let StreamBuilder + OnboardingGate handle routing
       if (mounted) {
-        await _navigateAfterLogin();
+        Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
