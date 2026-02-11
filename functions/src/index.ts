@@ -989,22 +989,40 @@ export const processPendingNotifications = functions.pubsub
 
               console.log(`📱 Sending buddy nudge to [${platform.toUpperCase()}] device [${deviceId}]`);
 
-              const message = {
+              // Platform-specific message structure
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const message: any = {
                 token: fcmToken,
-                data: {
+              };
+
+              if (platform === "android") {
+                // Android: Include both data AND notification fields
+                // - notification field: ensures system displays in background/terminated
+                // - data field: allows foreground handler to show with custom sound
+                message.data = {
                   type: "buddy_nudge",
                   title: notification.reminderName || "Buddy Nudge",
                   body: notification.reminderDescription || "Your buddy sent you a nudge!",
                   click_action: "FLUTTER_NOTIFICATION_CLICK",
-                },
-                notification: {
+                };
+                message.notification = {
                   title: notification.reminderName || "Buddy Nudge",
                   body: notification.reminderDescription || "Your buddy sent you a nudge!",
-                },
-                android: {
+                };
+                message.android = {
                   priority: "high" as const,
-                },
-                apns: {
+                  notification: {
+                    channelId: "buddy_nudge_channel",
+                    sound: "default",
+                  },
+                };
+                console.log("🤖 [ANDROID] Using notification + data for background/foreground support");
+              } else {
+                // iOS: APNS payload with notification
+                message.apns = {
+                  headers: {
+                    "apns-priority": "10",
+                  },
                   payload: {
                     aps: {
                       "alert": {
@@ -1014,9 +1032,12 @@ export const processPendingNotifications = functions.pubsub
                       "sound": "default",
                       "badge": 1,
                     },
+                    // Include type in payload for Flutter handling
+                    type: "buddy_nudge",
                   },
-                },
-              };
+                };
+                console.log("🍎 [iOS] Using APNS payload with notification");
+              }
 
               await messaging.send(message);
               console.log(`✅ [${platform.toUpperCase()}] Buddy nudge delivered!`);
@@ -1055,6 +1076,19 @@ export const processPendingNotifications = functions.pubsub
             console.log(`⚠️  No userId in reminder ${reminderId}, skipping`);
             continue;
           }
+
+          // Get user's notification sound preference
+          let notificationSound = "default";
+          try {
+            const userDoc = await db.collection("users").doc(userId).get();
+            if (userDoc.exists) {
+              notificationSound = userDoc.data()?.notificationSound || "default";
+            }
+            console.log(`🔊 User notification sound: ${notificationSound}`);
+          } catch (error) {
+            console.log(`⚠️  Error fetching notification sound preference: ${error}`);
+          }
+
 
           console.log(`📱 Querying for active devices for user: ${userId}...`);
           const devicesSnapshot = await db
@@ -1116,7 +1150,7 @@ export const processPendingNotifications = functions.pubsub
                       title: notification.reminderName,
                       body: notification.reminderDescription,
                     },
-                    "sound": "default",
+                    "sound": notificationSound === "default" ? "default" : `${notificationSound}.wav`,
                     "badge": 1,
                     "mutable-content": 1,
                     "category": "reminder_category",
