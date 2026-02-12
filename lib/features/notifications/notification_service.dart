@@ -692,7 +692,7 @@ class NotificationService {
       channelDescription: 'Notification channel for reminders',
       importance: Importance.high,
       priority: Priority.high,
-      sound: RawResourceAndroidNotificationSound(soundName),
+      sound: soundName == 'default' ? null : RawResourceAndroidNotificationSound(soundName),
       playSound: true,
       largeIcon: largeIcon, // Show custom icon as large icon
       color: notificationColor, // Set notification accent color
@@ -730,7 +730,7 @@ class NotificationService {
       presentAlert: true,
       presentBadge: true,
       presentSound: true,
-      sound: '$soundName.wav',
+      sound: soundName == 'default' ? 'default' : '$soundName.wav',
       interruptionLevel: InterruptionLevel.timeSensitive,
       attachments: iosAttachmentPath != null
           ? [DarwinNotificationAttachment(iosAttachmentPath)]
