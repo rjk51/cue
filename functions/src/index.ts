@@ -977,11 +977,24 @@ export const processPendingNotifications = functions.pubsub
             }
             console.log(`✅ Found ${devicesSnapshot.size} active device(s)`);
 
-            // Send buddy nudge notifications
-            const sendPromises = devicesSnapshot.docs.map(async (deviceDoc) => {
-              const deviceId = deviceDoc.id;
+            // Deduplicate devices by FCM token to avoid sending duplicate notifications
+            const uniqueDevices = new Map<string, any>();
+            devicesSnapshot.docs.forEach((deviceDoc) => {
               const fcmToken = deviceDoc.data().fcmToken;
-              const platform = deviceDoc.data().platform || "unknown";
+              if (fcmToken && !uniqueDevices.has(fcmToken)) {
+                uniqueDevices.set(fcmToken, {
+                  id: deviceDoc.id,
+                  data: deviceDoc.data(),
+                });
+              }
+            });
+            console.log(`📱 After deduplication: ${uniqueDevices.size} unique device(s)`);
+
+            // Send buddy nudge notifications
+            const sendPromises = Array.from(uniqueDevices.values()).map(async (device) => {
+              const deviceId = device.id;
+              const fcmToken = device.data.fcmToken;
+              const platform = device.data.platform || "unknown";
 
               if (!fcmToken) {
                 console.log(`⏭️  Skipping device [${deviceId}] - no FCM token`);
