@@ -181,6 +181,98 @@ class _CueProPaywallScreenState extends State<CueProPaywallScreen> {
     }
   }
 
+  Future<void> _showSubscriptionPlans() async {
+    // Ensure offerings are loaded
+    if (_offerings == null) {
+      try {
+        final offerings = await RevenueCatService().getOfferings();
+        if (mounted) setState(() => _offerings = offerings);
+      } catch (e) {
+        _showError('Failed to load plans: $e');
+        return;
+      }
+    }
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        final packages = _offerings?.current?.availablePackages ?? [];
+        return Container(
+          decoration: BoxDecoration(
+            color: _isDarkMode ? const Color(0xFF2A2A2A) : Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(24.r),
+              topRight: Radius.circular(24.r),
+            ),
+          ),
+          padding: EdgeInsets.all(24.w),
+          child: packages.isEmpty
+              ? SizedBox(height: 200.h, child: Center(child: Text('No plans available')))
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40.w,
+                        height: 4.h,
+                        decoration: BoxDecoration(
+                          color: (_isDarkMode ? Colors.white : Colors.black).withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(2.r),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 16.h),
+                    Text('Choose a plan', style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w600)),
+                    SizedBox(height: 12.h),
+                    ...packages.map((package) {
+                      return GestureDetector(
+                        onTap: () async {
+                          Navigator.pop(context);
+                          try {
+                            setState(() => _isPurchasing = true);
+                            final info = await RevenueCatService().purchasePackage(package);
+                            setState(() => _isPurchasing = false);
+                            if (info?.entitlements.active.containsKey('Cue Pro') ?? false) {
+                              _showSuccess('Welcome to Cue Pro!');
+                              await _initialize();
+                              Navigator.pop(this.context, true);
+                            } else {
+                              _showError('Purchase completed but not active');
+                            }
+                          } catch (e) {
+                            setState(() => _isPurchasing = false);
+                            _showError('Purchase failed: $e');
+                          }
+                        },
+                        child: Container(
+                          margin: EdgeInsets.only(bottom: 12.h),
+                          padding: EdgeInsets.all(12.w),
+                          decoration: BoxDecoration(
+                            color: _isDarkMode ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5),
+                            borderRadius: BorderRadius.circular(12.r),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(package.storeProduct.title ?? ''),
+                              Text(package.storeProduct.priceString ?? ''),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                    SizedBox(height: 12.h),
+                  ],
+                ),
+        );
+      },
+    );
+  }
+
 
   void _showSuccess(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -370,6 +462,29 @@ class _CueProPaywallScreenState extends State<CueProPaywallScreen> {
               ),
             ],
             SizedBox(height: 32.h),
+            // Always offer a Buy/Upgrade option even when user has Pro access
+            SizedBox(
+              width: double.infinity,
+              height: 50.h,
+              child: ElevatedButton(
+                onPressed: _isPurchasing ? null : _showSubscriptionPlans,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _accentColor,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12.r),
+                  ),
+                ),
+                child: Text(
+                  'Buy subscription',
+                  style: TextStyle(
+                    fontSize: 16.sp,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(height: 12.h),
             if (_proSource == 'revenuecat')
               SizedBox(
                 width: double.infinity,

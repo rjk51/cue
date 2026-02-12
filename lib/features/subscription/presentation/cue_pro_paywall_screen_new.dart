@@ -13,70 +13,82 @@ class CueProPaywallScreen extends StatefulWidget {
 }
 
 class _CueProPaywallScreenState extends State<CueProPaywallScreen> {
-  bool _isLoading = false;
-  bool _isPro = false;
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Show pro badge when user has access
+                  if (_isPro)
+                    Container(
+                      padding: EdgeInsets.symmetric(
+                        vertical: 16.h,
+                        horizontal: 24.w,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(16.r),
+                        border: Border.all(
+                          color: Colors.green,
+                          width: 2,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.check_circle_rounded,
+                            color: Colors.green,
+                            size: 24.sp,
+                          ),
+                          SizedBox(width: 12.w),
+                          Text(
+                            'You\'re a Pro member!',
+                            style: TextStyle(
+                              fontSize: 16.sp,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.green,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
 
-  @override
-  void initState() {
-    super.initState();
-    _checkProStatus();
-  }
-
-  Future<void> _checkProStatus() async {
-    try {
-      final hasPro = await RevenueCatService().hasCueProAccess();
-      if (mounted) {
-        setState(() => _isPro = hasPro);
-      }
-    } catch (e) {
-      // Ignore error, default to not pro
-    }
-  }
-
-  void _showSubscriptionPlans() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => const _SubscriptionBottomSheet(),
-    );
-  }
-
-  Future<void> _restorePurchases() async {
-    setState(() => _isLoading = true);
-    try {
-      await RevenueCatService().restorePurchases();
-      final hasPro = await RevenueCatService().hasCueProAccess();
-      
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _isPro = hasPro;
-        });
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(hasPro 
-              ? 'Purchases restored successfully!' 
-              : 'No purchases to restore'),
-            backgroundColor: hasPro ? Colors.green : Colors.orange,
-          ),
-        );
-
-        if (hasPro) {
-          Navigator.pop(context);
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error restoring purchases: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+                  // Always offer the option to buy/upgrade (useful during trial)
+                  SizedBox(height: 12.h),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _showSubscriptionPlans,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: accentColor,
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(vertical: 16.h),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16.r),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: _isLoading
+                          ? SizedBox(
+                              width: 20.w,
+                              height: 20.h,
+                              child: const CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            )
+                          : Text(
+                              'Buy subscription',
+                              style: TextStyle(
+                                fontSize: 18.sp,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
     }
   }
 
