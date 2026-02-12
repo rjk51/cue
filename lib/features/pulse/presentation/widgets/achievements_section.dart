@@ -134,44 +134,55 @@ class _AchievementBadge extends StatelessWidget {
         opacity: isLocked ? 0.35 : 1.0,
         duration: const Duration(milliseconds: 300),
         child: Container(
-          width: 72.w,
-          padding: EdgeInsets.symmetric(vertical: 10.h, horizontal: 4.w),
+          width: 90.w,
+          height: 90.h,
+          padding: EdgeInsets.symmetric(vertical: 12.h, horizontal: 6.w),
           decoration: BoxDecoration(
             color: isLocked
                 ? (isDarkMode
                     ? Colors.white.withOpacity(0.04)
                     : Colors.black.withOpacity(0.03))
                 : accentColor.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(14.r),
+            borderRadius: BorderRadius.circular(16.r),
             border: isLocked
-                ? null
+                ? Border.all(
+                    color: (isDarkMode
+                        ? Colors.white.withOpacity(0.08)
+                        : Colors.black.withOpacity(0.06)),
+                    width: 1,
+                  )
                 : Border.all(
                     color: accentColor.withOpacity(0.2),
                     width: 1.5,
                   ),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                isLocked ? '🔒' : achievement.emoji,
-                style: TextStyle(fontSize: 26.sp),
-              ),
-              SizedBox(height: 4.h),
-              Text(
-                achievement.title,
-                style: TextStyle(
-                  fontSize: 9.sp,
-                  fontWeight: FontWeight.w600,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isLocked ? Icons.lock_rounded : Icons.emoji_events_rounded,
+                  size: 26.sp,
                   color: isLocked
-                      ? textColor.withOpacity(0.4)
-                      : textColor,
+                      ? textColor.withOpacity(0.3)
+                      : accentColor,
                 ),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
+                SizedBox(height: 4.h),
+                Text(
+                  achievement.title,
+                  style: TextStyle(
+                    fontSize: 9.sp,
+                    fontWeight: FontWeight.w600,
+                    color: isLocked
+                        ? textColor.withOpacity(0.4)
+                        : textColor,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
         ),
       ),

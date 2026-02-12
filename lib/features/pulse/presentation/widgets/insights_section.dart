@@ -114,11 +114,19 @@ class _InsightCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text(
-                insight.emoji,
-                style: TextStyle(fontSize: 22.sp),
+              Container(
+                padding: EdgeInsets.all(6.r),
+                decoration: BoxDecoration(
+                  color: accentColor.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(8.r),
+                ),
+                child: Icon(
+                  Icons.lightbulb_rounded,
+                  color: accentColor,
+                  size: 16.sp,
+                ),
               ),
-              SizedBox(width: 8.w),
+              SizedBox(width: 10.w),
               Expanded(
                 child: Text(
                   insight.title,

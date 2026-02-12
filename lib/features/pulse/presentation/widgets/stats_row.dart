@@ -100,6 +100,8 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
+      height: 120.h,
       padding: EdgeInsets.all(14.r),
       decoration: BoxDecoration(
         color: cardColor,
@@ -114,6 +116,7 @@ class _StatCard extends StatelessWidget {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(icon, color: color, size: 18.sp),
           SizedBox(height: 8.h),
