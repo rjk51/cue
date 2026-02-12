@@ -280,6 +280,25 @@ class NotificationService {
 
     print('📱 Local notifications initialized: $initialized');
     
+    // Create Android notification channels
+    if (Platform.isAndroid) {
+      // Create buddy nudge notification channel
+      const AndroidNotificationChannel buddyNudgeChannel = AndroidNotificationChannel(
+        'buddy_nudge_channel',
+        'Buddy Nudges',
+        description: 'Notifications when your buddy nudges you',
+        importance: Importance.high,
+        playSound: true,
+        enableVibration: true,
+      );
+      
+      await _localNotifications
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(buddyNudgeChannel);
+      
+      print('✅ Android notification channel created: buddy_nudge_channel');
+    }
+    
     // For iOS, create notification channel equivalent
     if (Platform.isIOS) {
       print('📱 iOS detected - notification categories should be registered in AppDelegate');
@@ -358,6 +377,29 @@ class NotificationService {
       return;
     }
     
+    // Check if this is a buddy nudge notification
+    if (message.data.containsKey('type') && 
+        message.data['type'] == 'buddy_nudge') {
+      
+      final title = message.notification?.title ?? message.data['title'] ?? '👋 Buddy Nudge';
+      final body = message.notification?.body ?? message.data['body'] ?? 'Your buddy sent you a nudge!';
+      
+      print('👋 Buddy nudge received in foreground');
+      
+      // IMPORTANT: When app is in foreground, FCM doesn't auto-display notifications
+      // We need to show it manually with custom sound
+      final selectedSound = LocalStorageService.instance.getNudgeSound();
+      print('🔔 Showing buddy nudge with custom sound: $selectedSound');
+      
+      // Show buddy nudge notification with custom sound
+      _showBuddyNudgeNotification(
+        title: title,
+        body: body,
+        sound: selectedSound,
+      );
+      return;
+    }
+    
     // Check if this is a reminder notification
     if (message.data.containsKey('type') && 
         message.data['type'] == 'reminder_notification') {
@@ -391,6 +433,46 @@ class NotificationService {
   void _handleNotificationTap(RemoteMessage message) {
     print('Notification tapped: ${message.data}');
     // Navigate to specific screen if needed
+  }
+
+  Future<void> _showBuddyNudgeNotification({
+    required String title,
+    required String body,
+    required String sound,
+  }) async {
+    print('👋 Showing buddy nudge with sound: $sound');
+    
+    // TODO: Map sound ID to actual sound file when custom sound files are added
+    // For now, use default notification sound
+
+    if (Platform.isAndroid) {
+      const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+        'buddy_nudge_channel',
+        'Buddy Nudges',
+        channelDescription: 'Notifications when your buddy nudges you',
+        importance: Importance.high,
+        priority: Priority.high,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('notification_ringtone'), // Use default for now
+        icon: '@mipmap/ic_launcher',
+        largeIcon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
+      );
+
+      const NotificationDetails notificationDetails = NotificationDetails(
+        android: androidDetails,
+      );
+
+      await _localNotifications.show(
+        DateTime.now().millisecondsSinceEpoch % 100000, // Unique ID
+        title,
+        body,
+        notificationDetails,
+        payload: 'buddy_nudge',
+      );
+    } else {
+      // iOS notifications are handled by APNS payload
+      print('🍎 iOS buddy nudge notification handled by APNS');
+    }
   }
 
   // Helper method to generate a bitmap from a Flutter icon

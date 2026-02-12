@@ -379,6 +379,9 @@ class BuddyService {
     final customMessage = LocalStorageService.instance.getNudgeMessage();
     final nudgeMessage = '$myName: $customMessage 💪';
 
+    print('👋 [BuddyService] Sending nudge with message: "$nudgeMessage"');
+    print('   Custom message from storage: "$customMessage"');
+
     // Create a nudge notification for the buddy
     await _createNudgeNotification(
       buddyId,
@@ -388,6 +391,10 @@ class BuddyService {
 
   /// Create a notification document for the buddy
   Future<void> _createNudgeNotification(String targetUserId, String message) async {
+    print('📝 [BuddyService] Creating nudge notification');
+    print('   Target user: $targetUserId');
+    print('   Message: "$message"');
+    
     // Use the same pending_notifications format that processPendingNotifications expects
     // Create a special "buddy_nudge" type notification
     await _firestore.collection('pending_notifications').add({
@@ -399,6 +406,8 @@ class BuddyService {
       'scheduledTime': FieldValue.serverTimestamp(),
       'createdAt': FieldValue.serverTimestamp(),
     });
+    
+    print('✅ [BuddyService] Nudge notification created in Firestore');
   }
 
   /// Disconnect from buddy

@@ -1942,7 +1942,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 width: (barWidth * progress).w,
                 height: 8.h,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFF8E6E),
+                  color: _accentColor,
                   borderRadius: BorderRadius.circular(4.r),
                 ),
               ),

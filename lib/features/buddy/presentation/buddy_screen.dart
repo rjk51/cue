@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../services/theme_service.dart';
 import '../../../services/theme_notifier.dart';
+import '../../../services/local_storage_service.dart';
 import '../data/buddy_service.dart';
 import '../domain/buddy_pair_model.dart';
 
@@ -139,6 +140,10 @@ class _BuddyScreenState extends State<BuddyScreen>
     });
     // Dismiss keyboard
     FocusScope.of(context).unfocus();
+    
+    // Also save to LocalStorageService for notification service access
+    await LocalStorageService.instance.setNudgeSound(_selectedSound);
+    await LocalStorageService.instance.setNudgeMessage(_customNudgeMessage);
   }
 
   Future<void> _loadBuddyData() async {
@@ -314,13 +319,80 @@ class _BuddyScreenState extends State<BuddyScreen>
   Widget build(BuildContext context) {
     final bgColor = _backgroundColor ??
         (_isDarkMode ? const Color(0xFF121212) : Colors.white);
-    final textColor = _isDarkMode ? Colors.white : const Color(0xFF1A1A1A);
+    final textColor = ThemeNotifier.instance.textColor ?? (_isDarkMode ? Colors.white : const Color(0xFF1A1A1A));
     final subtitleColor =
         _isDarkMode ? Colors.white.withOpacity(0.6) : const Color(0xFF8A8A8A);
     final cardColor = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
 
     return Scaffold(
       backgroundColor: bgColor,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios_rounded, color: textColor, size: 24.sp),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Accountability Buddy',
+              style: TextStyle(
+                fontSize: 22.sp,
+                fontWeight: FontWeight.w700,
+                color: textColor,
+                letterSpacing: -0.3,
+              ),
+            ),
+            SizedBox(height: 2.h),
+            Text(
+              _buddyPair != null ? 'Stay on track together' : 'Find your partner',
+              style: TextStyle(
+                fontSize: 13.sp,
+                color: subtitleColor,
+              ),
+            ),
+          ],
+        ),
+        actions: _buddyPair != null ? [
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'disconnect') _disconnectBuddy();
+              if (value == 'refresh') {
+                if (_buddyPair != null) _loadProgressData(_buddyPair!);
+              }
+            },
+            icon: Icon(Icons.more_vert_rounded, color: subtitleColor),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16.r),
+            ),
+            color: _isDarkMode ? const Color(0xFF2A2A2A) : Colors.white,
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'refresh',
+                child: Row(
+                  children: [
+                    Icon(Icons.refresh_rounded, size: 20.sp, color: _accentColor),
+                    SizedBox(width: 12.w),
+                    Text('Refresh', style: TextStyle(color: _isDarkMode ? Colors.white : Colors.black)),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'disconnect',
+                child: Row(
+                  children: [
+                    Icon(Icons.link_off_rounded, size: 20.sp, color: Colors.red.shade400),
+                    SizedBox(width: 12.w),
+                    Text('Disconnect', style: TextStyle(color: Colors.red.shade400)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ] : null,
+      ),
       floatingActionButton: _buddyPair != null ? _buildFloatingNudgeButton(textColor, subtitleColor) : null,
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       body: SafeArea(
@@ -328,106 +400,13 @@ class _BuddyScreenState extends State<BuddyScreen>
             ? Center(
                 child: CircularProgressIndicator(color: _accentColor),
               )
-            : Column(
-                children: [
-                  _buildHeader(textColor, subtitleColor),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(),
-                      padding: EdgeInsets.symmetric(horizontal: 24.w),
-                      child: _buddyPair != null
-                          ? _buildBuddyView(textColor, subtitleColor, cardColor)
-                          : _buildInviteView(textColor, subtitleColor, cardColor),
-                    ),
-                  ),
-                ],
+            : SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: EdgeInsets.symmetric(horizontal: 24.w),
+                child: _buddyPair != null
+                    ? _buildBuddyView(textColor, subtitleColor, cardColor)
+                    : _buildInviteView(textColor, subtitleColor, cardColor),
               ),
-      ),
-    );
-  }
-
-  Widget _buildHeader(Color textColor, Color subtitleColor) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(24.w, 16.h, 24.w, 8.h),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              padding: EdgeInsets.all(8.r),
-              decoration: BoxDecoration(
-                color: _accentColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12.r),
-              ),
-              child: Icon(
-                Icons.arrow_back_ios_new_rounded,
-                color: _accentColor,
-                size: 20.sp,
-              ),
-            ),
-          ),
-          SizedBox(width: 16.w),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Accountability Buddy',
-                  style: TextStyle(
-                    fontSize: 22.sp,
-                    fontWeight: FontWeight.w700,
-                    color: textColor,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-                SizedBox(height: 2.h),
-                Text(
-                  _buddyPair != null ? 'Stay on track together' : 'Find your partner',
-                  style: TextStyle(
-                    fontSize: 13.sp,
-                    color: subtitleColor,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (_buddyPair != null)
-            PopupMenuButton<String>(
-              onSelected: (value) {
-                if (value == 'disconnect') _disconnectBuddy();
-                if (value == 'refresh') {
-                  if (_buddyPair != null) _loadProgressData(_buddyPair!);
-                }
-              },
-              icon: Icon(Icons.more_vert_rounded, color: subtitleColor),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16.r),
-              ),
-              color: _isDarkMode ? const Color(0xFF2A2A2A) : Colors.white,
-              itemBuilder: (context) => [
-                PopupMenuItem(
-                  value: 'refresh',
-                  child: Row(
-                    children: [
-                      Icon(Icons.refresh_rounded, size: 20.sp, color: _accentColor),
-                      SizedBox(width: 12.w),
-                      Text('Refresh', style: TextStyle(color: _isDarkMode ? Colors.white : Colors.black)),
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'disconnect',
-                  child: Row(
-                    children: [
-                      Icon(Icons.link_off_rounded, size: 20.sp, color: Colors.red.shade400),
-                      SizedBox(width: 12.w),
-                      Text('Disconnect', style: TextStyle(color: Colors.red.shade400)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-        ],
       ),
     );
   }
