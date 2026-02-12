@@ -23,6 +23,7 @@ class _BuddyScreenState extends State<BuddyScreen>
   final BuddyService _buddyService = BuddyService();
   final ThemeService _themeService = ThemeService();
   final TextEditingController _codeController = TextEditingController();
+  final TextEditingController _customNudgeController = TextEditingController();
 
   late Color _accentColor;
   late Color? _backgroundColor;
@@ -53,6 +54,7 @@ class _BuddyScreenState extends State<BuddyScreen>
   // Nudge settings
   String _selectedSound = 'default';
   String _customNudgeMessage = "Don't forget your reminders";
+  String _initialCustomNudgeMessage = "Don't forget your reminders";
 
   @override
   void initState() {
@@ -95,6 +97,7 @@ class _BuddyScreenState extends State<BuddyScreen>
     _pulseController.dispose();
     _nudgeController.dispose();
     _codeController.dispose();
+    _customNudgeController.dispose();
     super.dispose();
   }
 
@@ -123,6 +126,8 @@ class _BuddyScreenState extends State<BuddyScreen>
     setState(() {
       _selectedSound = prefs.getString('nudge_sound') ?? 'default';
       _customNudgeMessage = prefs.getString('custom_nudge_message') ?? "Don't forget your reminders";
+      _initialCustomNudgeMessage = _customNudgeMessage;
+      _customNudgeController.text = _customNudgeMessage;
     });
   }
 
@@ -130,6 +135,11 @@ class _BuddyScreenState extends State<BuddyScreen>
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('nudge_sound', _selectedSound);
     await prefs.setString('custom_nudge_message', _customNudgeMessage);
+    setState(() {
+      _initialCustomNudgeMessage = _customNudgeMessage;
+    });
+    // Dismiss keyboard
+    FocusScope.of(context).unfocus();
     
     // Also save to LocalStorageService for notification service access
     await LocalStorageService.instance.setNudgeSound(_selectedSound);
@@ -176,10 +186,10 @@ class _BuddyScreenState extends State<BuddyScreen>
 
     final buddyId = pair.getBuddyId(uid);
 
-    final myProgress = await _buddyService.getMyProgress();
-    final buddyProgress = await _buddyService.getBuddyProgress(buddyId);
-    final myStreak = await _buddyService.getBuddyStreak(uid);
-    final buddyStreak = await _buddyService.getBuddyStreak(buddyId);
+    final myProgress = await _buddyService.getMyProgress(connectionDate: pair.createdAt);
+    final buddyProgress = await _buddyService.getBuddyProgress(buddyId, connectionDate: pair.createdAt);
+    final myStreak = await _buddyService.getBuddyStreak(uid, connectionDate: pair.createdAt);
+    final buddyStreak = await _buddyService.getBuddyStreak(buddyId, connectionDate: pair.createdAt);
 
     if (mounted) {
       setState(() {
@@ -1346,11 +1356,11 @@ class _BuddyScreenState extends State<BuddyScreen>
                 ),
               ),
               Text(
-                '${_customNudgeMessage.trim().split(RegExp(r'\s+')).length} words',
+                '${_customNudgeController.text.trim().split(RegExp(r'\s+')).length} words',
                 style: TextStyle(
                   fontSize: 11.sp,
                   fontWeight: FontWeight.w600,
-                  color: _customNudgeMessage.trim().split(RegExp(r'\s+')).length <= 6 
+                  color: _customNudgeController.text.trim().split(RegExp(r'\s+')).length <= 6 
                     ? _accentColor 
                     : Colors.orange,
                 ),
@@ -1369,14 +1379,9 @@ class _BuddyScreenState extends State<BuddyScreen>
               ),
             ),
             child: TextField(
-              controller: TextEditingController(text: _customNudgeMessage)
-                ..selection = TextSelection.collapsed(offset: _customNudgeMessage.length),
+              controller: _customNudgeController,
               onChanged: (value) {
-                final words = value.trim().split(RegExp(r'\s+'));
-                if (words.length <= 6) {
-                  setState(() => _customNudgeMessage = value);
-                  _saveNudgeSettings();
-                }
+                setState(() => _customNudgeMessage = value);
               },
               style: TextStyle(
                 fontSize: 13.sp,
@@ -1396,8 +1401,32 @@ class _BuddyScreenState extends State<BuddyScreen>
               ),
             ),
           ),
-        ],
-      ),
+          if (_customNudgeMessage != _initialCustomNudgeMessage) ...[
+            SizedBox(height: 8.h),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: _saveNudgeSettings,
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
+                  backgroundColor: _accentColor.withOpacity(0.1),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6.r),
+                  ),
+                ),
+                child: Text(
+                  'Save',
+                  style: TextStyle(
+                    fontSize: 12.sp,
+                    fontWeight: FontWeight.w600,
+                    color: _accentColor,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ], 
+      ), 
     );
   }
 

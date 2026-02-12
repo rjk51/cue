@@ -195,69 +195,112 @@ class BuddyService {
   }
 
   /// Get buddy's today progress (completed / total) — tasks created today
-  Future<Map<String, int>> getBuddyProgress(String buddyUserId) async {
+  Future<Map<String, int>> getBuddyProgress(String buddyUserId, {DateTime? connectionDate}) async {
     try {
       final now = DateTime.now();
-      final startOfDay = DateTime(now.year, now.month, now.day);
-      final endOfDay = startOfDay.add(const Duration(days: 1));
+      final todayStr = '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
-      // Try querying by createdAt first
+      // Query all reminders for this user
       var query = await _firestore
           .collection('reminders')
           .where('userId', isEqualTo: buddyUserId)
-          .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
-          .where('createdAt', isLessThan: Timestamp.fromDate(endOfDay))
           .get(const GetOptions(source: Source.server));
 
-      int total = query.docs.length;
+      int total = 0;
       int completed = 0;
 
       for (final doc in query.docs) {
         final data = doc.data();
-        if (data['isCompleted'] == true ||
-            data['lastCompletedAt'] != null ||
-            data['completedAt'] != null) {
-          completed++;
+        
+        // Filter by connection date if provided
+        if (connectionDate != null) {
+          final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
+          if (createdAt == null || createdAt.isBefore(connectionDate)) {
+            continue;
+          }
+        }
+
+        // Check if this reminder is due today
+        final nextDueAt = (data['nextDueAt'] as Timestamp?)?.toDate();
+        final time = (data['time'] as Timestamp?)?.toDate();
+        final recurrence = data['recurrence'] as Map<String, dynamic>?;
+        
+        final dueTime = nextDueAt ?? time;
+        if (dueTime == null) continue;
+        
+        // For non-recurring or non-hourly: check if due today
+        final frequency = recurrence?['frequency'] as String?;
+        if (frequency != 'hourly') {
+          final dueDate = DateTime(dueTime.year, dueTime.month, dueTime.day);
+          final today = DateTime(now.year, now.month, now.day);
+          if (!dueDate.isAtSameMomentAs(today)) continue;
+          
+          total++;
+          
+          // Check if completed today
+          final consistency = data['consistency'] as Map<String, dynamic>?;
+          if (consistency != null) {
+            final completedDates = List<String>.from(consistency['completedDates'] ?? []);
+            if (completedDates.contains(todayStr)) {
+              completed++;
+            }
+          }
+        } else {
+          // For hourly reminders: count expected occurrences today
+          final unit = recurrence?['unit'] as String?;
+          final every = recurrence?['every'] as int? ?? 1;
+          
+          int intervalMinutes;
+          if (unit == 'hours') {
+            intervalMinutes = every * 60;
+          } else if (unit == 'minutes') {
+            intervalMinutes = every;
+          } else {
+            continue;
+          }
+          
+          // Calculate how many times it should occur today
+          final startTime = DateTime(dueTime.year, dueTime.month, dueTime.day, dueTime.hour, dueTime.minute);
+          final endOfDay = DateTime(now.year, now.month, now.day, 23, 59, 59);
+          
+          int occurrences = 0;
+          DateTime current = startTime;
+          while (current.isBefore(endOfDay) || current.isAtSameMomentAs(endOfDay)) {
+            if (current.day == now.day) {
+              occurrences++;
+            }
+            current = current.add(Duration(minutes: intervalMinutes));
+          }
+          
+          total += occurrences;
+          
+          // Count how many times completed today
+          final consistency = data['consistency'] as Map<String, dynamic>?;
+          if (consistency != null) {
+            final completedDates = List<String>.from(consistency['completedDates'] ?? []);
+            final todayCompletions = completedDates.where((d) => d == todayStr).length;
+            completed += todayCompletions;
+          }
         }
       }
 
       print('📊 Progress for $buddyUserId: $completed/$total');
       return {'total': total, 'completed': completed};
     } catch (e) {
-      // If createdAt query fails (missing index or field), fall back to all reminders
-      print('⚠️ createdAt query failed: $e, falling back to all reminders');
-      
-      final query = await _firestore
-          .collection('reminders')
-          .where('userId', isEqualTo: buddyUserId)
-          .get(const GetOptions(source: Source.server));
-
-      int total = query.docs.length;
-      int completed = 0;
-
-      for (final doc in query.docs) {
-        final data = doc.data();
-        if (data['isCompleted'] == true ||
-            data['lastCompletedAt'] != null ||
-            data['completedAt'] != null) {
-          completed++;
-        }
-      }
-
-      print('📊 Fallback progress for $buddyUserId: $completed/$total');
-      return {'total': total, 'completed': completed};
+      print('⚠️ Error getting buddy progress: $e');
+      return {'total': 0, 'completed': 0};
     }
   }
 
   /// Get your own today progress
-  Future<Map<String, int>> getMyProgress() async {
+  Future<Map<String, int>> getMyProgress({DateTime? connectionDate}) async {
     final uid = _currentUserId;
     if (uid == null) return {'total': 0, 'completed': 0};
-    return getBuddyProgress(uid);
+    return getBuddyProgress(uid, connectionDate: connectionDate);
   }
 
   /// Get buddy's current streak (consecutive days with at least 1 completion)
-  Future<int> getBuddyStreak(String buddyUserId) async {
+  Future<int> getBuddyStreak(String buddyUserId, {DateTime? connectionDate}) async {
     // Force server query for real-time streak data
     final query = await _firestore
         .collection('reminders')
@@ -269,20 +312,31 @@ class BuddyService {
     if (query.docs.isEmpty) return 0;
 
     // Collect all completed dates across all reminders
-    final allCompletedDates = <String>{};
+    final dateCounts = <String, int>{};
     for (final doc in query.docs) {
       final data = doc.data();
+      
+      // Filter by connection date if provided
+      if (connectionDate != null) {
+        final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
+        if (createdAt == null || createdAt.isBefore(connectionDate)) {
+          continue;
+        }
+      }
+      
       final consistency = data['consistency'] as Map<String, dynamic>?;
       if (consistency != null) {
         final dates = List<String>.from(consistency['completedDates'] ?? []);
-        allCompletedDates.addAll(dates);
+        for (final date in dates) {
+          dateCounts[date] = (dateCounts[date] ?? 0) + 1;
+        }
       }
     }
 
-    if (allCompletedDates.isEmpty) return 0;
+    if (dateCounts.isEmpty) return 0;
 
     // Sort dates and count streak from today backwards
-    final sortedDates = allCompletedDates.toList()..sort();
+    final sortedDates = dateCounts.keys.toList()..sort();
     final today = DateTime.now();
     int streak = 0;
 
@@ -290,8 +344,9 @@ class BuddyService {
       final checkDate = today.subtract(Duration(days: i));
       final dateStr =
           '${checkDate.year.toString().padLeft(4, '0')}-${checkDate.month.toString().padLeft(2, '0')}-${checkDate.day.toString().padLeft(2, '0')}';
-      if (sortedDates.contains(dateStr)) {
-        streak++;
+      final count = dateCounts[dateStr] ?? 0;
+      if (count > 0) {
+        streak += count;
       } else if (i > 0) {
         // Allow today to be incomplete (streak counts up to yesterday)
         break;
