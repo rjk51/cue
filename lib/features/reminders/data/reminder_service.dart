@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import '../domain/reminder_model.dart';
+import '../../notifications/notification_service.dart';
+import '../../../services/connectivity_service.dart';
 
 class ReminderService {
   static final ReminderService _instance = ReminderService._internal();
@@ -429,6 +431,16 @@ class ReminderService {
             });
 
         print('Reminder snoozed by $minutes minutes: $reminderId to $newTime');
+
+        // When offline, schedule a local notification as fallback
+        if (!ConnectivityService().isOnline.value) {
+          final snoozedReminder = reminder.copyWith(
+            time: newTime,
+            nextDueAt: isRecurring ? newTime : null,
+          );
+          await NotificationService()
+              .scheduleReminderNotification(snoozedReminder);
+        }
       }
     } catch (e) {
       print('Error snoozing reminder: $e');
@@ -481,6 +493,16 @@ class ReminderService {
             });
 
         print('Reminder snoozed to $targetTime: $reminderId');
+
+        // When offline, schedule a local notification as fallback
+        if (!ConnectivityService().isOnline.value) {
+          final snoozedReminder = reminder.copyWith(
+            time: targetTime,
+            nextDueAt: isRecurring ? targetTime : null,
+          );
+          await NotificationService()
+              .scheduleReminderNotification(snoozedReminder);
+        }
       }
     } catch (e) {
       print('Error snoozing reminder to time: $e');

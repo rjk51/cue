@@ -19,7 +19,9 @@ import 'services/local_storage_service.dart';
 import 'services/theme_service.dart';
 import 'services/theme_notifier.dart';
 import 'services/revenue_cat_service.dart';
+import 'services/connectivity_service.dart';
 import 'shared/widgets/onboarding_gate.dart';
+import 'shared/widgets/offline_banner.dart';
 
 // Global navigator key for navigation from notification handlers
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -150,6 +152,9 @@ void main() async {
     fontSizeScale: savedFontSize,
   );
 
+  // Initialize connectivity monitoring
+  await ConnectivityService().initialize();
+
   // Set background message handler (needs to be set early)
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
@@ -239,7 +244,7 @@ class _MyAppState extends State<MyApp> {
                 data: MediaQuery.of(context).copyWith(
                   textScaleFactor: themeNotifier.fontSizeScale,
                 ),
-                child: child!,
+                child: OfflineBanner(child: child!),
               );
             },
             theme: ThemeData(

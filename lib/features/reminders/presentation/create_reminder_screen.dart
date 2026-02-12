@@ -19,7 +19,9 @@ import '../../../services/theme_notifier.dart';
 import '../../../services/tutorial_service.dart';
 import '../../../services/pro_status_service.dart';
 import '../../../services/file_storage_service.dart';
+import '../../../services/connectivity_service.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
+import '../../../shared/widgets/internet_required_dialog.dart';
 import '../../../shared/widgets/cupertino_pickers.dart';
 import '../../../shared/widgets/edit_recurring_dialog.dart';
 import '../../../services/whisper_speech_service.dart';
@@ -759,6 +761,19 @@ class _NewReminderScreenState extends State<NewReminderScreen>
   }
 
   Future<void> _uploadAttachment(File file) async {
+    // Attachment upload requires internet (Firebase Storage)
+    if (!ConnectivityService().isOnline.value) {
+      if (mounted) {
+        await showInternetRequiredDialog(
+          context,
+          featureName: 'File attachments',
+          accentColor: _accentColor,
+          isDarkMode: _isDarkMode,
+        );
+      }
+      return;
+    }
+
     // Check file size (max 10MB)
     final fileSize = await file.length();
     if (fileSize > 10 * 1024 * 1024) {
@@ -1427,6 +1442,19 @@ class _NewReminderScreenState extends State<NewReminderScreen>
             ),
           );
         }
+      }
+      return;
+    }
+
+    // Voice input requires internet for Whisper API + ChatGPT
+    if (!ConnectivityService().isOnline.value) {
+      if (mounted) {
+        await showInternetRequiredDialog(
+          context,
+          featureName: 'Voice input',
+          accentColor: _accentColor,
+          isDarkMode: _isDarkMode,
+        );
       }
       return;
     }
@@ -2904,15 +2932,55 @@ class _NewReminderScreenState extends State<NewReminderScreen>
               left: 0,
               right: 0,
               bottom: 0,
-              child: StickySaveButton(
-                onPressed: _saveReminder,
-                onCancel: widget.reminderToEdit != null
-                    ? _resetToInitial
-                    : null,
-                showCancel: widget.reminderToEdit != null,
-                isLoading: _isSaving,
-                accentColor: _accentColor,
-                isDarkMode: _isDarkMode,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Offline sync note
+                  ValueListenableBuilder<bool>(
+                    valueListenable: ConnectivityService().isOnline,
+                    builder: (context, online, _) {
+                      if (online) return const SizedBox.shrink();
+                      return Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.symmetric(
+                            horizontal: 16.w, vertical: 8.h),
+                        color: _isDarkMode
+                            ? const Color(0xFF2A2A2A)
+                            : const Color(0xFFF5F5F5),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.cloud_off_rounded,
+                                size: 14.sp,
+                                color: _isDarkMode
+                                    ? Colors.white54
+                                    : Colors.black45),
+                            SizedBox(width: 6.w),
+                            Text(
+                              'Will sync when you\'re back online',
+                              style: TextStyle(
+                                fontSize: 12.sp,
+                                color: _isDarkMode
+                                    ? Colors.white54
+                                    : Colors.black45,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                  StickySaveButton(
+                    onPressed: _saveReminder,
+                    onCancel: widget.reminderToEdit != null
+                        ? _resetToInitial
+                        : null,
+                    showCancel: widget.reminderToEdit != null,
+                    isLoading: _isSaving,
+                    accentColor: _accentColor,
+                    isDarkMode: _isDarkMode,
+                  ),
+                ],
               ),
             ),
           // Tutorial overlays

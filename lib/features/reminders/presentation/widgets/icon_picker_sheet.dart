@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../../services/custom_icon_service.dart';
+import '../../../../services/connectivity_service.dart';
+import '../../../../shared/widgets/internet_required_dialog.dart';
 
 class IconPickerSheet extends StatefulWidget {
   final Color accentColor;
@@ -511,6 +513,19 @@ class _IconPickerSheetState extends State<IconPickerSheet>
   }
 
   Future<void> _pickAndUploadImage() async {
+    // Custom icon upload requires internet (Firebase Storage)
+    if (!ConnectivityService().isOnline.value) {
+      if (mounted) {
+        await showInternetRequiredDialog(
+          context,
+          featureName: 'Custom icon upload',
+          accentColor: widget.accentColor,
+          isDarkMode: widget.isDarkMode,
+        );
+      }
+      return;
+    }
+
     try {
       final XFile? image = await _imagePicker.pickImage(
         source: ImageSource.gallery,

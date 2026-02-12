@@ -12,6 +12,8 @@ import '../../reminders/data/reminder_service.dart';
 import '../../reminders/domain/reminder_model.dart';
 import '../../notifications/notification_service.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
+import '../../../services/connectivity_service.dart';
+import '../../../shared/widgets/internet_required_dialog.dart';
 
 class VoiceReminderScreen extends StatefulWidget {
   const VoiceReminderScreen({super.key});
@@ -92,6 +94,18 @@ class _VoiceReminderScreenState extends State<VoiceReminderScreen>
     if (_isRecording) {
       await _stopRecording();
     } else {
+      // Voice input requires internet for Whisper API + ChatGPT
+      if (!ConnectivityService().isOnline.value) {
+        if (mounted) {
+          await showInternetRequiredDialog(
+            context,
+            featureName: 'Voice input',
+            accentColor: _accentColor,
+            isDarkMode: _isDarkMode,
+          );
+        }
+        return;
+      }
       await _startRecording();
     }
   }

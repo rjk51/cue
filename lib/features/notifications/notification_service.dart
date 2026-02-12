@@ -18,6 +18,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import '../../services/local_storage_service.dart';
 
+import '../../services/connectivity_service.dart';
+
 // Top-level function for handling background notification responses
 @pragma('vm:entry-point')
 void notificationTapBackground(NotificationResponse response) {
@@ -705,20 +707,104 @@ class NotificationService {
     );
   }
 
-  // Schedule a notification using Cloud Functions
-  // Note: Actual scheduling now happens automatically via Firestore triggers
-  // This method is kept for backward compatibility but scheduling is handled server-side
+  // Schedule a notification using Cloud Functions (online) or locally (offline).
+  // When online, Cloud Functions handle scheduling via Firestore triggers.
+  // When offline, we schedule using flutter_local_notifications as a fallback
+  // so that reminders still fire even without internet.
   Future<void> scheduleReminderNotification(Reminder reminder) async {
     print('=== Reminder Created ===');
     print('Reminder: ${reminder.name}');
     print('Time: ${reminder.time}');
-    print('✅ Cloud Functions will automatically handle notification scheduling');
-    
-    // The scheduleReminderOnCreate Cloud Function trigger will automatically
-    // create a pending_notification document when the reminder is saved to Firestore
-    // No local scheduling needed - everything is handled server-side for iOS/Android parity
-    
-    return;
+
+    final isOnline = ConnectivityService().isOnline.value;
+
+    if (isOnline) {
+      print('✅ Online — Cloud Functions will handle notification scheduling');
+      return;
+    }
+
+    // Offline fallback: schedule a local notification
+    print('📴 Offline — scheduling local notification as fallback');
+
+    final scheduledTime = reminder.nextDueAt ?? reminder.time;
+    if (scheduledTime.isBefore(DateTime.now())) {
+      print('⏭️ Scheduled time is in the past, skipping local schedule');
+      return;
+    }
+
+    try {
+      final soundName = LocalStorageService.instance.getNotificationSound();
+
+      final AndroidNotificationDetails androidDetails =
+          AndroidNotificationDetails(
+        'reminder_channel',
+        'Reminders',
+        channelDescription: 'Notification channel for reminders',
+        importance: Importance.high,
+        priority: Priority.high,
+        sound: RawResourceAndroidNotificationSound(soundName),
+        playSound: true,
+        actions: <AndroidNotificationAction>[
+          const AndroidNotificationAction(
+            'mark_done',
+            'Done',
+            showsUserInterface: true,
+            cancelNotification: true,
+          ),
+          const AndroidNotificationAction(
+            'snooze_5',
+            '5 min Snooze',
+            showsUserInterface: true,
+            cancelNotification: true,
+          ),
+          AndroidNotificationAction(
+            'snooze_input',
+            'Custom Snooze',
+            showsUserInterface: true,
+            cancelNotification: false,
+            inputs: <AndroidNotificationActionInput>[
+              AndroidNotificationActionInput(
+                label: 'Enter minutes',
+                allowFreeFormInput: true,
+              ),
+            ],
+          ),
+        ],
+      );
+
+      final DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+        categoryIdentifier: 'reminder_category',
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+        sound: '$soundName.wav',
+        interruptionLevel: InterruptionLevel.timeSensitive,
+      );
+
+      final NotificationDetails notificationDetails = NotificationDetails(
+        android: androidDetails,
+        iOS: iosDetails,
+      );
+
+      final tzScheduledTime = tz.TZDateTime.from(scheduledTime, tz.local);
+
+      await _localNotifications.zonedSchedule(
+        reminder.id.hashCode,
+        reminder.name,
+        'Your reminder is due!',
+        tzScheduledTime,
+        notificationDetails,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        payload: reminder.id,
+        matchDateTimeComponents: null,
+      );
+
+      print('✅ Local notification scheduled for $scheduledTime (ID: ${reminder.id.hashCode})');
+    } catch (e) {
+      print('❌ Error scheduling local notification: $e');
+    }
   }
 
   // Trigger Cloud Function to send notification
