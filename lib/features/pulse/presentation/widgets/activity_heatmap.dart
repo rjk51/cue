@@ -94,7 +94,7 @@ class ActivityHeatmap extends StatelessWidget {
           children: [
             // Day labels (Mon, Wed, Fri)
             Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SizedBox(height: cellSize * 0.5), // align with first row
                 for (int i = 0; i < 7; i++)
@@ -122,30 +122,28 @@ class ActivityHeatmap extends StatelessWidget {
               ],
             ),
             // Grid cells
-            Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                reverse: true, // Show most recent on the right
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (final week in weeks)
-                      Column(
-                        children: [
-                          for (int day = 0; day < 7; day++)
-                            Padding(
-                              padding: EdgeInsets.all(cellSpacing / 2),
-                              child: _HeatmapCell(
-                                activity: week[day],
-                                size: cellSize,
-                                accentColor: accentColor,
-                                isDarkMode: isDarkMode,
-                              ),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              reverse: true, // Show most recent on the right
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final week in weeks)
+                    Column(
+                      children: [
+                        for (int day = 0; day < 7; day++)
+                          Padding(
+                            padding: EdgeInsets.all(cellSpacing / 2),
+                            child: _HeatmapCell(
+                              activity: week[day],
+                              size: cellSize,
+                              accentColor: accentColor,
+                              isDarkMode: isDarkMode,
                             ),
-                        ],
-                      ),
-                  ],
-                ),
+                          ),
+                      ],
+                    ),
+                ],
               ),
             ),
           ],
@@ -153,7 +151,7 @@ class ActivityHeatmap extends StatelessWidget {
         SizedBox(height: 12.h),
         // Legend
         Row(
-          mainAxisAlignment: MainAxisAlignment.end,
+          mainAxisAlignment: MainAxisAlignment.start,
           children: [
             Text(
               'Less',
