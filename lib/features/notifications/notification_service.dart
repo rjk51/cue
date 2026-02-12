@@ -282,26 +282,56 @@ class NotificationService {
     
     // Create Android notification channels
     if (Platform.isAndroid) {
-      // Create buddy nudge notification channel
-      const AndroidNotificationChannel buddyNudgeChannel = AndroidNotificationChannel(
-        'buddy_nudge_channel',
-        'Buddy Nudges',
-        description: 'Notifications when your buddy nudges you',
-        importance: Importance.high,
-        playSound: true,
-        enableVibration: true,
-      );
-      
-      await _localNotifications
-          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-          ?.createNotificationChannel(buddyNudgeChannel);
-      
-      print('✅ Android notification channel created: buddy_nudge_channel');
+      await _cleanupOldNotificationChannels();
+      await _createBuddyNudgeChannel();
     }
     
     // For iOS, create notification channel equivalent
     if (Platform.isIOS) {
       print('📱 iOS detected - notification categories should be registered in AppDelegate');
+    }
+  }
+
+  Future<void> _createBuddyNudgeChannel() async {
+    try {
+      print('📢 Creating buddy nudge notification channel...');
+      
+      final androidPlugin = _localNotifications.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      
+      if (androidPlugin != null) {
+        const AndroidNotificationChannel channel = AndroidNotificationChannel(
+          'buddy_nudge_channel',
+          'Buddy Nudges',
+          description: 'Notifications when your buddy nudges you',
+          importance: Importance.high,
+          playSound: true,
+          enableVibration: true,
+        );
+        
+        await androidPlugin.createNotificationChannel(channel);
+        print('✅ Buddy nudge channel created');
+      }
+    } catch (e) {
+      print('⚠️ Error creating buddy nudge channel: $e');
+    }
+  }
+
+  Future<void> _cleanupOldNotificationChannels() async {
+    try {
+      print('🧹 Cleaning up old notification channels...');
+      
+      final androidPlugin = _localNotifications.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      
+      if (androidPlugin != null) {
+        // Delete old channel IDs that might exist from previous versions
+        await androidPlugin.deleteNotificationChannel('reminder_channel');
+        
+        print('✅ Old notification channels cleaned up');
+      }
+    } catch (e) {
+      print('⚠️ Error cleaning up notification channels: $e');
     }
   }
 
@@ -386,12 +416,11 @@ class NotificationService {
       
       print('👋 Buddy nudge received in foreground');
       
-      // IMPORTANT: When app is in foreground, FCM doesn't auto-display notifications
-      // We need to show it manually with custom sound
+      // CRITICAL: When app is in foreground, FCM does NOT automatically display notifications
+      // on either platform. We MUST manually show them using local notifications.
       final selectedSound = LocalStorageService.instance.getNudgeSound();
-      print('🔔 Showing buddy nudge with custom sound: $selectedSound');
+      print('🔔 Showing buddy nudge notification with sound: $selectedSound');
       
-      // Show buddy nudge notification with custom sound
       _showBuddyNudgeNotification(
         title: title,
         body: body,
@@ -442,9 +471,6 @@ class NotificationService {
   }) async {
     print('👋 Showing buddy nudge with sound: $sound');
     
-    // TODO: Map sound ID to actual sound file when custom sound files are added
-    // For now, use default notification sound
-
     if (Platform.isAndroid) {
       const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
         'buddy_nudge_channel',
@@ -453,7 +479,7 @@ class NotificationService {
         importance: Importance.high,
         priority: Priority.high,
         playSound: true,
-        sound: RawResourceAndroidNotificationSound('notification_ringtone'), // Use default for now
+        sound: RawResourceAndroidNotificationSound('notification_ringtone'),
         icon: '@mipmap/ic_launcher',
         largeIcon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
       );
@@ -469,9 +495,29 @@ class NotificationService {
         notificationDetails,
         payload: 'buddy_nudge',
       );
+      print('✅ Android buddy nudge notification shown');
     } else {
-      // iOS notifications are handled by APNS payload
-      print('🍎 iOS buddy nudge notification handled by APNS');
+      // iOS: Show notification using local notifications
+      const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+        sound: 'default',
+        interruptionLevel: InterruptionLevel.timeSensitive,
+      );
+
+      const NotificationDetails notificationDetails = NotificationDetails(
+        iOS: iosDetails,
+      );
+
+      await _localNotifications.show(
+        DateTime.now().millisecondsSinceEpoch % 100000, // Unique ID
+        title,
+        body,
+        notificationDetails,
+        payload: 'buddy_nudge',
+      );
+      print('✅ iOS buddy nudge notification shown');
     }
   }
 
@@ -646,7 +692,7 @@ class NotificationService {
       channelDescription: 'Notification channel for reminders',
       importance: Importance.high,
       priority: Priority.high,
-      sound: RawResourceAndroidNotificationSound(soundName),
+      sound: soundName == 'default' ? null : RawResourceAndroidNotificationSound(soundName),
       playSound: true,
       largeIcon: largeIcon, // Show custom icon as large icon
       color: notificationColor, // Set notification accent color
@@ -684,7 +730,7 @@ class NotificationService {
       presentAlert: true,
       presentBadge: true,
       presentSound: true,
-      sound: '$soundName.wav',
+      sound: soundName == 'default' ? 'default' : '$soundName.wav',
       interruptionLevel: InterruptionLevel.timeSensitive,
       attachments: iosAttachmentPath != null
           ? [DarwinNotificationAttachment(iosAttachmentPath)]
