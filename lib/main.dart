@@ -189,6 +189,10 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     final themeNotifier = ThemeNotifier.instance;
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
 
     return ScreenUtilInit(
       designSize: const Size(484, 1048),

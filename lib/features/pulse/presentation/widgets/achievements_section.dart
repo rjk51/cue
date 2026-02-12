@@ -160,12 +160,9 @@ class _AchievementBadge extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  isLocked ? Icons.lock_rounded : Icons.emoji_events_rounded,
-                  size: 26.sp,
-                  color: isLocked
-                      ? textColor.withOpacity(0.3)
-                      : accentColor,
+                Text(
+                  isLocked ? '🔒' : achievement.emoji,
+                  style: TextStyle(fontSize: 26.sp),
                 ),
                 SizedBox(height: 4.h),
                 Text(

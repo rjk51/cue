@@ -573,21 +573,83 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   return aTime.compareTo(bTime);
                 });
 
-                final currentReminder = upcomingReminders.isNotEmpty
-                    ? upcomingReminders.first['reminder'] as Reminder
-                    : null;
+                // Determine current reminder with smart logic
+                Reminder? currentReminder;
+                DateTime? currentOccurrenceTime;
+                int? currentReminderIndex;
+                
+                if (upcomingReminders.isNotEmpty) {
+                  final firstItem = upcomingReminders.first;
+                  final firstReminder = firstItem['reminder'] as Reminder;
+                  final firstOccurrence = firstItem['occurrenceTime'] as DateTime?;
+                  final firstTime = firstOccurrence ?? firstReminder.getEffectiveDisplayTime();
+                  final now = DateTime.now();
+                  final minutesOverdue = now.difference(firstTime).inMinutes;
+                  
+                  // Check if first reminder is overdue by more than 1 hour
+                  if (minutesOverdue > 60) {
+                    // Look for a reminder coming up in the next 10 minutes
+                    Map<String, dynamic>? upcomingSoon;
+                    int? upcomingSoonIndex;
+                    for (var i = 1; i < upcomingReminders.length; i++) {
+                      final item = upcomingReminders[i];
+                      final reminder = item['reminder'] as Reminder;
+                      final occurrence = item['occurrenceTime'] as DateTime?;
+                      final time = occurrence ?? reminder.getEffectiveDisplayTime();
+                      final minutesUntil = time.difference(now).inMinutes;
+                      
+                      if (minutesUntil >= 0 && minutesUntil < 10) {
+                        upcomingSoon = item;
+                        upcomingSoonIndex = i;
+                        break;
+                      }
+                    }
+                    
+                    // If there's a reminder coming up soon, show that instead
+                    if (upcomingSoon != null) {
+                      currentReminder = upcomingSoon['reminder'] as Reminder;
+                      currentOccurrenceTime = upcomingSoon['occurrenceTime'] as DateTime?;
+                      currentReminderIndex = upcomingSoonIndex;
+                    } else if (upcomingReminders.length == 1) {
+                      // Show overdue reminder if it's the only one
+                      currentReminder = firstReminder;
+                      currentOccurrenceTime = firstOccurrence;
+                      currentReminderIndex = 0;
+                    }
+                    // Otherwise, don't show the overdue reminder (currentReminder stays null)
+                  } else {
+                    // First reminder is not overdue by more than 1 hour, show it
+                    currentReminder = firstReminder;
+                    currentOccurrenceTime = firstOccurrence;
+                    currentReminderIndex = 0;
+                  }
+                }
 
                 // Check tutorial for cue card (new logic)
                 _checkCueCardTutorial(currentReminder != null);
 
-                final currentOccurrenceTime = upcomingReminders.isNotEmpty
-                    ? upcomingReminders.first['occurrenceTime'] as DateTime?
-                    : null;
-
-                // Upcoming reminders (after current)
-                final upcomingAfterCurrent = upcomingReminders.length > 1
-                    ? upcomingReminders.sublist(1)
-                    : <Map<String, dynamic>>[];
+                // Upcoming reminders (after current) - exclude the current reminder with same occurrence
+                final upcomingAfterCurrent = <Map<String, dynamic>>[];
+                if (currentReminder != null) {
+                  for (var i = 0; i < upcomingReminders.length; i++) {
+                    final item = upcomingReminders[i];
+                    final reminder = item['reminder'] as Reminder;
+                    final occurrence = item['occurrenceTime'] as DateTime?;
+                    
+                    // Skip if it's the same reminder AND same occurrence time
+                    final isSameReminder = reminder.id == currentReminder.id;
+                    final isSameOccurrence = (occurrence == null && currentOccurrenceTime == null) ||
+                        (occurrence != null && currentOccurrenceTime != null && 
+                         occurrence.isAtSameMomentAs(currentOccurrenceTime));
+                    
+                    if (!(isSameReminder && isSameOccurrence)) {
+                      upcomingAfterCurrent.add(item);
+                    }
+                  }
+                } else {
+                  // No current reminder shown, include all
+                  upcomingAfterCurrent.addAll(upcomingReminders);
+                }
 
                 final isKeyboardOpen =
                     MediaQuery.of(context).viewInsets.bottom > 0;

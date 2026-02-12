@@ -48,24 +48,12 @@ class StreakCard extends StatelessWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    // Streak icon
-                    Container(
-                      padding: EdgeInsets.all(8.r),
-                      decoration: BoxDecoration(
-                        color: streaks.currentStreak > 0
-                            ? accentColor.withOpacity(0.15)
-                            : subtitleColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12.r),
-                      ),
-                      child: Icon(
-                        Icons.whatshot_rounded,
-                        color: streaks.currentStreak > 0
-                            ? accentColor
-                            : subtitleColor,
-                        size: 28.sp,
-                      ),
+                    // Animated flame
+                    _AnimatedFlame(
+                      isActive: streaks.currentStreak > 0,
+                      accentColor: accentColor,
                     ),
-                    SizedBox(width: 12.w),
+                    SizedBox(width: 8.w),
                     Text(
                       '${streaks.currentStreak}',
                       style: TextStyle(
@@ -219,10 +207,9 @@ class _AnimatedFlameState extends State<_AnimatedFlame>
       builder: (context, child) {
         return Transform.scale(
           scale: widget.isActive ? _scaleAnimation.value : 1.0,
-          child: Icon(
-            Icons.local_fire_department_rounded,
-            color: widget.isActive ? widget.accentColor : Colors.grey,
-            size: 36.sp,
+          child: Text(
+            widget.isActive ? '🔥' : '❄️',
+            style: TextStyle(fontSize: 36.sp),
           ),
         );
       },
