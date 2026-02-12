@@ -1,251 +1,62 @@
-# Cue - Smart Reminder App with Cross-Device Sync 🔔
+# 🚀 Cue – Technical Documentation
 
-A Flutter-based reminder application with **WhatsApp-style cross-device synchronization** powered by Firebase Cloud Messaging and Firestore.
+**Version:** `1.0.0+14`  
+**Last Updated:** `February 12, 2026`
 
-## ✨ Features
-
-- 📱 **Push Notifications** with action buttons (Done/Snooze)
-- 🔄 **Real-time Cross-Device Sync** - Mark as done on one device, disappears on all devices
-- 🔔 **Smart Scheduling** - Precise notification timing with timezone support
-- 💾 **Cloud Sync** - All reminders stored in Firestore
-- 🎯 **Action Buttons** - Complete or snooze directly from notifications
-- ⚡ **Real-time Updates** - Changes sync instantly across all devices
-- 🌐 **Offline Support** - Works offline, syncs when back online
-- 🎨 **Clean UI** - Material Design 3 with intuitive interface
-
-## 🚀 Quick Start
-
-```bash
-# Install dependencies
-flutter pub get
-
-# Run the app
-flutter run
-```
-
-## 📚 Documentation
-
-Complete documentation is available:
-
-- **[QUICKSTART.md](QUICKSTART.md)** - Get started in 5 minutes
-- **[FCM_SETUP.md](FCM_SETUP.md)** - Detailed FCM & Firestore setup
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture & data flow
-- **[USER_GUIDE.md](USER_GUIDE.md)** - Visual user guide
-- **[IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md)** - Complete implementation overview
-- **[CHECKLIST.md](CHECKLIST.md)** - Testing & deployment checklist
-
-## 🎯 How It Works
-
-### Creating a Reminder
-1. Tap the + button
-2. Enter reminder details (name, date, time)
-3. Tap Save
-4. Reminder syncs to all devices
-5. Notification scheduled for the specified time
-
-### Cross-Device Sync (The Magic! ✨)
-```
-Device A: Mark as "Done"
-    ↓
-Firestore: Update isCompleted = true
-    ↓
-Real-time Stream: Broadcast to all devices
-    ↓
-Device B, C, D: Auto-remove reminder & cancel notification
-    ↓
-Synchronized! (< 1 second)
-```
-
-## 🛠️ Tech Stack
-
-- **Flutter** - Cross-platform mobile framework
-- **Firebase Cloud Messaging** - Push notifications
-- **Cloud Firestore** - Real-time NoSQL database
-- **Flutter Local Notifications** - Native notification support
-- **Timezone** - Accurate scheduling across timezones
-
-## 📦 Key Dependencies
-
-```yaml
-firebase_core: ^3.15.0              # Firebase SDK
-firebase_messaging: ^15.0.0         # FCM for push notifications
-cloud_firestore: ^5.0.0             # Real-time database
-flutter_local_notifications: ^17.0.0 # Local notifications
-timezone: ^0.9.0                    # Timezone support
-```
-
-## 🏗️ Architecture
-
-```
-┌─────────────────┐
-│   Flutter UI    │
-└────────┬────────┘
-         │
-    ┌────┴────┐
-    │ Service │ (NotificationService + ReminderService)
-    └────┬────┘
-         │
-    ┌────┴────────────┐
-    │                 │
-    ▼                 ▼
-┌─────────┐    ┌───────────┐
-│   FCM   │    │ Firestore │
-└─────────┘    └───────────┘
-    │                 │
-    └────────┬────────┘
-             │
-    Real-time Sync to All Devices
-```
-
-## 🧪 Testing
-
-### Test Basic Features
-```bash
-flutter run
-```
-1. Create a reminder for 1 minute from now
-2. Wait for notification
-3. Tap "Done" button
-4. Verify reminder is removed
-
-### Test Cross-Device Sync
-```bash
-# Terminal 1
-flutter run -d device1
-
-# Terminal 2
-flutter run -d device2
-```
-1. Create reminder on device1
-2. See it appear on device2
-3. Mark done on device1
-4. Watch it disappear on device2
-
-## 📱 Platform Support
-
-- ✅ **Android** (Fully supported with all features)
-- ✅ **iOS** (Supported, requires additional setup)
-- ⚠️ **Web** (Limited - no local notifications)
-
-## 🔐 Security
-
-Currently configured for development with open Firestore rules. For production:
-
-```javascript
-// Update Firestore Security Rules
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /reminders/{reminderId} {
-      allow read, write: if request.auth != null 
-        && request.auth.uid == resource.data.userId;
-    }
-  }
-}
-```
-
-## 📊 Project Structure
-
-```
-lib/
-├── main.dart                    # App entry point
-├── firebase_options.dart        # Firebase configuration
-├── app/
-│   └── app_theme.dart          # Theme configuration
-└── features/
-    ├── home/
-    │   └── presentation/
-    │       └── home_screen.dart         # Main screen
-    ├── notifications/
-    │   └── notification_service.dart    # FCM & local notifications
-    └── reminders/
-        ├── domain/
-        │   └── reminder_model.dart      # Data model
-        ├── data/
-        │   └── reminder_service.dart    # Firestore operations
-        └── presentation/
-            └── create_reminder_screen.dart # Create reminder UI
-```
-
-## 🎓 Key Concepts
-
-### Why Firestore?
-- ⚡ Real-time synchronization
-- 📴 Offline support built-in
-- 🔄 Automatic conflict resolution
-- 🎯 Simple queries with streams
-- 📈 Scales automatically
-
-### Why FCM?
-- 📱 Native push notifications
-- 🔋 Battery efficient
-- 🌐 Works across platforms
-- 🎯 Topic-based messaging
-- 🔔 Background message handling
-
-## 🚀 Roadmap
-
-### Current Features ✅
-- [x] Create/Delete reminders
-- [x] Push notifications with actions
-- [x] Cross-device synchronization
-- [x] Real-time Firestore sync
-- [x] Snooze functionality
-- [x] Overdue indicators
-
-### Planned Features 🎯
-- [ ] User authentication (Firebase Auth)
-- [ ] Recurring reminders
-- [ ] Reminder categories/tags
-- [ ] Voice input
-- [ ] Reminder sharing
-- [ ] Rich media attachments
-- [ ] Location-based reminders
-- [ ] Notification history
-
-## 🤝 Contributing
-
-This is a prototype project demonstrating FCM and Firestore integration. Feel free to:
-- Report issues
-- Suggest features
-- Submit pull requests
-- Use as reference for your projects
-
-## 📄 License
-
-This project is created for educational purposes.
-
-## 🙏 Acknowledgments
-
-- Firebase team for excellent documentation
-- Flutter community for plugins and support
-- Material Design for UI guidelines
-
-## 📞 Firebase Project
-
-- **Project ID**: cues-1ced9
-- **Console**: https://console.firebase.google.com/project/cues-1ced9
-
-## 💡 Getting Help
-
-1. Check the [QUICKSTART.md](QUICKSTART.md) guide
-2. Review [FCM_SETUP.md](FCM_SETUP.md) for technical details
-3. Use [CHECKLIST.md](CHECKLIST.md) for troubleshooting
-4. Check Flutter logs: `flutter logs`
-5. Verify Firebase Console for data/errors
-
-## 🎉 Success Stories
-
-**What you can build with this:**
-- Team collaboration apps
-- Task management systems
-- Event reminder apps
-- Medication trackers
-- Habit tracking apps
-- Any app requiring cross-device notifications!
+Cue is a voice-first, socially-powered reminder system built with Flutter and Firebase.  
+This document provides a complete technical overview of the system architecture, core components, and engineering decisions behind Cue.
 
 ---
 
-**Built with ❤️ using Flutter & Firebase**
+## 📑 Table of Contents
 
-Start building: `flutter run` 🚀
+1. [Tech Stack Overview](#-tech-stack-overview)
+2. [System Architecture](#-system-architecture)
+3. [Firebase Integration](#-firebase-integration)
+4. [Notification System](#-notification-system)
+5. [RevenueCat Integration](#-revenuecat-integration)
+6. [Voice & Transcription](#-voice--transcription)
+7. [Data Models](#-data-models)
+8. [Security & Permissions](#-security--permissions)
+9. [Performance Optimization](#-performance-optimization)
+10. [Testing & Debugging](#-testing--debugging)
+11. [Production Deployment](#-production-deployment)
+12. [Links & Resources](#-links--resources)
+
+---
+
+## 🧱 Tech Stack Overview
+
+### Frontend (Mobile)
+- **Framework:** Flutter 3.10.7 (Dart)
+- **State Management:** Provider + ChangeNotifiers
+- **UI:** Material (Android) + Cupertino (iOS)
+- **Responsive Layouts:** `flutter_screenutil`
+
+### Backend & Cloud
+- **Auth:** Firebase Authentication  
+- **Database:** Cloud Firestore (NoSQL)  
+- **Functions:** Firebase Cloud Functions (Node.js + TypeScript)  
+- **Storage:** Firebase Storage  
+- **Push Notifications:** Firebase Cloud Messaging (FCM)
+
+### Key Dependencies
+
+```yaml
+firebase_core: ^2.24.2
+firebase_auth: ^4.16.0
+cloud_firestore: ^4.14.0
+cloud_functions: ^4.5.12
+firebase_storage: ^11.5.6
+firebase_messaging: ^14.7.10
+
+flutter_local_notifications: ^16.3.0
+timezone: ^0.9.2
+permission_handler: ^11.1.0
+
+flutter_sound:
+http:
+
+purchases_flutter: ^9.10.8
+flutter_screenutil:
+url_launcher:
