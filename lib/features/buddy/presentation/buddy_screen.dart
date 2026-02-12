@@ -168,7 +168,8 @@ class _BuddyScreenState extends State<BuddyScreen>
 
   void _startAutoRefresh(BuddyPair pair) {
     _stopAutoRefresh();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+    // Refresh every 5 seconds for more responsive updates
+    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (mounted && _buddyPair != null) {
         _loadProgressData(_buddyPair!);
       }
