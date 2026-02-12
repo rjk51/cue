@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -162,11 +163,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
       try {
         await _authService.signOut();
         if (mounted) {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (context) => const WelcomeScreen()),
-            (route) => false,
+          // Show app closing dialog
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => WillPopScope(
+              onWillPop: () async => false,
+              child: Dialog(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                backgroundColor: _isDarkMode ? const Color(0xFF2A2A2A) : Colors.white,
+                child: Padding(
+                  padding: EdgeInsets.all(24.r),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.check_circle_outline,
+                        color: Colors.green,
+                        size: 56.sp,
+                      ),
+                      SizedBox(height: 16.h),
+                      Text(
+                        'Logged out successfully',
+                        style: TextStyle(
+                          fontSize: 18.sp,
+                          fontWeight: FontWeight.w600,
+                          color: _isDarkMode ? Colors.white : const Color(0xFF2D2D2D),
+                        ),
+                      ),
+                      SizedBox(height: 8.h),
+                      Text(
+                        'App closing in 5 seconds',
+                        style: TextStyle(
+                          fontSize: 14.sp,
+                          color: _isDarkMode ? Colors.white70 : const Color(0xFF666666),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           );
+
+          // Wait 5 seconds then close the app
+          await Future.delayed(const Duration(seconds: 5));
+          SystemNavigator.pop();
         }
       } catch (e) {
         if (mounted) {
