@@ -4,12 +4,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../../services/auth_service.dart';
-import '../../../services/local_storage_service.dart';
 import '../../../shared/widgets/custom_snackbar.dart';
-import '../../home/presentation/home_screen.dart';
-import '../../onboarding/presentation/onboarding_screen.dart';
 import 'login_screen.dart';
-import 'link_account_dialog.dart';
 
 class SignupScreen extends StatefulWidget {
   final String? initialEmail;
@@ -31,7 +27,6 @@ class _SignupScreenState extends State<SignupScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _authService = AuthService();
-  final _storage = LocalStorageService.instance;
   bool _isLoading = false;
   bool _obscurePassword = true;
 
@@ -67,11 +62,8 @@ class _SignupScreenState extends State<SignupScreen> {
       );
 
       if (mounted) {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const OnboardingScreen()),
-          (route) => false,
-        );
+        // Don't manually navigate - let authStateChanges in main.dart handle it
+        Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
@@ -96,54 +88,13 @@ class _SignupScreenState extends State<SignupScreen> {
       final result = await _authService.attemptGoogleSignIn();
       
       if (result.status == GoogleSignInStatus.cancelled) {
-        // User canceled
         setState(() => _isLoading = false);
         return;
       }
 
-      if (result.status == GoogleSignInStatus.needsLinking) {
-        // Account exists with email/password, need to link
-        setState(() => _isLoading = false);
-        
-        if (mounted) {
-          await showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => LinkAccountDialog(
-              email: result.email!,
-              onSuccess: () async {
-                // Navigate to home after successful linking (treat as first device)
-                await _storage.set('device_sync_onboarding_shown', true);
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (context) => const HomeScreen()),
-                  (route) => false,
-                );
-              },
-            ),
-          );
-        }
-        return;
-      }
-
-      // Successfully signed in/up with Google
+      // Success — pop and let StreamBuilder + OnboardingGate handle routing
       if (mounted) {
-        await _storage.set('device_sync_onboarding_shown', true);
-        
-        // If existing user, go to home; if new user, go to onboarding
-        if (result.isNewUser) {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (context) => const OnboardingScreen()),
-            (route) => false,
-          );
-        } else {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (context) => const HomeScreen()),
-            (route) => false,
-          );
-        }
+        Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
@@ -163,53 +114,13 @@ class _SignupScreenState extends State<SignupScreen> {
       final result = await _authService.attemptAppleSignIn();
       
       if (result.status == AppleSignInStatus.cancelled) {
-        // User canceled
         setState(() => _isLoading = false);
         return;
       }
 
-      if (result.status == AppleSignInStatus.needsLinking) {
-        // Account exists with email/password, need to link
-        setState(() => _isLoading = false);
-        
-        if (mounted) {
-          await showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => LinkAccountDialog(
-              email: result.email!,
-              appleCredential: result.appleCredential,
-              onSuccess: () async {
-                // Navigate to home after successful linking (treat as first device)
-                await _storage.set('device_sync_onboarding_shown', true);
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (context) => const HomeScreen()),
-                  (route) => false,
-                );
-              },
-            ),
-          );
-        }
-        return;
-      }
-
-      // Successfully signed in with Apple
+      // Success — pop and let StreamBuilder + OnboardingGate handle routing
       if (mounted) {
-        // If existing user, go to home; if new user, go to onboarding
-        if (result.isNewUser) {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (context) => const OnboardingScreen()),
-            (route) => false,
-          );
-        } else {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (context) => const HomeScreen()),
-            (route) => false,
-          );
-        }
+        Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {

@@ -10,6 +10,8 @@ import '../../../services/theme_service.dart';
 import '../../../services/theme_notifier.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/pro_status_service.dart';
+import '../../../services/local_storage_service.dart';
+import '../../notifications/notification_service.dart';
 import '../../auth/presentation/welcome_screen.dart';
 import '../../onboarding/presentation/onboarding_screen.dart';
 import '../../subscription/presentation/cue_pro_paywall_screen.dart';
@@ -309,11 +311,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
               .doc(userId)
               .delete();
           
+          // Deactivate and clear device data before deletion
+          final notificationService = NotificationService();
+          final token = notificationService.fcmToken;
+          if (token != null) {
+            try {
+              await FirebaseFirestore.instance
+                  .collection('devices')
+                  .doc(token)
+                  .delete();
+              print('✅ Current device removed');
+            } catch (e) {
+              print('⚠️ Error removing device: $e');
+            }
+          }
+          
+          // Clear local storage/cache
+          final localStorage = LocalStorageService();
+          await localStorage.remove('theme_preference');
+          await localStorage.remove('accent_color');
+          await localStorage.remove('font_size_scale');
+          await localStorage.remove('background_color');
+          await localStorage.remove('text_color');
+          await localStorage.remove('device_sync_onboarding_shown');
+          await localStorage.remove('notification_sound');
+          await localStorage.remove('nudge_message');
+          print('✅ Local storage cleared');
+          
           // Delete the Firebase Auth user - THIS MUST BE LAST
           await user.delete();
           
-          // Sign out to clear any cached credentials
-          await FirebaseAuth.instance.signOut();
+          // Sign out to clear any cached credentials (including Google)
+          final authService = AuthService();
+          await authService.signOut();
+          print('✅ Signed out from all providers');
         }
 
         if (mounted) {

@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flex_color_picker/flex_color_picker.dart';
 import '../../../services/theme_service.dart';
+import '../../../services/theme_notifier.dart';
 import '../../../services/local_storage_service.dart';
 import '../../home/presentation/home_screen.dart';
 
 class AccentColorScreen extends StatefulWidget {
   final String themeMode;
+  final VoidCallback? onComplete;
 
-  const AccentColorScreen({super.key, required this.themeMode});
+  const AccentColorScreen({super.key, required this.themeMode, this.onComplete});
 
   @override
   State<AccentColorScreen> createState() => _AccentColorScreenState();
@@ -110,14 +112,32 @@ class _AccentColorScreenState extends State<AccentColorScreen> {
       // Mark device sync onboarding as shown (first device doesn't need sync screen)
       await _storage.set('device_sync_onboarding_shown', true);
 
+      // Capture before any navigation
+      final themeMode = widget.themeMode;
+      final onComplete = widget.onComplete;
+
       if (mounted) {
-        // Navigate to home screen
+        // Pop AccentColorScreen off the nav stack first
+        Navigator.pop(context);
+      }
+
+      // Signal onboarding complete — OnboardingGate re-checks and switches to HomeScreen
+      if (onComplete != null) {
+        onComplete();
+      } else if (mounted) {
+        // Fallback: navigate directly to home
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const HomeScreen()),
           (route) => false,
         );
       }
+
+      // Defer theme application until after navigation settles —
+      // calling it synchronously would rebuild the entire widget tree mid-transition
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ThemeNotifier.instance.updateThemeMode(themeMode);
+      });
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -32,15 +32,24 @@ class _OnboardingGateState extends State<OnboardingGate> {
 
   @override
   Widget build(BuildContext context) {
-    // Use cached value to avoid flashing
-    final hasCompleted = _hasCompletedOnboarding ?? true; // Default to true to show home immediately
+    if (_hasCompletedOnboarding == null) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF4A4458),
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFFFFB4A3)),
+        ),
+      );
+    }
 
-    if (hasCompleted) {
-      // User has completed onboarding, go to home
+    if (_hasCompletedOnboarding!) {
       return const HomeScreen();
     } else {
-      // New user, show theme preference screen
-      return const ThemePreferenceScreen();
+      return ThemePreferenceScreen(
+        onOnboardingComplete: () {
+          // Re-check onboarding status — will now find theme+color set and show HomeScreen
+          _checkOnboarding();
+        },
+      );
     }
   }
 }
