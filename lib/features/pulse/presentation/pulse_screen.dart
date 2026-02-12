@@ -274,17 +274,17 @@ class _PulseScreenState extends State<PulseScreen>
                             SizedBox(height: 12.h),
                             Container(
                               width: double.infinity,
-                              padding: EdgeInsets.all(16.r),
+                              padding: EdgeInsets.all(14.r),
                               decoration: BoxDecoration(
                                 color: cardColor,
                                 borderRadius:
-                                    BorderRadius.circular(18.r),
+                                    BorderRadius.circular(16.r),
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withOpacity(
-                                        _isDarkMode ? 0.25 : 0.05),
-                                    blurRadius: 14,
-                                    offset: const Offset(0, 5),
+                                        _isDarkMode ? 0.2 : 0.04),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 3),
                                   ),
                                 ],
                               ),
