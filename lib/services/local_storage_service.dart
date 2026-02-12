@@ -120,6 +120,17 @@ class LocalStorageService {
     return get<String>(_notificationSoundKey) ?? 'notification_ringtone'; // Default sound
   }
 
+  // Nudge sound preference
+  static const String _nudgeSoundKey = 'nudge_sound';
+  
+  Future<void> setNudgeSound(String soundId) async {
+    await set(_nudgeSoundKey, soundId);
+  }
+  
+  String getNudgeSound() {
+    return get<String>(_nudgeSoundKey) ?? 'default'; // Default sound
+  }
+
   // Nudge message preference
   static const String _nudgeMessageKey = 'nudge_message';
   

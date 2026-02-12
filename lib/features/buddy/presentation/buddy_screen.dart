@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../services/theme_service.dart';
 import '../../../services/theme_notifier.dart';
+import '../../../services/local_storage_service.dart';
 import '../data/buddy_service.dart';
 import '../domain/buddy_pair_model.dart';
 
@@ -129,6 +130,10 @@ class _BuddyScreenState extends State<BuddyScreen>
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('nudge_sound', _selectedSound);
     await prefs.setString('custom_nudge_message', _customNudgeMessage);
+    
+    // Also save to LocalStorageService for notification service access
+    await LocalStorageService.instance.setNudgeSound(_selectedSound);
+    await LocalStorageService.instance.setNudgeMessage(_customNudgeMessage);
   }
 
   Future<void> _loadBuddyData() async {
@@ -341,20 +346,10 @@ class _BuddyScreenState extends State<BuddyScreen>
       padding: EdgeInsets.fromLTRB(24.w, 16.h, 24.w, 8.h),
       child: Row(
         children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              padding: EdgeInsets.all(8.r),
-              decoration: BoxDecoration(
-                color: _accentColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12.r),
-              ),
-              child: Icon(
-                Icons.arrow_back_ios_new_rounded,
-                color: _accentColor,
-                size: 20.sp,
-              ),
-            ),
+          IconButton(
+            icon: Icon(Icons.arrow_back_ios_rounded, color: textColor, size: 24.sp),
+            onPressed: () => Navigator.pop(context),
+            splashRadius: 24.r,
           ),
           SizedBox(width: 16.w),
           Expanded(
