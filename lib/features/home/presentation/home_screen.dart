@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flip_card/flip_card.dart';
 import 'package:lottie/lottie.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../reminders/domain/reminder_model.dart';
@@ -49,7 +48,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   bool _showCueCardTutorial = false;
   bool _hasShownCueCardTutorial = false;
   int _cueCardTutorialStep =
-      0; // 0: highlight card, 1: snooze, 2: done, 3: notes, 4: flip
+      0; // 0: highlight card, 1: snooze, 2: done, 3: notes
   final GlobalKey _fabKey = GlobalKey();
   final GlobalKey _cueCardKey = GlobalKey();
 
@@ -191,7 +190,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _onCueCardTutorialNext() {
-    if (_cueCardTutorialStep < 4) {
+    if (_cueCardTutorialStep < 3) {
       setState(() {
         _cueCardTutorialStep++;
       });
@@ -205,7 +204,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         TutorialService.homeSnoozeShownKey,
         TutorialService.homeDoneShownKey,
         TutorialService.homeNotesShownKey,
-        TutorialService.homeFlipShownKey,
       ]);
     }
   }
@@ -228,8 +226,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         return 'Mark as Done';
       case 3:
         return 'Add Notes';
-      case 4:
-        return 'Flip for More';
       default:
         return '';
     }
@@ -245,8 +241,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         return 'Tap done to mark the reminder completed. Great job staying on track!';
       case 3:
         return 'Tap inside the card to add notes or additional details about this reminder.';
-      case 4:
-        return 'Flip the card to see more options like editing or deleting this reminder.';
       default:
         return '';
     }
@@ -997,7 +991,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               description: _getCueCardTutorialDescription(),
               onSkip: _onCueCardTutorialSkip,
               onNext: _onCueCardTutorialNext,
-              isLastStep: _cueCardTutorialStep == 4,
+              isLastStep: _cueCardTutorialStep == 3,
               accentColor: _accentColor,
               isDarkMode: _isDarkMode,
               highlightPadding: EdgeInsets.all(16.w),
@@ -1197,340 +1191,117 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final timeOnly = DateFormat('hh:mm').format(displayTime);
     final amPm = DateFormat('a').format(displayTime);
 
-    final flipKey = GlobalKey<FlipCardState>();
-
     return GestureDetector(
-      onHorizontalDragEnd: (details) {
-        if (details.primaryVelocity != null) {
-          if (details.primaryVelocity!.abs() > 300) {
-            flipKey.currentState?.toggleCard();
-          }
-        }
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ReminderDetailsScreen(reminder: reminder),
+          ),
+        );
       },
-      child: FlipCard(
-        key: flipKey,
-        fill: Fill.fillBack,
-        direction: FlipDirection.HORIZONTAL,
-        flipOnTouch: false,
-        front: GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ReminderDetailsScreen(reminder: reminder),
-              ),
-            );
-          },
-          child: Container(
-            width: 180.w,
-            padding: EdgeInsets.all(20.r),
-            decoration: BoxDecoration(
-              color: cardColor,
-              borderRadius: BorderRadius.circular(20.r),
-              border: Border.all(
-                color: reminder.color.withOpacity(0.2),
-                width: 1.5,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(_isDarkMode ? 0.2 : 0.05),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // Title and Icon row
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Reminder name
-                    Expanded(
-                      child: Text(
-                        reminder.name,
-                        style: TextStyle(
-                          fontSize: 17.sp,
-                          fontWeight: FontWeight.w600,
-                          color: textColor,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    SizedBox(width: 8.w),
-                    // Icon on the right
-                    Container(
-                      width: 32.w,
-                      height: 32.h,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: reminder.color.withOpacity(0.15),
-                      ),
-                      child: reminder.customIconUrl != null
-                          ? ClipOval(
-                              child: Image.network(
-                                reminder.customIconUrl!,
-                                width: 32.w,
-                                height: 32.h,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return Icon(
-                                    reminder.icon,
-                                    color: reminder.color,
-                                    size: 20.sp,
-                                  );
-                                },
-                              ),
-                            )
-                          : Icon(
-                              reminder.icon,
-                              color: reminder.color,
-                              size: 20.sp,
-                            ),
-                    ),
-                  ],
-                ),
-
-                // Time with AM/PM
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      timeOnly,
-                      style: TextStyle(
-                        fontSize: 18.sp,
-                        fontWeight: FontWeight.w600,
-                        color: textColor,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                    SizedBox(width: 4.w),
-                    Padding(
-                      padding: EdgeInsets.only(bottom: 2.h),
-                      child: Text(
-                        amPm,
-                        style: TextStyle(
-                          fontSize: 11.sp,
-                          fontWeight: FontWeight.w500,
-                          color: subtitleColor,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+      child: Container(
+        width: 180.w,
+        padding: EdgeInsets.all(20.r),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(20.r),
+          border: Border.all(
+            color: reminder.color.withOpacity(0.2),
+            width: 1.5,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(_isDarkMode ? 0.2 : 0.05),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
-        back: Container(
-          width: 180.w,
-          decoration: BoxDecoration(
-            color: cardColor,
-            borderRadius: BorderRadius.circular(32.r),
-            border: Border.all(
-              color: reminder.color.withOpacity(0.2),
-              width: 1.5,
-            ),
-          ),
-          padding: EdgeInsets.all(12.w),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Attachments Preview (if any)
-              if (reminder.attachments != null &&
-                  reminder.attachments!.isNotEmpty) ...[                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.attach_file,
-                            size: 12.sp,
-                            color: subtitleColor,
-                          ),
-                          SizedBox(width: 4.w),
-                          Text(
-                            '${reminder.attachments!.length} file${reminder.attachments!.length == 1 ? '' : 's'}',
-                            style: TextStyle(
-                              fontSize: 10.sp,
-                              fontWeight: FontWeight.w600,
-                              color: subtitleColor,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 8.h),
-                      Expanded(
-                        child: ListView.builder(
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: reminder.attachments!.length > 2
-                              ? 2
-                              : reminder.attachments!.length,
-                          itemBuilder: (context, index) {
-                            final attachment =
-                                reminder.attachments![index];
-                            final fileType = attachment['type'] ?? 'file';
-                            final fileName =
-                                attachment['name'] ?? 'Unknown';
-                            final fileUrl = attachment['url'] ?? '';
-
-                            return GestureDetector(
-                              onTap: () => _openAttachment(fileUrl),
-                              child: Container(
-                                margin: EdgeInsets.only(bottom: 6.h),
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: 8.w,
-                                  vertical: 6.h,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: _isDarkMode
-                                      ? Colors.white.withOpacity(0.05)
-                                      : Colors.grey.shade100,
-                                  borderRadius:
-                                      BorderRadius.circular(8.r),
-                                ),
-                                child: Row(
-                                  children: [
-                                    // File icon or image preview
-                                    if (fileType == 'image')
-                                      ClipRRect(
-                                        borderRadius:
-                                            BorderRadius.circular(4.r),
-                                        child: Image.network(
-                                          fileUrl,
-                                          width: 24.w,
-                                          height: 24.h,
-                                          fit: BoxFit.cover,
-                                          errorBuilder:
-                                              (context, error, stackTrace) {
-                                            return Container(
-                                              width: 24.w,
-                                              height: 24.h,
-                                              decoration: BoxDecoration(
-                                                color: reminder.color
-                                                    .withOpacity(0.2),
-                                                borderRadius:
-                                                    BorderRadius.circular(
-                                                        4.r),
-                                              ),
-                                              child: Icon(
-                                                Icons.image,
-                                                color: reminder.color,
-                                                size: 14.sp,
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      )
-                                    else
-                                      Container(
-                                        width: 24.w,
-                                        height: 24.h,
-                                        decoration: BoxDecoration(
-                                          color: reminder.color
-                                              .withOpacity(0.15),
-                                          borderRadius:
-                                              BorderRadius.circular(4.r),
-                                        ),
-                                        child: Icon(
-                                          _getFileIcon(fileType),
-                                          color: reminder.color,
-                                          size: 14.sp,
-                                        ),
-                                      ),
-                                    SizedBox(width: 8.w),
-                                    // File name
-                                    Expanded(
-                                      child: Text(
-                                        fileName,
-                                        style: TextStyle(
-                                          fontSize: 11.sp,
-                                          fontWeight: FontWeight.w500,
-                                          color: textColor,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    Icon(
-                                      Icons.open_in_new,
-                                      color: reminder.color,
-                                      size: 12.sp,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                      if (reminder.attachments!.length > 2)
-                        Padding(
-                          padding: EdgeInsets.only(top: 4.h),
-                          child: Text(
-                            '+${reminder.attachments!.length - 2} more',
-                            style: TextStyle(
-                              fontSize: 9.sp,
-                              color: subtitleColor,
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                        ),
-                    ],
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            // Title and Icon row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Reminder name
+                Expanded(
+                  child: Text(
+                    reminder.name,
+                    style: TextStyle(
+                      fontSize: 17.sp,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                SizedBox(height: 8.h),
-              ] else
-                Expanded(child: SizedBox()),
-              // Action Buttons at bottom
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  // Edit button
-                  _buildCompactActionButton(
-                    icon: Icons.edit_rounded,
-                    color: _accentColor,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              NewReminderScreen(reminderToEdit: reminder),
+                SizedBox(width: 8.w),
+                // Icon on the right
+                Container(
+                  width: 32.w,
+                  height: 32.h,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: reminder.color.withOpacity(0.15),
+                  ),
+                  child: reminder.customIconUrl != null
+                      ? ClipOval(
+                          child: Image.network(
+                            reminder.customIconUrl!,
+                            width: 32.w,
+                            height: 32.h,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Icon(
+                                reminder.icon,
+                                color: reminder.color,
+                                size: 20.sp,
+                              );
+                            },
+                          ),
+                        )
+                      : Icon(
+                          reminder.icon,
+                          color: reminder.color,
+                          size: 20.sp,
                         ),
-                      );
-                    },
+                ),
+              ],
+            ),
+
+            // Time with AM/PM
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  timeOnly,
+                  style: TextStyle(
+                    fontSize: 18.sp,
+                    fontWeight: FontWeight.w600,
+                    color: textColor,
+                    letterSpacing: -0.5,
                   ),
-                  // View details button
-                  _buildCompactActionButton(
-                    icon: Icons.visibility_rounded,
-                    color: Colors.blue.shade400,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              ReminderDetailsScreen(reminder: reminder),
-                        ),
-                      );
-                    },
+                ),
+                SizedBox(width: 4.w),
+                Padding(
+                  padding: EdgeInsets.only(bottom: 2.h),
+                  child: Text(
+                    amPm,
+                    style: TextStyle(
+                      fontSize: 11.sp,
+                      fontWeight: FontWeight.w500,
+                      color: subtitleColor,
+                    ),
                   ),
-                  // Delete button
-                  _buildCompactActionButton(
-                    icon: Icons.delete_rounded,
-                    color: Colors.red.shade400,
-                    onTap: () => _handleUpcomingCardDelete(reminder),
-                  ),
-                ],
-              ),
-            ],
-          ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
