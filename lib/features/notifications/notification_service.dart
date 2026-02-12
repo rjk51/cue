@@ -53,6 +53,26 @@ class NotificationService {
   // Stream subscription for reminder updates
   StreamSubscription<QuerySnapshot>? _reminderSubscription;
 
+  // Safe helper to get notification sound with fallback
+  String _getSafeNotificationSound() {
+    try {
+      return LocalStorageService.instance.getNotificationSound();
+    } catch (e) {
+      print('⚠️ LocalStorageService not initialized, using default sound');
+      return 'notification_bell'; // Default sound
+    }
+  }
+
+  // Safe helper to get nudge sound with fallback
+  String _getSafeNudgeSound() {
+    try {
+      return LocalStorageService.instance.getNudgeSound();
+    } catch (e) {
+      print('⚠️ LocalStorageService not initialized, using default nudge sound');
+      return 'notification_bell'; // Default sound
+    }
+  }
+
   Future<void> ensureDeviceRegistered() async {
     print('🔄 Ensuring device is registered...');
     if (_fcmToken != null) {
@@ -283,12 +303,39 @@ class NotificationService {
     // Create Android notification channels
     if (Platform.isAndroid) {
       await _cleanupOldNotificationChannels();
+      await _createDefaultReminderChannel();
       await _createBuddyNudgeChannel();
     }
     
     // For iOS, create notification channel equivalent
     if (Platform.isIOS) {
       print('📱 iOS detected - notification categories should be registered in AppDelegate');
+    }
+  }
+
+  Future<void> _createDefaultReminderChannel() async {
+    try {
+      print('📢 Creating default reminder notification channel...');
+      
+      final androidPlugin = _localNotifications.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      
+      if (androidPlugin != null) {
+        const AndroidNotificationChannel channel = AndroidNotificationChannel(
+          'reminder_channel',
+          'Reminders',
+          description: 'Notifications for your reminders',
+          importance: Importance.high,
+          playSound: true,
+          enableVibration: true,
+          showBadge: true,
+        );
+        
+        await androidPlugin.createNotificationChannel(channel);
+        print('✅ Default reminder channel created');
+      }
+    } catch (e) {
+      print('⚠️ Error creating default reminder channel: $e');
     }
   }
 
@@ -325,8 +372,8 @@ class NotificationService {
           AndroidFlutterLocalNotificationsPlugin>();
       
       if (androidPlugin != null) {
-        // Delete old channel IDs that might exist from previous versions
-        await androidPlugin.deleteNotificationChannel('reminder_channel');
+        // Note: Do not delete reminder_channel as it's actively used
+        // Only delete truly obsolete channels here
         
         print('✅ Old notification channels cleaned up');
       }
@@ -418,7 +465,7 @@ class NotificationService {
       
       // CRITICAL: When app is in foreground, FCM does NOT automatically display notifications
       // on either platform. We MUST manually show them using local notifications.
-      final selectedSound = LocalStorageService.instance.getNudgeSound();
+      final selectedSound = _getSafeNudgeSound();
       print('🔔 Showing buddy nudge notification with sound: $selectedSound');
       
       _showBuddyNudgeNotification(
@@ -682,7 +729,7 @@ class NotificationService {
     }
 
     // Get user's preferred notification sound
-    final soundName = LocalStorageService.instance.getNotificationSound();
+    final soundName = _getSafeNotificationSound();
     
     // Always use custom ringtone for reminder/snooze notifications
     final AndroidNotificationDetails androidDetails =
@@ -863,7 +910,7 @@ class NotificationService {
       importance: Importance.max,
       priority: Priority.high,
       icon: '@mipmap/ic_launcher',
-      sound: RawResourceAndroidNotificationSound(LocalStorageService.instance.getNotificationSound()),
+      sound: RawResourceAndroidNotificationSound(_getSafeNotificationSound()),
       playSound: true,
       actions: <AndroidNotificationAction>[
         AndroidNotificationAction(
@@ -886,7 +933,7 @@ class NotificationService {
       presentAlert: true,
       presentBadge: true,
       presentSound: true,
-      sound: '${LocalStorageService.instance.getNotificationSound()}.wav',
+      sound: '${_getSafeNotificationSound()}.wav',
       interruptionLevel: InterruptionLevel.timeSensitive,
     );
 
