@@ -123,6 +123,14 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Set system UI overlay style for dark theme to prevent white flash
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+    systemNavigationBarColor: Color(0xFF121212),
+    systemNavigationBarIconBrightness: Brightness.light,
+  ));
+
   // Initialize Hive for local storage
   await Hive.initFlutter();
   final localStorageService = LocalStorageService();
@@ -193,6 +201,14 @@ class _MyAppState extends State<MyApp> {
           final isDark = themeNotifier.isDarkMode;
           final bgColor = isDark ? const Color(0xFF121212) : Colors.white;
 
+          // Update system UI overlay style based on theme
+          SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+            systemNavigationBarColor: bgColor,
+            systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+          ));
+
           // Map stored string to Flutter ThemeMode
           final modeString = themeNotifier.themeMode;
           final themeMode = modeString == 'dark'
@@ -216,6 +232,7 @@ class _MyAppState extends State<MyApp> {
             title: 'Cue',
             navigatorKey: navigatorKey,
             themeMode: themeMode,
+            color: bgColor,
             builder: (context, child) {
               // Apply global text scale factor based on user preference
               return MediaQuery(
@@ -232,12 +249,24 @@ class _MyAppState extends State<MyApp> {
               scaffoldBackgroundColor: bgColor,
               canvasColor: bgColor,
               useMaterial3: true,
+              pageTransitionsTheme: const PageTransitionsTheme(
+                builders: {
+                  TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
+                  TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+                },
+              ),
             ),
             darkTheme: ThemeData(
               colorScheme: darkColorScheme,
               scaffoldBackgroundColor: bgColor,
               canvasColor: bgColor,
               useMaterial3: true,
+              pageTransitionsTheme: const PageTransitionsTheme(
+                builders: {
+                  TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
+                  TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+                },
+              ),
             ),
             debugShowCheckedModeBanner: false,
             home: StreamBuilder<User?>(

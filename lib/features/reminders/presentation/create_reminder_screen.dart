@@ -101,6 +101,8 @@ class _NewReminderScreenState extends State<NewReminderScreen>
   // Attachments
   List<Map<String, dynamic>> _attachments = [];
   bool _isUploadingAttachment = false;
+  List<Map<String, dynamic>> _addedAttachments = [];
+  List<Map<String, dynamic>> _removedAttachments = [];
 
   // Map day indices to abbreviated names
   final List<String> _dayAbbreviations = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -121,6 +123,7 @@ class _NewReminderScreenState extends State<NewReminderScreen>
   int? _initialAutoSnoozeMaxCount;
   int _initialHourlyIntervalHours = 1;
   int _initialHourlyIntervalMinutes = 0;
+  List<Map<String, dynamic>> _initialAttachments = [];
 
   @override
   void initState() {
@@ -287,6 +290,7 @@ class _NewReminderScreenState extends State<NewReminderScreen>
     if (reminder.attachments != null) {
       _attachments = List<Map<String, dynamic>>.from(reminder.attachments!);
     }
+    _initialAttachments = List<Map<String, dynamic>>.from(_attachments);
 
     // Adjust slider max value if auto-snooze interval is greater than 60
     if (_autoSnoozeInterval > 60) {
@@ -430,6 +434,10 @@ class _NewReminderScreenState extends State<NewReminderScreen>
     if (_autoSnoozeInterval != _initialAutoSnoozeInterval) return true;
     if (_autoSnoozeMaxCount != _initialAutoSnoozeMaxCount) return true;
 
+    // Check attachments
+    if (_attachments.length != _initialAttachments.length ||
+        !_attachments.every((a) => _initialAttachments.any((ia) => a['url'] == ia['url']))) return true;
+
     return false;
   }
 
@@ -511,6 +519,17 @@ class _NewReminderScreenState extends State<NewReminderScreen>
 
       _hourlyIntervalHours = _initialHourlyIntervalHours;
       _hourlyIntervalMinutes = _initialHourlyIntervalMinutes;
+
+      _attachments = List<Map<String, dynamic>>.from(_initialAttachments);
+
+      // Delete added attachments that were not saved
+      for (final attachment in _addedAttachments) {
+        if (attachment['storagePath'] != null) {
+          _fileStorageService.deleteFile(attachment['storagePath']);
+        }
+      }
+      _addedAttachments.clear();
+      _removedAttachments.clear();
 
       // Ensure days are sane if repeat is off
       if (!_repeatEnabled) {
@@ -766,6 +785,9 @@ class _NewReminderScreenState extends State<NewReminderScreen>
 
       setState(() {
         _attachments.add(attachmentData);
+        if (widget.reminderToEdit != null) {
+          _addedAttachments.add(attachmentData);
+        }
         _isUploadingAttachment = false;
       });
 
@@ -786,23 +808,18 @@ class _NewReminderScreenState extends State<NewReminderScreen>
   Future<void> _removeAttachment(int index) async {
     final attachment = _attachments[index];
     
-    try {
-      // Delete from storage if it has a storagePath
-      if (attachment['storagePath'] != null) {
-        await _fileStorageService.deleteFile(attachment['storagePath']);
+    setState(() {
+      _attachments.removeAt(index);
+      if (widget.reminderToEdit != null) {
+        _removedAttachments.add(attachment);
+      } else {
+        // For new reminders, delete immediately
+        _fileStorageService.deleteFile(attachment['storagePath']);
       }
-      
-      setState(() {
-        _attachments.removeAt(index);
-      });
-      
-      if (mounted) {
-        context.showSuccessSnackbar('Attachment removed');
-      }
-    } catch (e) {
-      if (mounted) {
-        context.showErrorSnackbar('Failed to remove attachment: $e');
-      }
+    });
+    
+    if (mounted) {
+      context.showSuccessSnackbar('Attachment removed');
     }
   }
 
@@ -1288,6 +1305,13 @@ class _NewReminderScreenState extends State<NewReminderScreen>
           widget.reminderToEdit!.id,
           updates,
         );
+
+        // Delete removed attachments
+        for (final attachment in _removedAttachments) {
+          if (attachment['storagePath'] != null) {
+            await _fileStorageService.deleteFile(attachment['storagePath']);
+          }
+        }
 
         if (mounted) {
           Navigator.pop(context, true); // Return true to indicate update
